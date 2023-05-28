@@ -1,7 +1,9 @@
+
 import random
 import sqlite3
 import tkinter as tk
 from tkinter import messagebox
+
 
 # Função para limpar rifas
 def limpar_rifas():
@@ -11,7 +13,6 @@ def limpar_rifas():
     conn.commit()
     conn.close()
     messagebox.showinfo("Sucesso", "Todas as rifas foram limpas com sucesso!")
-
 
 # Função para criar a tabela de rifas no banco de dados
 def criar_tabela_rifas():
@@ -92,6 +93,22 @@ def sortear_rifa():
     else:
         messagebox.showinfo("Rifa Sorteada", "Nenhuma rifa vendida.")
 
+# Função para exibir as informações de uma rifa específica
+def exibir_informacoes():
+    numero_rifa = int(numero_rifa_ver_entry.get())
+
+    conn = sqlite3.connect("rifas.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM rifas WHERE numero_rifa = ?", (numero_rifa,))
+    rifa = cursor.fetchone()
+    conn.close()
+
+    if rifa:
+        numero_rifa, nome, telefone, endereco = rifa
+        messagebox.showinfo("Informações da Rifa", f"Número da rifa: {numero_rifa}\nNome: {nome}\nTelefone: {telefone}\nEndereço: {endereco}")
+    else:
+        messagebox.showinfo("Informações da Rifa", f"A rifa número {numero_rifa} não foi vendida.")
+
 # Cria a tabela de rifas no banco de dados (executar somente na primeira execução)
 criar_tabela_rifas()
 
@@ -120,6 +137,11 @@ endereco_label.pack()
 endereco_entry = tk.Entry(window)
 endereco_entry.pack()
 
+numero_rifa_ver_label = tk.Label(window, text="Número da Rifa para Ver Informações:")
+numero_rifa_ver_label.pack()
+numero_rifa_ver_entry = tk.Entry(window)
+numero_rifa_ver_entry.pack()
+
 vender_button = tk.Button(window, text="Vender Rifa", command=vender_rifa)
 vender_button.pack()
 
@@ -129,7 +151,16 @@ mostrar_rifas_button.pack()
 sortear_rifa_button = tk.Button(window, text="Sortear Rifa", command=sortear_rifa)
 sortear_rifa_button.pack()
 
+exibir_informacoes_button = tk.Button(window, text="Exibir Informações", command=exibir_informacoes)
+exibir_informacoes_button.pack()
+
 limpar_rifas_button = tk.Button(window, text="Limpar Rifas", command=limpar_rifas)
 limpar_rifas_button.pack()
+
 # Inicia o loop principal da interface gráfica
 window.mainloop()
+
+
+
+
+
