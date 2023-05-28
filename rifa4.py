@@ -99,16 +99,23 @@ def exibir_informacoes():
     else:
         messagebox.showinfo("Informações da Rifa", f"A rifa número {numero_rifa} não foi encontrada.")
 
-# Função para limpar as rifas
-def limpar_rifas():
-    result = messagebox.askyesno("Limpar Rifas", "Tem certeza que deseja limpar todas as rifas?")
-    if result == tk.YES:
-        conn = sqlite3.connect("rifas.db")
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM rifas")
-        conn.commit()
-        conn.close()
-        messagebox.showinfo("Limpar Rifas", "Todas as rifas foram removidas do banco de dados.")
+# Função para apagar uma rifa específica
+def apagar_rifa():
+    numero_rifa = int(numero_rifa_apagar_entry.get())
+
+    conn = sqlite3.connect("rifas.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM rifas WHERE numero_rifa = ?", (numero_rifa,))
+    rifa = cursor.fetchone()
+    if rifa:
+        result = messagebox.askyesno("Apagar Rifa", f"Tem certeza que deseja apagar a rifa número {numero_rifa}?")
+        if result == tk.YES:
+            cursor.execute("DELETE FROM rifas WHERE numero_rifa = ?", (numero_rifa,))
+            conn.commit()
+            messagebox.showinfo("Apagar Rifa", f"A rifa número {numero_rifa} foi apagada com sucesso!")
+    else:
+        messagebox.showinfo("Apagar Rifa", f"A rifa número {numero_rifa} não foi encontrada.")
+    conn.close()
 
 # Cria a tabela de rifas no banco de dados (executar somente na primeira execução)
 criar_tabela_rifas()
@@ -116,7 +123,7 @@ criar_tabela_rifas()
 # Cria a janela principal
 window = tk.Tk()
 window.title("Sistema de Venda de Rifas")
-window.geometry("400x400")
+window.geometry("400x500")
 
 # Define um estilo para os widgets
 style = ttk.Style()
@@ -162,8 +169,13 @@ numero_rifa_ver_entry.pack()
 exibir_informacoes_button = ttk.Button(window, text="Exibir Informações", command=exibir_informacoes)
 exibir_informacoes_button.pack()
 
-limpar_rifas_button = ttk.Button(window, text="Limpar Rifas", command=limpar_rifas)
-limpar_rifas_button.pack()
+numero_rifa_apagar_label = ttk.Label(window, text="Número da Rifa para Apagar:")
+numero_rifa_apagar_label.pack()
+numero_rifa_apagar_entry = ttk.Entry(window)
+numero_rifa_apagar_entry.pack()
+
+apagar_rifa_button = ttk.Button(window, text="Apagar Rifa", command=apagar_rifa)
+apagar_rifa_button.pack()
 
 # Inicia o loop principal da interface gráfica
 window.mainloop()
