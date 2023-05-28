@@ -65,4 +65,4 @@ def limpar_rifas():
 #vender_rifa(1, "José Pereira", "555555555", "Rua C, 789")  # Tentando vender uma rifa já vendida
 
 mostrar_rifas()
-#limpar_rifas()
+limpar_rifas()

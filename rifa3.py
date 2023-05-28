@@ -90,13 +90,15 @@ def sortear_rifa():
 criar_tabela_rifas()
 
 # Exemplo de uso
-#vender_rifa(1, "João da Silva", "123456789", "Rua A, 123")
-#vender_rifa(2, "Maria Souza", "987654321", "Avenida B, 456")
-#vender_rifa(3, "Carlos Oliveira", "555555555", "Rua C, 789")
-#vender_rifa(4, "Matheus", "22222222", "Rua C, 789222")
+vender_rifa(1, "João da Silva", "123456789", "Rua A, 123")
+vender_rifa(2, "Maria Souza", "987654321", "Avenida B, 456")
+vender_rifa(3, "Carlos Oliveira", "555555555", "Rua C, 789")
+vender_rifa(4, "Matheus", "22222222", "Rua C, 789222")
+vender_rifa(5, "Matheus", "22222222", "Rua C, 789222")
+
 
 mostrar_rifas()
 
-#sortear_rifa()
+sortear_rifa()
 
-limpar_rifas()
+#limpar_rifas()
