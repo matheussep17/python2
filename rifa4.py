@@ -123,7 +123,6 @@ criar_tabela_rifas()
 # Cria a janela principal
 window = tk.Tk()
 window.title("Sistema de Venda de Rifas")
-window.geometry("400x500")
 
 # Define um estilo para os widgets
 style = ttk.Style()
@@ -132,53 +131,50 @@ style.configure("TLabel", padding=10, font=("Arial", 12))
 style.configure("TEntry", padding=10, font=("Arial", 12))
 
 # Cria os widgets da interface
-titulo_label = ttk.Label(window, text="Sistema de Venda de Rifas", font=("Arial", 16, "bold"))
-titulo_label.pack(pady=10)
-
 numero_rifa_label = ttk.Label(window, text="Número da Rifa:")
-numero_rifa_label.pack()
+numero_rifa_label.grid(row=0, column=0)
 numero_rifa_entry = ttk.Entry(window)
-numero_rifa_entry.pack()
+numero_rifa_entry.grid(row=0, column=1)
 
 nome_label = ttk.Label(window, text="Nome:")
-nome_label.pack()
+nome_label.grid(row=1, column=0)
 nome_entry = ttk.Entry(window)
-nome_entry.pack()
+nome_entry.grid(row=1, column=1)
 
 telefone_label = ttk.Label(window, text="Telefone:")
-telefone_label.pack()
+telefone_label.grid(row=2, column=0)
 telefone_entry = ttk.Entry(window)
-telefone_entry.pack()
+telefone_entry.grid(row=2, column=1)
 
 endereco_label = ttk.Label(window, text="Endereço:")
-endereco_label.pack()
+endereco_label.grid(row=3, column=0)
 endereco_entry = ttk.Entry(window)
-endereco_entry.pack()
+endereco_entry.grid(row=3, column=1)
 
 vender_button = ttk.Button(window, text="Vender Rifa", command=vender_rifa)
-vender_button.pack(pady=10)
+vender_button.grid(row=4, column=0, columnspan=2)
 
 mostrar_rifas_button = ttk.Button(window, text="Mostrar Rifas Vendidas", command=mostrar_rifas)
-mostrar_rifas_button.pack(pady=10)
+mostrar_rifas_button.grid(row=5, column=0, columnspan=2)
 
 sortear_rifa_button = ttk.Button(window, text="Sortear Rifa", command=sortear_rifa)
-sortear_rifa_button.pack(pady=10)
+sortear_rifa_button.grid(row=6, column=0, columnspan=2)
 
-numero_rifa_ver_label = ttk.Label(window, text="Número da Rifa para Ver Informações:")
-numero_rifa_ver_label.pack()
+numero_rifa_ver_label = ttk.Label(window, text="Número da Rifa:")
+numero_rifa_ver_label.grid(row=7, column=0)
 numero_rifa_ver_entry = ttk.Entry(window)
-numero_rifa_ver_entry.pack()
+numero_rifa_ver_entry.grid(row=7, column=1)
 
 exibir_informacoes_button = ttk.Button(window, text="Exibir Informações", command=exibir_informacoes)
-exibir_informacoes_button.pack(pady=10)
+exibir_informacoes_button.grid(row=8, column=0, columnspan=2)
 
-numero_rifa_apagar_label = ttk.Label(window, text="Número da Rifa para Apagar:")
-numero_rifa_apagar_label.pack()
+numero_rifa_apagar_label = ttk.Label(window, text="Número da Rifa:")
+numero_rifa_apagar_label.grid(row=9, column=0)
 numero_rifa_apagar_entry = ttk.Entry(window)
-numero_rifa_apagar_entry.pack()
+numero_rifa_apagar_entry.grid(row=9, column=1)
 
 apagar_rifa_button = ttk.Button(window, text="Apagar Rifa", command=apagar_rifa)
-apagar_rifa_button.pack(pady=10)
+apagar_rifa_button.grid(row=10, column=0, columnspan=2)
 
-# Inicia o loop principal da interface gráfica
+# Inicia o loop principal da janela
 window.mainloop()
