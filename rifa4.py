@@ -146,7 +146,7 @@ telefone_label.grid(row=2, column=0)
 telefone_entry = ttk.Entry(window)
 telefone_entry.grid(row=2, column=1)
 
-endereco_label = ttk.Label(window, text="Endereço:")
+endereco_label = ttk.Label(window, text="Quem vendeu:")
 endereco_label.grid(row=3, column=0)
 endereco_entry = ttk.Entry(window)
 endereco_entry.grid(row=3, column=1)
