@@ -95,7 +95,7 @@ def exibir_informacoes():
 
     if rifa:
         numero_rifa, nome, telefone, endereco = rifa
-        messagebox.showinfo("Informações da Rifa", f"Número da rifa: {numero_rifa}\nNome: {nome}\nTelefone: {telefone}\nEndereço: {endereco}")
+        messagebox.showinfo("Informações da Rifa", f"Número da rifa: {numero_rifa}\nNome: {nome}\nTelefone: {telefone}\nQuem vendeu: {endereco}")
     else:
         messagebox.showinfo("Informações da Rifa", f"A rifa número {numero_rifa} não foi encontrada.")
 
