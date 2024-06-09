@@ -16,6 +16,7 @@ class YouTubeDownloaderApp(ttk.Window):
         super().__init__(title="Baixar vídeos e músicas do YouTube", themename="superhero", size=(600, 500))
         self.destination_folder = self.load_config()
         self.selected_format = tk.StringVar(value="mp3")  # Define MP3 como padrão
+        self.selected_quality = tk.StringVar(value="best")  # Define qualidade como padrão
         self.downloaded_file = None
         self.init_ui()
 
@@ -41,20 +42,26 @@ class YouTubeDownloaderApp(ttk.Window):
         self.format_menu = ttk.Combobox(self, textvariable=self.selected_format, values=['mp3', 'mp4'], state='readonly')
         self.format_menu.grid(row=3, column=1, padx=5, pady=10)
 
+        self.quality_label = ttk.Label(self, text="Qualidade:", font=('Helvetica', 12))
+        self.quality_label.grid(row=4, column=0, padx=5, sticky='w')
+
+        self.quality_menu = ttk.Combobox(self, textvariable=self.selected_quality, values=['best', '144p', '240p', '360p', '480p', '720p', '1080p', '1440p', '2160p'], state='readonly')
+        self.quality_menu.grid(row=4, column=1, padx=5, pady=10)
+
         self.download_button = ttk.Button(self, text="Baixar", command=self.start_download, bootstyle=PRIMARY)
-        self.download_button.grid(row=4, column=0, columnspan=3, pady=10)
+        self.download_button.grid(row=5, column=0, columnspan=3, pady=10)
 
         self.progress = ttk.Progressbar(self, orient=tk.HORIZONTAL, length=400, mode='determinate')
-        self.progress.grid(row=5, column=0, columnspan=3, pady=10)
+        self.progress.grid(row=6, column=0, columnspan=3, pady=10)
 
         self.stats_label = ttk.Label(self, text="", font=('Helvetica', 12))
-        self.stats_label.grid(row=6, column=0, columnspan=3, pady=10)
+        self.stats_label.grid(row=7, column=0, columnspan=3, pady=10)
 
         self.log_text = ScrolledText(self, height=8, state='disabled', wrap='word', font=('Helvetica', 10))
-        self.log_text.grid(row=7, column=0, columnspan=3, pady=10, padx=10, sticky='nsew')
+        self.log_text.grid(row=8, column=0, columnspan=3, pady=10, padx=10, sticky='nsew')
 
         self.open_folder_button = ttk.Button(self, text="Abrir local do arquivo", command=self.open_file_location, bootstyle=INFO)
-        self.open_folder_button.grid(row=8, column=0, columnspan=3, pady=10)
+        self.open_folder_button.grid(row=9, column=0, columnspan=3, pady=10)
         self.open_folder_button.grid_remove()  # Initially hide the button
 
         self.init_menu()
@@ -102,9 +109,10 @@ class YouTubeDownloaderApp(ttk.Window):
             return
 
         format_choice = self.selected_format.get()
-        threading.Thread(target=self.download_media, args=(url, format_choice)).start()
+        quality_choice = self.selected_quality.get()
+        threading.Thread(target=self.download_media, args=(url, format_choice, quality_choice)).start()
 
-    def download_media(self, url, format_choice):
+    def download_media(self, url, format_choice, quality_choice):
         try:
             self.progress['value'] = 0
             if format_choice == 'mp3':
@@ -124,13 +132,22 @@ class YouTubeDownloaderApp(ttk.Window):
             elif format_choice == 'mp4':
                 self.stats_label.config(text="Baixando vídeo...")
                 self.log("Baixando vídeo...")
-                ydl_opts = {
-                    'format': 'bestvideo+bestaudio/best',  # Melhor vídeo e áudio
-                    'outtmpl': os.path.join(self.destination_folder, '%(title)s.%(ext)s'),
-                    'progress_hooks': [self.ydl_hook],
-                    'noprogress': False,
-                    'nocolor': True,
-                }
+                if quality_choice == 'best':
+                    ydl_opts = {
+                        'format': 'bestvideo+bestaudio/best',
+                        'outtmpl': os.path.join(self.destination_folder, '%(title)s.%(ext)s'),
+                        'progress_hooks': [self.ydl_hook],
+                        'noprogress': False,
+                        'nocolor': True,
+                    }
+                else:
+                    ydl_opts = {
+                        'format': f'bestvideo[height<={quality_choice[:-1]}]+bestaudio/best',
+                        'outtmpl': os.path.join(self.destination_folder, '%(title)s.%(ext)s'),
+                        'progress_hooks': [self.ydl_hook],
+                        'noprogress': False,
+                        'nocolor': True,
+                    }
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 result = ydl.download([url])
