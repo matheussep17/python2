@@ -125,7 +125,7 @@ class YouTubeDownloaderApp(ttk.Window):
                 self.stats_label.config(text="Baixando vídeo...")
                 self.log("Baixando vídeo...")
                 ydl_opts = {
-                    'format': 'bestvideo+bestaudio/best',  # Melhor vídeo e áudio
+                    'format': 'best',
                     'outtmpl': os.path.join(self.destination_folder, '%(title)s.%(ext)s'),
                     'progress_hooks': [self.ydl_hook],
                     'noprogress': False,
