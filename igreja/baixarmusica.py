@@ -13,7 +13,7 @@ CONFIG_FILE = 'config.json'
 
 class YouTubeDownloaderApp(ttk.Window):
     def __init__(self):
-        super().__init__(title="Baixar vídeos e músicas do YouTube", themename="superhero", size=(800, 600))
+        super().__init__(title="Baixar vídeos e músicas do YouTube", themename="darkly", size=(800, 600))
         self.center_window(800, 600)
         self.destination_folder = self.load_config()
         self.selected_format = tk.StringVar(value="mp3")
@@ -30,63 +30,72 @@ class YouTubeDownloaderApp(ttk.Window):
 
     def init_ui(self):
         self.header = ttk.Label(self, text="Baixar Vídeos e Músicas do YouTube", font=('Helvetica', 20, 'bold'))
-        self.header.grid(row=0, column=0, columnspan=3, pady=20)
+        self.header.grid(row=0, column=0, columnspan=4, pady=20)
 
         self.url_label = ttk.Label(self, text="YouTube URL:", font=('Helvetica', 12))
-        self.url_label.grid(row=1, column=0, padx=5, sticky='w')
+        self.url_label.grid(row=1, column=0, padx=5, pady=5, sticky='e')
 
         self.url_entry = ttk.Entry(self, width=50, font=('Helvetica', 12))
-        self.url_entry.grid(row=1, column=1, padx=5)
+        self.url_entry.grid(row=1, column=1, columnspan=3, padx=5, pady=5, sticky='we')
 
         self.dest_button = ttk.Button(self, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS)
-        self.dest_button.grid(row=2, column=0, padx=5, pady=10, sticky='w')
+        self.dest_button.grid(row=2, column=0, padx=5, pady=5, sticky='e')
 
-        self.dest_label = ttk.Label(self, text=self.destination_folder or "Nenhuma pasta selecionada", width=30, anchor='w', font=('Helvetica', 12))
-        self.dest_label.grid(row=2, column=1, padx=5, pady=10, sticky='w')
+        self.dest_label = ttk.Label(self, text=self.destination_folder or "Nenhuma pasta selecionada", width=50, anchor='w', font=('Helvetica', 12))
+        self.dest_label.grid(row=2, column=1, columnspan=3, padx=5, pady=5, sticky='we')
 
         self.format_label = ttk.Label(self, text="Formato:", font=('Helvetica', 12))
-        self.format_label.grid(row=3, column=0, padx=5, sticky='w')
+        self.format_label.grid(row=3, column=0, padx=5, pady=5, sticky='e')
 
         self.format_menu = ttk.Combobox(self, textvariable=self.selected_format, values=['mp3', 'mp4'], state='readonly')
-        self.format_menu.grid(row=3, column=1, padx=5, pady=10)
+        self.format_menu.grid(row=3, column=1, padx=5, pady=5, sticky='w')
 
         self.quality_label = ttk.Label(self, text="Qualidade:", font=('Helvetica', 12))
-        self.quality_label.grid(row=4, column=0, padx=5, sticky='w')
+        self.quality_label.grid(row=3, column=2, padx=5, pady=5, sticky='e')
 
         self.quality_menu = ttk.Combobox(self, textvariable=self.selected_quality, values=['best', '144p', '240p', '360p', '480p', '720p', '1080p', '1440p', '2160p'], state='readonly')
-        self.quality_menu.grid(row=4, column=1, padx=5, pady=10)
+        self.quality_menu.grid(row=3, column=3, padx=5, pady=5, sticky='w')
 
         self.download_button = ttk.Button(self, text="Baixar", command=self.start_download, bootstyle=PRIMARY)
-        self.download_button.grid(row=5, column=0, columnspan=3, pady=10)
+        self.download_button.grid(row=4, column=0, columnspan=4, pady=10, padx=10, sticky='ew')
 
         self.progress = ttk.Progressbar(self, orient=tk.HORIZONTAL, length=400, mode='determinate')
-        self.progress.grid(row=6, column=0, columnspan=3, pady=10)
+        self.progress.grid(row=5, column=0, columnspan=4, pady=10, padx=10, sticky='ew')
 
         self.stats_label = ttk.Label(self, text="", font=('Helvetica', 12))
-        self.stats_label.grid(row=7, column=0, columnspan=3, pady=10)
+        self.stats_label.grid(row=6, column=0, columnspan=4, pady=10, padx=10, sticky='ew')
 
-        self.log_text = ScrolledText(self, height=8, state='disabled', wrap='word', font=('Helvetica', 10))
-        self.log_text.grid(row=8, column=0, columnspan=3, pady=10, padx=10, sticky='nsew')
+        self.log_text = ScrolledText(self, height=8, state='disabled', wrap='word', font=('Helvetica', 10), bg="#333", fg="#fff", insertbackground='white')
+        self.log_text.grid(row=7, column=0, columnspan=4, pady=10, padx=10, sticky='nsew')
 
         self.open_folder_button = ttk.Button(self, text="Abrir local do arquivo", command=self.open_file_location, bootstyle=INFO)
-        self.open_folder_button.grid(row=9, column=0, columnspan=3, pady=10)
-        self.open_folder_button.grid_remove()
+        self.open_folder_button.grid(row=8, column=0, columnspan=4, pady=10)
 
         self.init_menu()
 
-        self.grid_columnconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=2)
+        self.grid_columnconfigure(2, weight=1)
+        self.grid_columnconfigure(3, weight=2)
+
+        self.grid_rowconfigure(7, weight=1)
 
     def init_menu(self):
         menubar = tk.Menu(self)
         file_menu = tk.Menu(menubar, tearoff=0)
         file_menu.add_command(label="Sobre", command=self.show_about)
         file_menu.add_separator()
+        file_menu.add_command(label="Criador", command=self.show_creator)
+        file_menu.add_separator()
         file_menu.add_command(label="Sair", command=self.quit)
         menubar.add_cascade(label="Arquivo", menu=file_menu)
         self.config(menu=menubar)
 
     def show_about(self):
-        messagebox.showinfo("Sobre", "Tava sem ideia mas é isso ai")
+        messagebox.showinfo("Sobre", "Aplicativo para baixar vídeos e músicas do YouTube.")
+
+    def show_creator(self):
+        messagebox.showinfo("Criador", "Desenvolvido por Torres")
 
     def load_config(self):
         if os.path.exists(CONFIG_FILE):
