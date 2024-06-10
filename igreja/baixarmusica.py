@@ -13,12 +13,20 @@ CONFIG_FILE = 'config.json'
 
 class YouTubeDownloaderApp(ttk.Window):
     def __init__(self):
-        super().__init__(title="Baixar vídeos e músicas do YouTube", themename="superhero", size=(600, 500))
+        super().__init__(title="Baixar vídeos e músicas do YouTube", themename="superhero", size=(800, 600))
+        self.center_window(800, 600)  # Centraliza a janela na tela
         self.destination_folder = self.load_config()
         self.selected_format = tk.StringVar(value="mp3")  # Define MP3 como padrão
         self.selected_quality = tk.StringVar(value="best")  # Define qualidade como padrão
         self.downloaded_file = None
         self.init_ui()
+
+    def center_window(self, width, height):
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        self.geometry(f'{width}x{height}+{x}+{y}')
 
     def init_ui(self):
         self.header = ttk.Label(self, text="Baixar Vídeos e Músicas do YouTube", font=('Helvetica', 20, 'bold'))
