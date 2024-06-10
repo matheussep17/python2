@@ -164,6 +164,7 @@ class YouTubeDownloaderApp(ttk.Window):
             self.progress['value'] = 100
             self.stats_label.config(text="Concluído!")
             self.log("Concluído!")
+            self.downloaded_file = d['filename']  # Save the downloaded file path
         elif d['status'] == 'downloading':
             p_str = d.get('_percent_str', '0.0%').replace('%', '').strip()
             try:
