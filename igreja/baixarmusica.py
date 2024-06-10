@@ -14,10 +14,10 @@ CONFIG_FILE = 'config.json'
 class YouTubeDownloaderApp(ttk.Window):
     def __init__(self):
         super().__init__(title="Baixar vídeos e músicas do YouTube", themename="superhero", size=(800, 600))
-        self.center_window(800, 600)  # Centraliza a janela na tela
+        self.center_window(800, 600)
         self.destination_folder = self.load_config()
-        self.selected_format = tk.StringVar(value="mp3")  # Define MP3 como padrão
-        self.selected_quality = tk.StringVar(value="best")  # Define qualidade como padrão
+        self.selected_format = tk.StringVar(value="mp3")
+        self.selected_quality = tk.StringVar(value="best")
         self.downloaded_file = None
         self.init_ui()
 
@@ -70,11 +70,11 @@ class YouTubeDownloaderApp(ttk.Window):
 
         self.open_folder_button = ttk.Button(self, text="Abrir local do arquivo", command=self.open_file_location, bootstyle=INFO)
         self.open_folder_button.grid(row=9, column=0, columnspan=3, pady=10)
-        self.open_folder_button.grid_remove()  # Initially hide the button
+        self.open_folder_button.grid_remove()
 
         self.init_menu()
 
-        self.grid_columnconfigure(1, weight=1)  # Make the second column expand
+        self.grid_columnconfigure(1, weight=1)
 
     def init_menu(self):
         menubar = tk.Menu(self)
@@ -172,7 +172,7 @@ class YouTubeDownloaderApp(ttk.Window):
             self.progress['value'] = 100
             self.stats_label.config(text="Concluído!")
             self.log("Concluído!")
-            self.downloaded_file = d['filename']  # Save the downloaded file path
+            self.downloaded_file = d['filename']
         elif d['status'] == 'downloading':
             p_str = d.get('_percent_str', '0.0%').replace('%', '').strip()
             try:
