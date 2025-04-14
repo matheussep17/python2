@@ -2,6 +2,8 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter.scrolledtext import ScrolledText
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
 import yt_dlp
 import json
 from datetime import datetime
@@ -9,13 +11,9 @@ import os
 
 CONFIG_FILE = 'config.json'
 
-# Corrigir a importação do ttk
-import tkinter.ttk as ttk
-
-class YouTubeDownloaderApp(tk.Tk):
+class YouTubeDownloaderApp(ttk.Window):
     def __init__(self):
-        super().__init__()  # Corrigido: não deve passar o título diretamente no construtor
-        self.title("Baixar vídeos e músicas do YouTube")  # Define o título da janela aqui
+        super().__init__(title="Baixar vídeos e músicas do YouTube", themename="darkly", size=(800, 600))
         self.center_window(800, 600)
         self.destination_folder = self.load_config()
         self.selected_format = tk.StringVar(value="mp3")
@@ -31,47 +29,46 @@ class YouTubeDownloaderApp(tk.Tk):
         self.geometry(f'{width}x{height}+{x}+{y}')
 
     def init_ui(self):
-        self.header = tk.Label(self, text="Baixar Vídeos e Músicas do YouTube", font=('Helvetica', 20, 'bold'))
+        self.header = ttk.Label(self, text="Baixar Vídeos e Músicas do YouTube", font=('Helvetica', 20, 'bold'))
         self.header.grid(row=0, column=0, columnspan=4, pady=20)
 
-        self.url_label = tk.Label(self, text="YouTube URL:", font=('Helvetica', 12))
+        self.url_label = ttk.Label(self, text="YouTube URL:", font=('Helvetica', 12))
         self.url_label.grid(row=1, column=0, padx=5, pady=5, sticky='e')
 
-        self.url_entry = tk.Entry(self, width=50, font=('Helvetica', 12))
+        self.url_entry = ttk.Entry(self, width=50, font=('Helvetica', 12))
         self.url_entry.grid(row=1, column=1, columnspan=3, padx=5, pady=5, sticky='we')
 
-        self.dest_button = tk.Button(self, text="Escolher pasta de destino", command=self.choose_dest_folder)
+        self.dest_button = ttk.Button(self, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS)
         self.dest_button.grid(row=2, column=0, padx=5, pady=5, sticky='e')
 
-        self.dest_label = tk.Label(self, text=self.destination_folder or "Nenhuma pasta selecionada", width=50, anchor='w', font=('Helvetica', 12))
+        self.dest_label = ttk.Label(self, text=self.destination_folder or "Nenhuma pasta selecionada", width=50, anchor='w', font=('Helvetica', 12))
         self.dest_label.grid(row=2, column=1, columnspan=3, padx=5, pady=5, sticky='we')
 
-        self.format_label = tk.Label(self, text="Formato:", font=('Helvetica', 12))
+        self.format_label = ttk.Label(self, text="Formato:", font=('Helvetica', 12))
         self.format_label.grid(row=3, column=0, padx=5, pady=5, sticky='e')
 
-        self.format_menu = tk.OptionMenu(self, self.selected_format, 'mp3', 'mp4')
+        self.format_menu = ttk.Combobox(self, textvariable=self.selected_format, values=['mp3', 'mp4'], state='readonly')
         self.format_menu.grid(row=3, column=1, padx=5, pady=5, sticky='w')
 
-        self.quality_label = tk.Label(self, text="Qualidade:", font=('Helvetica', 12))
+        self.quality_label = ttk.Label(self, text="Qualidade:", font=('Helvetica', 12))
         self.quality_label.grid(row=3, column=2, padx=5, pady=5, sticky='e')
 
-        self.quality_menu = tk.OptionMenu(self, self.selected_quality, 'best', '144p', '240p', '360p', '480p', '720p', '1080p', '1440p', '2160p')
+        self.quality_menu = ttk.Combobox(self, textvariable=self.selected_quality, values=['best', '144p', '240p', '360p', '480p', '720p', '1080p', '1440p', '2160p'], state='readonly')
         self.quality_menu.grid(row=3, column=3, padx=5, pady=5, sticky='w')
 
-        self.download_button = tk.Button(self, text="Baixar", command=self.start_download)
+        self.download_button = ttk.Button(self, text="Baixar", command=self.start_download, bootstyle=PRIMARY)
         self.download_button.grid(row=4, column=0, columnspan=4, pady=10, padx=10, sticky='ew')
 
-        # Alterado para usar ttk.Progressbar
         self.progress = ttk.Progressbar(self, orient=tk.HORIZONTAL, length=400, mode='determinate')
         self.progress.grid(row=5, column=0, columnspan=4, pady=10, padx=10, sticky='ew')
 
-        self.stats_label = tk.Label(self, text="", font=('Helvetica', 12))
+        self.stats_label = ttk.Label(self, text="", font=('Helvetica', 12))
         self.stats_label.grid(row=6, column=0, columnspan=4, pady=10, padx=10, sticky='ew')
 
         self.log_text = ScrolledText(self, height=8, state='disabled', wrap='word', font=('Helvetica', 10), bg="#333", fg="#fff", insertbackground='white')
         self.log_text.grid(row=7, column=0, columnspan=4, pady=10, padx=10, sticky='nsew')
 
-        self.open_folder_button = tk.Button(self, text="Abrir local do arquivo", command=self.open_file_location)
+        self.open_folder_button = ttk.Button(self, text="Abrir local do arquivo", command=self.open_file_location, bootstyle=INFO)
         self.open_folder_button.grid(row=8, column=0, columnspan=4, pady=10)
 
         self.init_menu()
@@ -204,10 +201,7 @@ class YouTubeDownloaderApp(tk.Tk):
     def open_file_location(self):
         if self.downloaded_file:
             file_dir = os.path.dirname(self.downloaded_file)
-            if os.name == 'nt':  # Para Windows
-                os.startfile(file_dir)
-            elif os.name == 'posix':  # Para Linux e macOS
-                os.system(f'xdg-open "{file_dir}"')  # Linux ou macOS
+            os.startfile(file_dir)
         else:
             messagebox.showerror("Erro", "Nenhum arquivo baixado encontrado.")
 
