@@ -1,0 +1,4 @@
+# Ignore build and dist folders
+build/
+dist/
+config.json 
