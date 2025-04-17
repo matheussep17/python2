@@ -8,6 +8,7 @@ import yt_dlp
 import json
 from datetime import datetime
 import os
+import subprocess
 
 CONFIG_FILE = 'config.json'
 
@@ -201,7 +202,13 @@ class YouTubeDownloaderApp(ttk.Window):
     def open_file_location(self):
         if self.downloaded_file:
             file_dir = os.path.dirname(self.downloaded_file)
-            os.startfile(file_dir)
+            try:
+                if os.name == 'nt':  # Windows
+                    os.startfile(file_dir)
+                else:  # Linux
+                    subprocess.Popen(['xdg-open', file_dir])
+            except Exception as e:
+                messagebox.showerror("Erro", f"Não foi possível abrir o local do arquivo: {str(e)}")
         else:
             messagebox.showerror("Erro", "Nenhum arquivo baixado encontrado.")
 
