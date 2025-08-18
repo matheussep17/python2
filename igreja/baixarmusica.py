@@ -5,8 +5,8 @@ from tkinter import filedialog, messagebox
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 import yt_dlp
+from yt_dlp.utils import DownloadCancelled
 import json
-from datetime import datetime
 from pathlib import Path
 import subprocess
 import sys
@@ -17,6 +17,7 @@ CONFIG_FILE = Path("config.json")
 
 
 def format_bytes(n):
+    """Formata bytes em unidades legíveis (KB/MB/GB)."""
     try:
         n = float(n)
     except Exception:
@@ -32,13 +33,18 @@ def format_bytes(n):
 class YouTubeDownloaderApp(ttk.Window):
     def __init__(self):
         super().__init__(title="Baixar vídeos e músicas do YouTube",
-                         themename="darkly", size=(680, 420))
-        self.center_window(680, 420)
+                         themename="darkly", size=(720, 440))
+        self.center_window(720, 440)
+
+        # estado
         self.destination_folder = self.load_config()
         self.selected_format = tk.StringVar(value="mp3")
         self.selected_quality = tk.StringVar(value="best")
         self.downloaded_file = None
-        self._last_logged_percent = -1  # só para limitar updates de UI
+
+        # controle de cancelamento
+        self.cancel_requested = False
+        self._last_tmp_file = None  # arquivo parcial (.part) rastreado pelo hook
 
         self.init_ui()
 
@@ -86,27 +92,39 @@ class YouTubeDownloaderApp(ttk.Window):
         )
         self.format_menu.grid(row=3, column=1, padx=5, pady=5, sticky="w")
 
-        ttk.Label(main, text="Qualidade:", font=("Helvetica", 14)).grid(
+        ttk.Label(main, text="Qualidade (vídeo):", font=("Helvetica", 14)).grid(
             row=3, column=2, padx=5, pady=5, sticky="e"
         )
         self.quality_menu = ttk.Combobox(
             main, textvariable=self.selected_quality,
-            values=["best", "144p", "240p", "360p", "480p", "720p", "1080p", "1440p", "2160p"],
+            values=["best", "144p", "240p", "360p", "480p",
+                    "720p", "1080p", "1440p", "2160p"],
             state="readonly", font=("Helvetica", 12)
         )
         self.quality_menu.grid(row=3, column=3, padx=5, pady=5, sticky="w")
 
-        ttk.Button(
-            main, text="Baixar", command=self.start_download, bootstyle=PRIMARY
-        ).grid(row=4, column=0, columnspan=4, pady=(15, 5), sticky="ew")
+        # Ações
+        actions = ttk.Frame(main)
+        actions.grid(row=4, column=0, columnspan=4, pady=(15, 8), sticky="ew")
+        actions.columnconfigure(0, weight=1)
+        actions.columnconfigure(1, weight=1)
 
-        # Barra de progresso (somente percent)
-        self.progress = ttk.Progressbar(main, orient=tk.HORIZONTAL, length=400, mode="determinate")
+        self.download_btn = ttk.Button(actions, text="Baixar",
+                                       command=self.start_download, bootstyle=PRIMARY)
+        self.download_btn.grid(row=0, column=0, sticky="ew", padx=(0, 5))
+
+        self.cancel_btn = ttk.Button(actions, text="Cancelar",
+                                     command=self.cancel_download,
+                                     bootstyle=SECONDARY, state=DISABLED)
+        self.cancel_btn.grid(row=0, column=1, sticky="ew", padx=(5, 0))
+
+        # Barra de progresso + status (sem ETA / sem log)
+        self.progress = ttk.Progressbar(main, orient=tk.HORIZONTAL,
+                                        length=400, mode="determinate")
         self.progress.grid(row=5, column=0, columnspan=4, pady=6, sticky="ew")
 
-        # Status enxuto (sem ETA / sem N/A)
         self.status = ttk.Label(main, text="", font=("Helvetica", 12))
-        self.status.grid(row=6, column=0, columnspan=4, pady=(0, 10), sticky="ew")
+        self.status.grid(row=6, column=0, columnspan=4, pady=(0, 12), sticky="ew")
 
         self.open_folder_button = ttk.Button(
             main, text="Abrir local do arquivo",
@@ -117,6 +135,7 @@ class YouTubeDownloaderApp(ttk.Window):
         for i in range(4):
             main.columnconfigure(i, weight=1)
 
+    # ---------- Config ----------
     def load_config(self):
         if CONFIG_FILE.exists():
             with CONFIG_FILE.open("r", encoding="utf-8") as file:
@@ -134,8 +153,9 @@ class YouTubeDownloaderApp(ttk.Window):
             self.dest_label.config(text=folder)
             self.save_config()
 
+    # ---------- Download ----------
     def start_download(self):
-        url = self.url_entry.get()
+        url = self.url_entry.get().strip()
         if not url:
             messagebox.showerror("Erro", "Insira a URL do YouTube.")
             return
@@ -145,10 +165,15 @@ class YouTubeDownloaderApp(ttk.Window):
 
         # reset UI
         self.progress["value"] = 0
-        self.status.config(text="")
-        self._last_logged_percent = -1
+        self.status.config(text="Preparando...")
         self.open_folder_button.config(state=DISABLED)
         self.downloaded_file = None
+        self.cancel_requested = False
+        self._last_tmp_file = None
+
+        # travar/soltar botões
+        self.download_btn.config(state=DISABLED)
+        self.cancel_btn.config(state=NORMAL)
 
         threading.Thread(
             target=self.download_media,
@@ -156,12 +181,32 @@ class YouTubeDownloaderApp(ttk.Window):
             daemon=True,
         ).start()
 
+    def cancel_download(self):
+        if self.cancel_requested:
+            return
+        self.cancel_requested = True
+        self.cancel_btn.config(state=DISABLED)
+        self.status.config(text="Cancelando...")
+
+    def _cleanup_partial(self):
+        """Remove arquivo parcial conhecido (.part / .ytdl)."""
+        paths = set()
+        if self._last_tmp_file:
+            paths.add(self._last_tmp_file)
+            if not self._last_tmp_file.endswith(".part"):
+                paths.add(self._last_tmp_file + ".part")
+            paths.add(self._last_tmp_file + ".ytdl")
+        for p in list(paths):
+            try:
+                if p and os.path.exists(p):
+                    os.remove(p)
+            except Exception:
+                pass
+
     def download_media(self, url, format_choice, quality_choice):
         try:
-            self.status.config(text="Preparando...")
-
             if format_choice == "mp3":
-                # áudio: extrai em MP3 via ffmpeg
+                # áudio -> MP3
                 ydl_opts = {
                     "format": "bestaudio/best",
                     "postprocessors": [{
@@ -172,10 +217,10 @@ class YouTubeDownloaderApp(ttk.Window):
                     "progress_hooks": [self.ydl_hook],
                     "noprogress": True,
                     "nocolor": True,
+                    "quiet": True,
                 }
             else:
-                # vídeo MP4 com AAC (evita Opus):
-                # escolhe trilhas compatíveis: vídeo mp4 (H.264) + áudio m4a (AAC)
+                # vídeo MP4 (H.264) + m4a (AAC) -> evita Opus
                 if quality_choice == "best":
                     vsel = "bestvideo[ext=mp4]"
                 else:
@@ -189,32 +234,53 @@ class YouTubeDownloaderApp(ttk.Window):
                     "progress_hooks": [self.ydl_hook],
                     "noprogress": True,
                     "nocolor": True,
-                    "merge_output_format": "mp4",  # garante contêiner mp4
+                    "quiet": True,
+                    "merge_output_format": "mp4",
+                    # Se algum caso raro ainda vier com áudio incompatível,
+                    # descomente para forçar AAC:
+                    # "postprocessor_args": ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k"],
                 }
-                # Se ainda assim pegar áudio incompatível em casos raros,
-                # descomente as linhas abaixo para forçar reencode do áudio para AAC:
-                # ydl_opts["postprocessor_args"] = ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k"]
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+                try:
+                    ydl.download([url])
+                except DownloadCancelled:
+                    # cancelado pelo usuário
+                    self._cleanup_partial()
+                    self._finish_canceled()
+                    return
 
-            self.status.config(text="Download concluído!")
-            self.open_folder_button.config(state=NORMAL)
+            # concluído
+            self._finish_ok()
 
         except Exception as e:
-            messagebox.showerror("Erro", str(e))
+            if self.cancel_requested:
+                # Tratamento gentil se a exceção veio após cancelar
+                self._cleanup_partial()
+                self._finish_canceled()
+                return
+            self._finish_error(str(e))
 
+    # ---------- Hooks / Finalização ----------
     def ydl_hook(self, d):
-        if d.get("status") == "finished":
+        # cancelar de forma amigável
+        if self.cancel_requested:
+            raise DownloadCancelled()
+
+        status = d.get("status")
+        # Guarda caminho temporário/definitivo para poder limpar em cancelamento
+        self._last_tmp_file = d.get("tmpfilename") or d.get("filename") or self._last_tmp_file
+
+        if status == "finished":
             self.progress["value"] = 100
             self.status.config(text="Concluído!")
             self.downloaded_file = d.get("filename") or d.get("info_dict", {}).get("_filename")
             return
 
-        if d.get("status") == "downloading":
+        if status == "downloading":
             downloaded = d.get("downloaded_bytes")
             total = d.get("total_bytes") or d.get("total_bytes_estimate")
-            speed = d.get("speed")  # manteremos na UI (sem ETA)
+            speed = d.get("speed")  # mostrado sem ETA
 
             pct = None
             if downloaded is not None and total:
@@ -229,21 +295,38 @@ class YouTubeDownloaderApp(ttk.Window):
             parts = ["Baixando..."]
             if pct is not None:
                 parts.append(f"{pct:.1f}%")
-
             if downloaded is not None:
                 if total:
                     parts.append(f"({format_bytes(downloaded)} de {format_bytes(total)})")
                 else:
                     parts.append(f"({format_bytes(downloaded)})")
-
             if speed:
                 sp = format_bytes(speed)
                 if sp:
                     parts.append(f"{sp}/s")
 
-            # Status sem ETA e sem 'N/A'
             self.status.config(text=" • ".join([p for p in parts if p]))
 
+    def _finish_ok(self):
+        self.status.config(text="Download concluído!")
+        self.open_folder_button.config(state=NORMAL)
+        self.download_btn.config(state=NORMAL)
+        self.cancel_btn.config(state=DISABLED)
+
+    def _finish_canceled(self):
+        self.status.config(text="Download cancelado.")
+        self.progress["value"] = 0
+        self.open_folder_button.config(state=DISABLED)
+        self.download_btn.config(state=NORMAL)
+        self.cancel_btn.config(state=DISABLED)
+
+    def _finish_error(self, msg):
+        self.status.config(text="")
+        self.download_btn.config(state=NORMAL)
+        self.cancel_btn.config(state=DISABLED)
+        messagebox.showerror("Erro", msg)
+
+    # ---------- Abertura de pasta ----------
     def open_file_location(self):
         if self.downloaded_file:
             file_dir = os.path.dirname(self.downloaded_file)
