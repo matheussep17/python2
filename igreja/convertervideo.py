@@ -41,11 +41,14 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             super().__init__()
             self.title("Conversor de Vídeo")
             self.style = ttk.Style(theme="darkly")
-            self.geometry("600x360")
+            self.geometry("600x480")  # <--- altura maior
         else:
-            super().__init__(title="Conversor de Vídeo", themename="darkly", size=(600, 360))
+            super().__init__(title="Conversor de Vídeo", themename="darkly", size=(600, 480))  # <--- altura maior
 
-        self.center_window(600, 360)
+        # Evita ficar menor que o necessário (para o botão aparecer sempre)
+        self.minsize(600, 420)
+
+        self.center_window(600, 480)  # <--- centraliza com a nova altura
         self.caminho_video = ""
         self.ultimo_arquivo_convertido = ""
         self.formato_destino = tk.StringVar(value="mp4")
@@ -136,7 +139,7 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             container, text="Abrir pasta do arquivo convertido",
             command=self.abrir_pasta, bootstyle=INFO, state=DISABLED
         )
-        self.open_btn.pack(pady=10)
+        self.open_btn.pack(pady=10)  # <--- agora cabe com folga
 
     # ---------- Drag & Drop ----------
     def _on_drop_files(self, event):
@@ -293,7 +296,7 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
                     self.status_var.set(payload)
                     self.convert_btn.config(state=NORMAL)
                     self.cancel_btn.config(state=DISABLED)
-                    self.open_btn.config(state=NORMAL)
+                    self.open_btn.config(state=NORMAL)  # <--- fica visível e habilitada
                     messagebox.showinfo("Sucesso", "Conversão concluída!")
                 elif kind == "canceled":
                     self.is_converting = False
