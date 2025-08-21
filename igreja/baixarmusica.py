@@ -32,13 +32,14 @@ def format_bytes(n):
 
 class YouTubeDownloaderApp(ttk.Window):
     def __init__(self):
+        # janelinha um pouco maior para caber o texto "Qualidade do vídeo"
         super().__init__(title="Baixar vídeos e músicas do YouTube",
-                         themename="darkly", size=(720, 440))
-        self.center_window(720, 440)
+                         themename="darkly", size=(780, 460))
+        self.center_window(780, 460)
 
         # estado
         self.destination_folder = self.load_config()
-        self.selected_format = tk.StringVar(value="mp3")
+        self.selected_format = tk.StringVar(value="Música")   # antes: "mp3"
         self.selected_quality = tk.StringVar(value="best")
         self.downloaded_file = None
 
@@ -83,25 +84,32 @@ class YouTubeDownloaderApp(ttk.Window):
         )
         self.dest_label.grid(row=2, column=1, columnspan=3, padx=5, pady=5, sticky="we")
 
+        # Formato (Música/Vídeo)
         ttk.Label(main, text="Formato:", font=("Helvetica", 14)).grid(
             row=3, column=0, padx=5, pady=5, sticky="e"
         )
         self.format_menu = ttk.Combobox(
-            main, textvariable=self.selected_format, values=["mp3", "mp4"],
-            state="readonly", font=("Helvetica", 12)
+            main, textvariable=self.selected_format,
+            values=["Música", "Vídeo"],              # antes: ["mp3", "mp4"]
+            state="readonly", font=("Helvetica", 12), width=12
         )
         self.format_menu.grid(row=3, column=1, padx=5, pady=5, sticky="w")
+        self.format_menu.bind("<<ComboboxSelected>>", self._on_format_change)
 
-        ttk.Label(main, text="Qualidade (vídeo):", font=("Helvetica", 14)).grid(
-            row=3, column=2, padx=5, pady=5, sticky="e"
-        )
+        # Qualidade do vídeo (mostrada apenas quando formato = Vídeo)
+        self.quality_label = ttk.Label(main, text="Qualidade do vídeo:", font=("Helvetica", 14))
+        self.quality_label.grid(row=3, column=2, padx=5, pady=5, sticky="e")
+
         self.quality_menu = ttk.Combobox(
             main, textvariable=self.selected_quality,
             values=["best", "144p", "240p", "360p", "480p",
                     "720p", "1080p", "1440p", "2160p"],
-            state="readonly", font=("Helvetica", 12)
+            state="readonly", font=("Helvetica", 12), width=12
         )
         self.quality_menu.grid(row=3, column=3, padx=5, pady=5, sticky="w")
+
+        # referências diretas (sem grid_slaves)
+        self._quality_widgets = [self.quality_label, self.quality_menu]
 
         # Ações
         actions = ttk.Frame(main)
@@ -135,6 +143,9 @@ class YouTubeDownloaderApp(ttk.Window):
         for i in range(4):
             main.columnconfigure(i, weight=1)
 
+        # aplica a visibilidade inicial (default é "Música" → esconde qualidade)
+        self._apply_quality_visibility()
+
     # ---------- Config ----------
     def load_config(self):
         if CONFIG_FILE.exists():
@@ -152,6 +163,28 @@ class YouTubeDownloaderApp(ttk.Window):
             self.destination_folder = folder
             self.dest_label.config(text=folder)
             self.save_config()
+
+    # ---------- Eventos UI ----------
+    def _on_format_change(self, _evt=None):
+        self._apply_quality_visibility()
+
+    def _is_video(self):
+        return self.selected_format.get() == "Vídeo"
+
+    def _apply_quality_visibility(self):
+        # mostra qualidade somente quando o formato é "Vídeo"
+        if self._is_video():
+            for w in self._quality_widgets:
+                try:
+                    w.grid()
+                except Exception:
+                    pass
+        else:
+            for w in self._quality_widgets:
+                try:
+                    w.grid_remove()
+                except Exception:
+                    pass
 
     # ---------- Download ----------
     def start_download(self):
@@ -175,9 +208,12 @@ class YouTubeDownloaderApp(ttk.Window):
         self.download_btn.config(state=DISABLED)
         self.cancel_btn.config(state=NORMAL)
 
+        fmt_mode = self.selected_format.get()   # "Música" ou "Vídeo"
+        qual = self.selected_quality.get()
+
         threading.Thread(
             target=self.download_media,
-            args=(url, self.selected_format.get(), self.selected_quality.get()),
+            args=(url, fmt_mode, qual),
             daemon=True,
         ).start()
 
@@ -203,9 +239,9 @@ class YouTubeDownloaderApp(ttk.Window):
             except Exception:
                 pass
 
-    def download_media(self, url, format_choice, quality_choice):
+    def download_media(self, url, fmt_mode, quality_choice):
         try:
-            if format_choice == "mp3":
+            if fmt_mode == "Música":
                 # áudio -> MP3
                 ydl_opts = {
                     "format": "bestaudio/best",
@@ -220,7 +256,7 @@ class YouTubeDownloaderApp(ttk.Window):
                     "quiet": True,
                 }
             else:
-                # vídeo MP4 (H.264) + m4a (AAC) -> evita Opus
+                # vídeo MP4 (H.264) + m4a (AAC)
                 if quality_choice == "best":
                     vsel = "bestvideo[ext=mp4]"
                 else:
@@ -236,9 +272,6 @@ class YouTubeDownloaderApp(ttk.Window):
                     "nocolor": True,
                     "quiet": True,
                     "merge_output_format": "mp4",
-                    # Se algum caso raro ainda vier com áudio incompatível,
-                    # descomente para forçar AAC:
-                    # "postprocessor_args": ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k"],
                 }
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
