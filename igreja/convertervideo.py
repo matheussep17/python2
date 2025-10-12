@@ -61,7 +61,8 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.ui_queue = queue.Queue()            # thread -> UI
 
         # --- FORMATS BASE (inclui mp3) ---
-        self.base_formats = ["mp4", "avi", "mkv", "mov", "mp3"]  # NEW
+        self.base_formats = ["mp3", "mp4", "avi", "mkv", "mov"]
+  # NEW
 
         self.init_ui()
         self.after(100, self._drain_ui_queue)
