@@ -60,6 +60,9 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self._current_output_path = None         # <-- arquivo de saída atual
         self.ui_queue = queue.Queue()            # thread -> UI
 
+        # --- FORMATS BASE (inclui mp3) ---
+        self.base_formats = ["mp4", "avi", "mkv", "mov", "mp3"]  # NEW
+
         self.init_ui()
         self.after(100, self._drain_ui_queue)
 
@@ -111,10 +114,14 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         fmt_row.pack(pady=(8, 5), fill="x")
         ttk.Label(fmt_row, text="Converter para:", font=("Helvetica", 14, "bold")).pack(side="left")
         self.format_menu = ttk.Combobox(
-            fmt_row, textvariable=self.formato_destino,
-            values=["mp4", "avi", "mkv", "mov"], state="readonly"
+            fmt_row,
+            textvariable=self.formato_destino,
+            values=self.base_formats,              # NEW: lista base
+            state="readonly"
         )
         self.format_menu.pack(side="left", padx=(10, 0))
+        # garante coerência inicial
+        self._update_format_menu()                 # NEW
 
         # Botões Converter / Cancelar
         btn_row = ttk.Frame(container)
@@ -141,6 +148,16 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         )
         self.open_btn.pack(pady=10)  # <--- agora cabe com folga
 
+    # ---------- Atualiza opções do combobox removendo o formato original ----------
+    def _update_format_menu(self, original_ext=None):
+        values = list(self.base_formats)
+        if original_ext and original_ext in values:
+            values.remove(original_ext)
+        self.format_menu.config(values=values)
+        current = self.formato_destino.get()
+        if current not in values and values:
+            self.formato_destino.set(values[0])
+
     # ---------- Drag & Drop ----------
     def _on_drop_files(self, event):
         raw = event.data.strip()
@@ -156,7 +173,7 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
     def selecionar_video(self):
         caminho = filedialog.askopenfilename(
             title="Selecione um vídeo",
-            filetypes=[("Arquivos de vídeo", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v")],
+            filetypes=[("Arquivos de mídia", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v *.wav *.mp3")],  # NEW
         )
         if caminho:
             self._set_selected_file(caminho)
@@ -166,6 +183,7 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         formato_original = os.path.splitext(caminho)[1][1:].lower()
         self.label_video.config(text=f"Arquivo: {os.path.basename(caminho)}")
         self.label_formato.config(text=f"Formato original: {formato_original}")
+        self._update_format_menu(formato_original)   # NEW
 
     def remover_video(self):
         self.caminho_video = ""
@@ -174,6 +192,8 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.progress_var.set(0)
         self.status_var.set("")
         self.open_btn.config(state=DISABLED)
+        # volta lista para base (sem filtro de origem)
+        self._update_format_menu(None)               # NEW
 
     # ---------- Conversão ----------
     def start_conversion(self):
@@ -214,7 +234,12 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             duration = self._probe_duration(in_path)
             total_seconds = float(duration) if duration else None
 
-            cmd = ["ffmpeg", "-y", "-i", in_path, out_path]
+            # NEW: se destino for mp3, extrai só o áudio
+            if out_path.lower().endswith(".mp3"):
+                cmd = ["ffmpeg", "-y", "-i", in_path, "-vn", "-acodec", "libmp3lame", "-q:a", "2", out_path]
+            else:
+                cmd = ["ffmpeg", "-y", "-i", in_path, out_path]
+
             creationflags = create_no_window_flags()
             self.proc = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
