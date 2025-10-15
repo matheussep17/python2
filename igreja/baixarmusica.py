@@ -4,16 +4,39 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
-import yt_dlp
-from yt_dlp.utils import DownloadCancelled
 import json
 from pathlib import Path
-import subprocess
 import sys
+import subprocess
 import os
 import math
 
 CONFIG_FILE = Path("config.json")
+
+# =======================
+# Auto-update do yt-dlp
+# =======================
+def ensure_yt_dlp_updated():
+    """
+    Garante que o yt-dlp esteja atualizado sempre que o app iniciar.
+    Silencioso em caso de falha (sem travar a UI).
+    """
+    try:
+        # Usa o mesmo Python que está rodando o app
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-U", "yt-dlp"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass  # não interrompe o app se algo der errado
+
+ensure_yt_dlp_updated()
+
+# Importa depois de tentar atualizar
+import yt_dlp
+from yt_dlp.utils import DownloadCancelled
 
 
 def format_bytes(n):
