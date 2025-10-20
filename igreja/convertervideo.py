@@ -15,6 +15,19 @@ try:
 except Exception:
     HAS_DND = False
 
+# --- Dependências opcionais para imagens ---
+try:
+    from PIL import Image
+    HAS_PIL = True
+except Exception:
+    HAS_PIL = False
+
+try:
+    import rawpy  # para CR2/RAW
+    HAS_RAWPY = True
+except Exception:
+    HAS_RAWPY = False
+
 
 def create_no_window_flags():
     """Evita abrir o console no Windows."""
@@ -34,16 +47,36 @@ def seconds_to_hms(s):
     return f"{h:02d}:{m:02d}:{sec:02d}"
 
 
+def _ext(path):
+    return os.path.splitext(path)[1][1:].lower()
+
+
+VIDEO_EXTS = {
+    "mp4", "avi", "mkv", "mov", "webm", "flv", "m4v"
+}
+AUDIO_EXTS = {"wav", "mp3"}
+IMAGE_EXTS = {
+    "jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff", "cr2"
+}
+
+
+def is_video_file(path):
+    return _ext(path) in VIDEO_EXTS or _ext(path) in AUDIO_EXTS  # mantém seu comportamento anterior (wav/mp3 listados)
+
+def is_image_file(path):
+    return _ext(path) in IMAGE_EXTS
+
+
 class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
     def __init__(self):
         if HAS_DND:
             # Com DnD herdamos de TkinterDnD.Tk e aplicamos o tema do ttkbootstrap
             super().__init__()
-            self.title("Conversor de Vídeo")
+            self.title("Conversor de Vídeo / Imagem")
             self.style = ttk.Style(theme="darkly")
             self.geometry("600x480")  # <--- altura maior
         else:
-            super().__init__(title="Conversor de Vídeo", themename="darkly", size=(600, 480))  # <--- altura maior
+            super().__init__(title="Conversor de Vídeo / Imagem", themename="darkly", size=(600, 480))  # <--- altura maior
 
         # Evita ficar menor que o necessário (para o botão aparecer sempre)
         self.minsize(600, 420)
@@ -60,9 +93,13 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self._current_output_path = None         # <-- arquivo de saída atual
         self.ui_queue = queue.Queue()            # thread -> UI
 
-        # --- FORMATS BASE (inclui mp3) ---
-        self.base_formats = ["mp3", "mp4", "avi", "mkv", "mov"]
-  # NEW
+        # --- FORMATS (vídeo/áudio) ---
+        self.video_formats = ["mp3", "mp4", "avi", "mkv", "mov"]
+        # --- FORMATS (imagem) ---
+        self.image_formats = ["jpg", "png", "webp", "tiff", "bmp"]
+
+        # modo atual: "video" ou "image"
+        self.current_mode = "video"
 
         self.init_ui()
         self.after(100, self._drain_ui_queue)
@@ -87,14 +124,14 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         container = ttk.Frame(self, padding=20)
         container.pack(fill="both", expand=True)
 
-        ttk.Label(container, text="Conversor de Vídeo", font=("Helvetica", 20, "bold")).pack(pady=(0, 10))
+        ttk.Label(container, text="Conversor de Vídeo / Imagem", font=("Helvetica", 20, "bold")).pack(pady=(0, 10))
 
         # Linha Selecionar / Remover
         row = ttk.Frame(container)
         row.pack(pady=5, fill="x")
 
-        ttk.Button(row, text="Selecionar Vídeo", command=self.selecionar_video, bootstyle=WARNING).pack(side="left")
-        ttk.Button(row, text="🗑 Remover vídeo", command=self.remover_video, bootstyle=DANGER).pack(side="left", padx=(10, 0))
+        ttk.Button(row, text="Selecionar Arquivo", command=self.selecionar_video, bootstyle=WARNING).pack(side="left")
+        ttk.Button(row, text="🗑 Remover arquivo", command=self.remover_video, bootstyle=DANGER).pack(side="left", padx=(10, 0))
 
         # Info do arquivo
         self.label_video = ttk.Label(container, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
@@ -105,7 +142,7 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         if HAS_DND:
             ttk.Label(
                 container,
-                text="Dica: arraste e solte um arquivo de vídeo aqui.",
+                text="Dica: arraste e solte um arquivo de vídeo (mp4, avi, mkv...) ou imagem (jpg, png, cr2...) aqui.",
                 font=("Helvetica", 10, "italic"),
                 foreground="#9aa0a6",
             ).pack(anchor="w", pady=(0, 6))
@@ -117,12 +154,12 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.format_menu = ttk.Combobox(
             fmt_row,
             textvariable=self.formato_destino,
-            values=self.base_formats,              # NEW: lista base
+            values=self.video_formats,              # inicia em vídeo
             state="readonly"
         )
         self.format_menu.pack(side="left", padx=(10, 0))
-        # garante coerência inicial
-        self._update_format_menu()                 # NEW
+        # coerência inicial (sem arquivo ainda)
+        self._update_format_menu(None)
 
         # Botões Converter / Cancelar
         btn_row = ttk.Frame(container)
@@ -147,13 +184,18 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             container, text="Abrir pasta do arquivo convertido",
             command=self.abrir_pasta, bootstyle=INFO, state=DISABLED
         )
-        self.open_btn.pack(pady=10)  # <--- agora cabe com folga
+        self.open_btn.pack(pady=10)
 
     # ---------- Atualiza opções do combobox removendo o formato original ----------
     def _update_format_menu(self, original_ext=None):
-        values = list(self.base_formats)
+        if self.current_mode == "image":
+            values = list(self.image_formats)
+        else:
+            values = list(self.video_formats)
+
         if original_ext and original_ext in values:
             values.remove(original_ext)
+
         self.format_menu.config(values=values)
         current = self.formato_destino.get()
         if current not in values and values:
@@ -172,19 +214,34 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
     # ---------- Seleção / Remoção ----------
     def selecionar_video(self):
+        # adiciona imagens nas opções mantendo layout
+        tipos = [
+            ("Vídeo/Áudio/Imagem", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v *.wav *.mp3 *.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff *.cr2"),
+            ("Vídeos", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v"),
+            ("Áudio", "*.wav *.mp3"),
+            ("Imagens", "*.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff *.cr2"),
+            ("Todos", "*.*"),
+        ]
         caminho = filedialog.askopenfilename(
-            title="Selecione um vídeo",
-            filetypes=[("Arquivos de mídia", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v *.wav *.mp3")],  # NEW
+            title="Selecione um arquivo",
+            filetypes=tipos,
         )
         if caminho:
             self._set_selected_file(caminho)
 
     def _set_selected_file(self, caminho):
         self.caminho_video = caminho
-        formato_original = os.path.splitext(caminho)[1][1:].lower()
+        formato_original = _ext(caminho)
         self.label_video.config(text=f"Arquivo: {os.path.basename(caminho)}")
         self.label_formato.config(text=f"Formato original: {formato_original}")
-        self._update_format_menu(formato_original)   # NEW
+
+        # Detecta tipo e ajusta lista do combobox
+        if is_image_file(caminho) and not is_video_file(caminho):
+            self.current_mode = "image"
+        else:
+            self.current_mode = "video"
+
+        self._update_format_menu(formato_original)
 
     def remover_video(self):
         self.caminho_video = ""
@@ -193,20 +250,22 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.progress_var.set(0)
         self.status_var.set("")
         self.open_btn.config(state=DISABLED)
-        # volta lista para base (sem filtro de origem)
-        self._update_format_menu(None)               # NEW
+        # volta lista padrão para vídeo
+        self.current_mode = "video"
+        self._update_format_menu(None)
 
     # ---------- Conversão ----------
     def start_conversion(self):
         if self.is_converting:
             return
         if not self.caminho_video:
-            messagebox.showerror("Erro", "Selecione um vídeo primeiro.")
+            messagebox.showerror("Erro", "Selecione um arquivo primeiro.")
             return
 
         formato_destino = self.formato_destino.get()
         pasta_saida = os.path.dirname(self.caminho_video)
-        nome_saida = os.path.splitext(os.path.basename(self.caminho_video))[0] + f".{formato_destino}"
+        base = os.path.splitext(os.path.basename(self.caminho_video))[0]
+        nome_saida = base + f".{formato_destino}"
         caminho_saida = os.path.join(pasta_saida, nome_saida)
 
         self.is_converting = True
@@ -218,7 +277,10 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.progress_var.set(0)
         self.status_var.set("Preparando...")
 
-        t = threading.Thread(target=self._convert_worker, args=(self.caminho_video, caminho_saida), daemon=True)
+        if self.current_mode == "image":
+            t = threading.Thread(target=self._convert_image_worker, args=(self.caminho_video, caminho_saida), daemon=True)
+        else:
+            t = threading.Thread(target=self._convert_worker, args=(self.caminho_video, caminho_saida), daemon=True)
         t.start()
 
     def cancel_conversion(self):
@@ -230,12 +292,13 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
                 except Exception:
                     pass
 
+    # ---------- Worker de VÍDEO/ÁUDIO (original) ----------
     def _convert_worker(self, in_path, out_path):
         try:
             duration = self._probe_duration(in_path)
             total_seconds = float(duration) if duration else None
 
-            # NEW: se destino for mp3, extrai só o áudio
+            # se destino for mp3, extrai só o áudio
             if out_path.lower().endswith(".mp3"):
                 cmd = ["ffmpeg", "-y", "-i", in_path, "-vn", "-acodec", "libmp3lame", "-q:a", "2", out_path]
             else:
@@ -279,7 +342,7 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
             if ret == 0:
                 self.ultimo_arquivo_convertido = out_path
-                self.ui_queue.put(("done", f"Vídeo convertido com sucesso!\nArquivo: {os.path.basename(out_path)}"))
+                self.ui_queue.put(("done", f"Arquivo convertido com sucesso!\nArquivo: {os.path.basename(out_path)}"))
             else:
                 self.ui_queue.put(("error", "Falha na conversão. Verifique se o arquivo é válido e se o ffmpeg está instalado."))
 
@@ -297,6 +360,80 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
                 self.ui_queue.put(("error", f"Erro: {e}"))
         finally:
             self.proc = None
+
+    # ---------- Worker de IMAGEM (novo) ----------
+    def _convert_image_worker(self, in_path, out_path):
+        try:
+            if not HAS_PIL:
+                self.ui_queue.put(("error", "Conversão de imagens requer Pillow. Instale com: pip install pillow"))
+                return
+
+            self.ui_queue.put(("status", "Convertendo imagem..."))
+
+            src_ext = _ext(in_path)
+            dst_ext = _ext(out_path)
+
+            # Carrega a imagem (CR2 via rawpy se disponível)
+            if src_ext == "cr2":
+                if not HAS_RAWPY:
+                    self.ui_queue.put(("error", "Para converter CR2 é necessário instalar o rawpy: pip install rawpy"))
+                    return
+                with rawpy.imread(in_path) as raw:
+                    rgb = raw.postprocess()
+                # converte o array para PIL
+                from PIL import Image
+                im = Image.fromarray(rgb)
+            else:
+                im = Image.open(in_path)
+
+            # Converte para modo adequado dependendo do formato de destino
+            save_kwargs = {}
+            fmt = dst_ext.upper()
+            # Ajustes por formato
+            if dst_ext in ("jpg", "jpeg"):
+                if im.mode in ("RGBA", "LA", "P"):
+                    im = im.convert("RGB")
+                save_kwargs["quality"] = 92
+                fmt = "JPEG"
+            elif dst_ext == "png":
+                # mantém alpha se houver
+                pass
+            elif dst_ext == "webp":
+                # mantém alpha; qualidade default
+                fmt = "WEBP"
+                save_kwargs["quality"] = 92
+            elif dst_ext in ("tif", "tiff"):
+                fmt = "TIFF"
+            elif dst_ext == "bmp":
+                fmt = "BMP"
+
+            # Salva
+            im.save(out_path, fmt, **save_kwargs)
+
+            # Finaliza UI
+            if self.cancel_requested:
+                try:
+                    if out_path and os.path.exists(out_path):
+                        os.remove(out_path)
+                except Exception:
+                    pass
+                self.ui_queue.put(("canceled", "Conversão cancelada."))
+                return
+
+            self.ultimo_arquivo_convertido = out_path
+            self.ui_queue.put(("progress", 100))
+            self.ui_queue.put(("done", f"Arquivo convertido com sucesso!\nArquivo: {os.path.basename(out_path)}"))
+
+        except Exception as e:
+            if self.cancel_requested:
+                try:
+                    if out_path and os.path.exists(out_path):
+                        os.remove(out_path)
+                except Exception:
+                    pass
+                self.ui_queue.put(("canceled", "Conversão cancelada."))
+            else:
+                self.ui_queue.put(("error", f"Erro na conversão de imagem: {e}"))
 
     def _probe_duration(self, path):
         try:
@@ -322,7 +459,7 @@ class VideoConverterApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
                     self.status_var.set(payload)
                     self.convert_btn.config(state=NORMAL)
                     self.cancel_btn.config(state=DISABLED)
-                    self.open_btn.config(state=NORMAL)  # <--- fica visível e habilitada
+                    self.open_btn.config(state=NORMAL)
                     messagebox.showinfo("Sucesso", "Conversão concluída!")
                 elif kind == "canceled":
                     self.is_converting = False
