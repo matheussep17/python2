@@ -1,6 +1,3 @@
-# app_unificado.py
-# Mídia Suite — Conversor • YouTube • Transcrição (tema darkly)
-
 import os, sys, math, json, queue, socket, threading, subprocess, importlib.util, tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -137,7 +134,7 @@ class ConverterFrame(ttk.Frame):
         if paths: self._set_selected_files(list(paths))
 
     def _collect_supported_files(self, items):
-        out=[]; 
+        out=[]
         for it in items:
             if os.path.isfile(it) and _ext(it) in ALL_EXTS: out.append(os.path.abspath(it))
             elif os.path.isdir(it):
@@ -153,7 +150,7 @@ class ConverterFrame(ttk.Frame):
         return uniq
 
     def _on_drop_files(self,event):
-        items=self.tk.splitlist(event.data); 
+        items=self.tk.splitlist(event.data)
         if not items: return
         paths=self._collect_supported_files(items)
         if paths: self._set_selected_files(paths)
@@ -580,26 +577,30 @@ class YouTubeFrame(ttk.Frame):
                 try: w.pack_forget()
                 except Exception: pass
 
-    # --------- seleção de qualidade 100% respeitada ---------
+    # --------- seleção de qualidade corrigida (respeita EXATO e depois <= alvo) ---------
     def _build_yt_format(self, quality_choice):
         """
-        Retorna (format_string, sort_list, force_flag)
-        - Preferimos mp4 (H.264/avc1) + m4a para compatibilidade.
-        - Se 'best', pega melhor mp4 disponível.
-        - Se resolução escolhida, pega a MELHOR <= alvo, e força sort por res.
+        Retorna uma única string 'format' que:
+          1) tenta altura EXATA (mp4 -> qualquer),
+          2) depois altura <= alvo (mp4 -> qualquer),
+          3) junta com melhor áudio (m4a preferido, senão bestaudio),
+          4) e por fim cai para 'best' como último recurso de segurança.
+        Isso evita "travar" em 480p mp4 quando existem 720p/1080p em VP9/AV1.
         """
-        # vídeo (bv) + áudio (ba). fallback: best[ext=mp4] / best
         if quality_choice == "best":
-            vsel = "bv*[ext=mp4]/bv*"
-            fmt = f"{vsel}+ba/b[ext=mp4]/b"
-            sort = ["vcodec:h264", "codec:avc1", "res", "fps"]
-            return fmt, sort, False
+            return "(bv*[ext=mp4]/bv*)+ba[ext=m4a]/ba/b[ext=mp4]/b"
+
         h = "".join(ch for ch in quality_choice if ch.isdigit()) or "1080"
-        # primeiro tenta mp4 até a resolução alvo; se não houver, qualquer bv* até a resolução
-        vsel = f"bv*[ext=mp4][height<={h}]/bv*[height<={h}]"
-        fmt = f"{vsel}+ba/b[ext=mp4]/b"
-        sort = [f"res:{h}", "vcodec:h264", "codec:avc1", "fps"]
-        return fmt, sort, True  # força obedecer o sort
+
+        # Ordem: exato h mp4 -> exato h qualquer -> <=h mp4 -> <=h qualquer
+        # Sempre juntar com áudio preferindo m4a
+        fmt = (
+            f"((bv*[ext=mp4][height={h}]/bv*[height={h}])"
+            f"/(bv*[ext=mp4][height<={h}]/bv*[height<={h}]))"
+            f"+(ba[ext=m4a]/ba)"
+            f"/b[ext=mp4]/b"
+        )
+        return fmt
 
     def start_download(self):
         url=self.url_entry.get().strip()
@@ -639,8 +640,7 @@ class YouTubeFrame(ttk.Frame):
                 "noprogress": True, "nocolor": True, "quiet": True,
                 "progress_hooks": [self.ydl_hook],
                 "outtmpl": os.path.join(self.destination_folder, "%(title)s.%(ext)s"),
-                # Workaround SABR (evita web/web_safari)
-                "extractor_args": {"youtube": {"player_client": ["android"], "player_skip": ["web_safari","web"]}},
+                # Removido extractor_args que podia limitar formatos
                 "merge_output_format": "mp4",
                 "prefer_free_formats": False,
                 "allow_unplayable_formats": False,
@@ -650,8 +650,8 @@ class YouTubeFrame(ttk.Frame):
                 ydl_opts = {**common_args, "format": "bestaudio/best",
                             "postprocessors": [{"key":"FFmpegExtractAudio","preferredcodec":"mp3"}]}
             else:
-                fmt, sort, force = self._build_yt_format(quality_choice)
-                ydl_opts = {**common_args, "format": fmt, "format_sort": sort, "format_sort_force": force}
+                fmt = self._build_yt_format(quality_choice)
+                ydl_opts = {**common_args, "format": fmt}
 
             y = self._yt_dlp
             with y.YoutubeDL(ydl_opts) as ydl:
@@ -671,8 +671,14 @@ class YouTubeFrame(ttk.Frame):
         if self.cancel_requested: raise self._yt_dlp.utils.DownloadCancelled()
         st=d.get("status"); self._last_tmp_file=d.get("tmpfilename") or d.get("filename") or self._last_tmp_file
         if st=="finished":
-            self.progress["value"]=100; self.status.config(text="Concluído!")
-            self.downloaded_file=d.get("filename") or d.get("info_dict",{}).get("_filename")
+            self.progress["value"]=100
+            info = d.get("info_dict", {}) or {}
+            fmt_note = info.get("format", "") or info.get("format_note", "") or ""
+            height = info.get("height")
+            chosen = f"{height}p" if height else ""
+            suffix = f" — Selecionado: {chosen} {fmt_note}".strip()
+            self.status.config(text=f"Concluído! {suffix}".strip())
+            self.downloaded_file=d.get("filename") or info.get("_filename")
             self.on_status("Download finalizado"); return
         if st=="downloading":
             downloaded=d.get("downloaded_bytes"); total=d.get("total_bytes") or d.get("total_bytes_estimate"); speed=d.get("speed")
@@ -681,7 +687,7 @@ class YouTubeFrame(ttk.Frame):
                 try: pct=max(0.0,min(100.0,(downloaded/total)*100.0))
                 except Exception: pct=None
             if pct is not None: self.progress["value"]=pct
-            parts=["Baixando..."]; 
+            parts=["Baixando..."]
             if pct is not None: parts.append(f"{pct:.1f}%")
             if downloaded is not None:
                 parts.append(f"({format_bytes(downloaded)} de {format_bytes(total) if total else '??'})")
@@ -691,7 +697,7 @@ class YouTubeFrame(ttk.Frame):
             msg=" • ".join([p for p in parts if p]); self.status.config(text=msg); self.on_status(msg)
 
     def _finish_ok(self):
-        self.status.config(text="Download concluído!"); self.open_folder_button.config(state=NORMAL)
+        self.status.config(text=self.status.cget("text") or "Download concluído!"); self.open_folder_button.config(state=NORMAL)
         self.download_btn.config(state=NORMAL); self.cancel_btn.config(state=DISABLED)
 
     def _finish_canceled(self):
@@ -748,7 +754,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         if "transcribe" in self.frames: self.bind("<Control-Key-3>",lambda e:self._show("transcribe"))
 
     def _show(self,key):
-        f=self.frames.get(key); 
+        f=self.frames.get(key)
         if not f: return
         f.lift()
         self.title_label.config(text={"converter":" — Conversor","youtube":" — YouTube","transcribe":" — Transcrição"}.get(key,""))
