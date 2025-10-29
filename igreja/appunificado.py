@@ -193,7 +193,7 @@ class ConverterFrame(ttk.Frame):
 
     def _batch_convert_worker(self, files, out_ext):
         try:
-            total=len(files); last_out=None
+            total=len(files); last_out=None; successes=0; failures=0
             for idx, in_path in enumerate(files, start=1):
                 if self.cancel_requested: break
                 mode="image" if is_image_file(in_path) and not is_video_file(in_path) else "video"
@@ -202,13 +202,18 @@ class ConverterFrame(ttk.Frame):
                 self.ui_queue.put(("status",f"[{idx}/{total}] Preparando..."))
                 ok=self._convert_single_image(in_path,out_path,idx,total) if mode=="image" else self._convert_single_video(in_path,out_path,idx,total)
                 if not ok:
+                    failures+=1
                     if self.cancel_requested: break
                     continue
+                successes+=1
                 last_out=out_path
             if self.cancel_requested: self.ui_queue.put(("canceled","Conversão cancelada."))
             else:
-                if last_out: self.ultimo_arquivo_convertido=last_out
-                self.ui_queue.put(("done",f"Conversão concluída de {total} arquivo(s)."))
+                if failures:
+                    msg=f"Conversão concluída: {successes} de {total} arquivo(s) convertidos. {failures} falharam."
+                else:
+                    msg=f"Conversão concluída: {successes} arquivo(s) convertidos."
+                self.ui_queue.put(("done",{"message":msg,"last_output":last_out,"successes":successes,"failures":failures,"total":total}))
         except Exception as e:
             if self.cancel_requested: self.ui_queue.put(("canceled","Conversão cancelada."))
             else: self.ui_queue.put(("error",f"Erro no processamento: {e}"))
@@ -260,24 +265,45 @@ class ConverterFrame(ttk.Frame):
                 self.ui_queue.put(("error","Conversão de imagens requer Pillow. Instale: pip install pillow")); return False
             self.ui_queue.put(("status",f"[{idx}/{total}] Convertendo imagem..."))
             src=_ext(in_path); dst=_ext(out_path)
+
+            def _save_image(base_image):
+                fmt=dst.upper()
+                save_kwargs={}
+                image_to_save=base_image
+                converted=None
+                if dst in ("jpg","jpeg"):
+                    if base_image.mode in ("RGBA","LA","P"):
+                        converted=base_image.convert("RGB")
+                        image_to_save=converted
+                    save_kwargs["quality"]=92
+                    fmt="JPEG"
+                elif dst=="webp":
+                    fmt="WEBP"
+                    save_kwargs["quality"]=92
+                elif dst in ("tif","tiff"):
+                    fmt="TIFF"
+                elif dst=="bmp":
+                    fmt="BMP"
+                image_to_save.save(out_path,fmt,**save_kwargs)
+                if converted is not None:
+                    converted.close()
+
             if src=="cr2":
                 if not HAS_RAWPY:
                     self.ui_queue.put(("error","Para converter CR2 instale rawpy: pip install rawpy")); return False
                 try: import rawpy
                 except Exception:
                     self.ui_queue.put(("error","Falha ao carregar rawpy. Instale com: pip install rawpy")); return False
-                with rawpy.imread(in_path) as raw: rgb=raw.postprocess()
+                with rawpy.imread(in_path) as raw:
+                    rgb=raw.postprocess()
                 im=Image.fromarray(rgb)
+                try:
+                    _save_image(im)
+                finally:
+                    im.close()
             else:
-                im=Image.open(in_path)
-            save_kwargs={}; fmt=dst.upper()
-            if dst in ("jpg","jpeg"):
-                if im.mode in ("RGBA","LA","P"): im=im.convert("RGB")
-                save_kwargs["quality"]=92; fmt="JPEG"
-            elif dst=="webp": fmt="WEBP"; save_kwargs["quality"]=92
-            elif dst in ("tif","tiff"): fmt="TIFF"
-            elif dst=="bmp": fmt="BMP"
-            im.save(out_path,fmt,**save_kwargs)
+                with Image.open(in_path) as im:
+                    _save_image(im)
             if self.cancel_requested:
                 try:
                     if out_path and os.path.exists(out_path): os.remove(out_path)
@@ -306,9 +332,27 @@ class ConverterFrame(ttk.Frame):
                 if kind=="progress": self.progress_var.set(payload)
                 elif kind=="status": self.status_var.set(payload); self.on_status(payload)
                 elif kind=="done":
-                    self.is_converting=False; self.progress_var.set(100); self.status_var.set(payload); self.on_status("Conversão finalizada")
-                    self.convert_btn.config(state=NORMAL); self.cancel_btn.config(state=DISABLED); self.open_btn.config(state=NORMAL)
-                    messagebox.showinfo("Sucesso","Conversão concluída!")
+                    info=payload if isinstance(payload, dict) else {"message": str(payload)}
+                    message=info.get("message") or "Conversão concluída."
+                    successes=info.get("successes", 0) or 0
+                    failures=info.get("failures", 0) or 0
+                    total=info.get("total")
+                    if total is None:
+                        total=successes+failures
+                    self.is_converting=False
+                    self.progress_var.set(100 if total else 0)
+                    self.status_var.set(message)
+                    self.on_status(message)
+                    self.convert_btn.config(state=NORMAL)
+                    self.cancel_btn.config(state=DISABLED)
+                    self._current_output_path=None
+                    last_out=info.get("last_output")
+                    self.ultimo_arquivo_convertido=last_out or ""
+                    self.open_btn.config(state=NORMAL if last_out else DISABLED)
+                    if failures:
+                        messagebox.showwarning("Aviso", message)
+                    else:
+                        messagebox.showinfo("Sucesso", message)
                 elif kind=="canceled":
                     self.is_converting=False; self.status_var.set(payload); self.on_status(payload)
                     self.progress_var.set(0); self.convert_btn.config(state=NORMAL); self.cancel_btn.config(state=DISABLED); self.open_btn.config(state=DISABLED); self._current_output_path=None
@@ -508,7 +552,10 @@ class YouTubeFrame(ttk.Frame):
         self.destination_folder=self.load_config(); self.selected_format=tk.StringVar(value="Música")
         self.selected_quality=tk.StringVar(value="best"); self.downloaded_file=None; self.cancel_requested=False
         self._last_tmp_file=None; self._yt_dlp=None
-        self._build_ui(); self._apply_quality_visibility()
+        self._build_ui()
+        self.ui_queue=queue.Queue()
+        self.after(100,self._drain_ui_queue)
+        self._apply_quality_visibility()
 
     def _build_ui(self):
         card=ttk.Frame(self,padding=18,bootstyle="dark"); card.pack(fill="both",expand=True)
@@ -576,6 +623,38 @@ class YouTubeFrame(ttk.Frame):
             for w in self._quality_widgets:
                 try: w.pack_forget()
                 except Exception: pass
+
+    def _queue_event(self, kind, payload=None):
+        try:
+            self.ui_queue.put_nowait((kind, payload))
+        except queue.Full:
+            pass
+
+    def _drain_ui_queue(self):
+        try:
+            while True:
+                kind, payload = self.ui_queue.get_nowait()
+                if kind == "progress":
+                    try:
+                        self.progress["value"] = float(payload)
+                    except Exception:
+                        pass
+                elif kind == "status":
+                    self.status.config(text=str(payload or ""))
+                elif kind == "notify":
+                    self.on_status(str(payload or ""))
+                elif kind == "downloaded_file":
+                    self.downloaded_file = payload
+                elif kind == "done":
+                    self._finish_ok()
+                elif kind == "canceled":
+                    self._finish_canceled()
+                elif kind == "error":
+                    self._finish_error(str(payload or ""))
+        except queue.Empty:
+            pass
+        finally:
+            self.after(100, self._drain_ui_queue)
 
     # --------- seleção de qualidade corrigida (respeita EXATO e depois <= alvo) ---------
     def _build_yt_format(self, quality_choice):
@@ -658,35 +737,41 @@ class YouTubeFrame(ttk.Frame):
                 try:
                     ydl.download([url])
                 except y.utils.DownloadCancelled:
-                    self._cleanup_partial(); self._finish_canceled(); return
+                    self._cleanup_partial()
+                    self._queue_event("canceled")
+                    return
 
-            self._finish_ok()
+            self._queue_event("done")
 
         except Exception as e:
             if self.cancel_requested:
-                self._cleanup_partial(); self._finish_canceled(); return
-            self._finish_error(str(e))
+                self._cleanup_partial()
+                self._queue_event("canceled")
+                return
+            self._queue_event("error", str(e))
 
     def ydl_hook(self, d):
         if self.cancel_requested: raise self._yt_dlp.utils.DownloadCancelled()
         st=d.get("status"); self._last_tmp_file=d.get("tmpfilename") or d.get("filename") or self._last_tmp_file
         if st=="finished":
-            self.progress["value"]=100
             info = d.get("info_dict", {}) or {}
             fmt_note = info.get("format", "") or info.get("format_note", "") or ""
             height = info.get("height")
             chosen = f"{height}p" if height else ""
-            suffix = f" — Selecionado: {chosen} {fmt_note}".strip()
-            self.status.config(text=f"Concluído! {suffix}".strip())
-            self.downloaded_file=d.get("filename") or info.get("_filename")
-            self.on_status("Download finalizado"); return
+            suffix = f" - Selecionado: {chosen} {fmt_note}".strip()
+            text=f"Concluído! {suffix}".strip()
+            self._queue_event("progress", 100)
+            self._queue_event("status", text)
+            self._queue_event("notify", "Download finalizado")
+            self._queue_event("downloaded_file", d.get("filename") or info.get("_filename"))
+            return
         if st=="downloading":
             downloaded=d.get("downloaded_bytes"); total=d.get("total_bytes") or d.get("total_bytes_estimate"); speed=d.get("speed")
             pct=None
             if downloaded is not None and total:
                 try: pct=max(0.0,min(100.0,(downloaded/total)*100.0))
                 except Exception: pct=None
-            if pct is not None: self.progress["value"]=pct
+            if pct is not None: self._queue_event("progress", pct)
             parts=["Baixando..."]
             if pct is not None: parts.append(f"{pct:.1f}%")
             if downloaded is not None:
@@ -694,7 +779,9 @@ class YouTubeFrame(ttk.Frame):
             if speed:
                 sp=format_bytes(speed)
                 if sp: parts.append(f"{sp}/s")
-            msg=" • ".join([p for p in parts if p]); self.status.config(text=msg); self.on_status(msg)
+            msg=" - ".join([p for p in parts if p])
+            self._queue_event("status", msg)
+            self._queue_event("notify", msg)
 
     def _finish_ok(self):
         self.status.config(text=self.status.cget("text") or "Download concluído!"); self.open_folder_button.config(state=NORMAL)
