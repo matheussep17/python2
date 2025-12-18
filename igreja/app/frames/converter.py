@@ -1,0 +1,544 @@
+# app/frames/converter.py
+import os
+import sys
+import queue
+import threading
+import subprocess
+import tkinter as tk
+from tkinter import filedialog, messagebox
+
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
+
+from app.utils import (
+    HAS_DND, HAS_PIL, HAS_RAWPY, DND_FILES, Image,
+    create_no_window_flags, seconds_to_hms, _ext
+)
+
+# ---------- Conversor ----------
+VIDEO_EXTS = {"mp4", "avi", "mkv", "mov", "webm", "flv", "m4v"}
+AUDIO_EXTS = {"wav", "mp3"}
+IMAGE_EXTS = {"jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff", "cr2"}
+ALL_EXTS = VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS
+
+def is_video_file(p): return _ext(p) in VIDEO_EXTS or _ext(p) in AUDIO_EXTS
+def is_image_file(p): return _ext(p) in IMAGE_EXTS
+
+class ConverterFrame(ttk.Frame):
+    def __init__(self, master, on_status):
+        super().__init__(master)
+        self.on_status = on_status
+
+        self.input_files = []
+        self.ultimo_arquivo_convertido = ""
+        self.formato_destino = tk.StringVar(value="mp4")
+
+        self.progress_var = tk.DoubleVar(value=0)
+        self.status_var = tk.StringVar(value="")
+        self.is_converting = False
+        self.proc = None
+        self.cancel_requested = False
+        self._current_output_path = None
+        self.ui_queue = queue.Queue()
+
+        self.video_formats = ["mp3", "mp4", "avi", "mkv", "mov"]
+        self.image_formats = ["jpg", "png", "webp", "tiff", "bmp"]
+        self.current_mode = "video"
+
+        self._build_ui()
+        self.after(100, self._drain_ui_queue)
+
+        if HAS_DND:
+            try:
+                self.drop_target_register(DND_FILES)
+                self.dnd_bind("<<Drop>>", self._on_drop_files)
+            except Exception:
+                pass
+
+    def _build_ui(self):
+        card = ttk.Frame(self, padding=18, bootstyle="dark")
+        card.pack(fill="both", expand=True)
+
+        header = ttk.Frame(card)
+        header.pack(fill="x")
+        ttk.Label(header, text="Conversor de Vídeo / Imagem", font=("Helvetica", 18, "bold")).pack(side="left")
+        ttk.Separator(card).pack(fill="x", pady=12)
+
+        row = ttk.Frame(card)
+        row.pack(fill="x")
+        ttk.Button(row, text="Selecionar Arquivo(s)", command=self.selecionar_arquivos, bootstyle=WARNING).pack(side="left")
+        ttk.Button(row, text="🗑 Remover", command=self.remover_arquivos, bootstyle=DANGER).pack(side="left", padx=(10, 0))
+
+        info = ttk.Frame(card)
+        info.pack(fill="x", pady=(10, 0))
+        self.label_video = ttk.Label(info, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
+        self.label_video.pack(anchor="w")
+        self.label_formato = ttk.Label(info, text="", font=("Helvetica", 12))
+        self.label_formato.pack(anchor="w", pady=(2, 0))
+
+        if HAS_DND:
+            ttk.Label(
+                card,
+                text="Arraste e solte vídeos/áudios (mp4, mkv, mp3...) ou imagens (jpg, png, cr2...)",
+                font=("Helvetica", 10, "italic"),
+                foreground="#9aa0a6"
+            ).pack(anchor="w", pady=(6, 4))
+
+        self.fmt_row = ttk.Frame(card)
+        self.fmt_row_visible = False
+        ttk.Label(self.fmt_row, text="Converter para:", font=("Helvetica", 13, "bold")).pack(side="left")
+        self.format_menu = ttk.Combobox(self.fmt_row, textvariable=self.formato_destino, values=[], state="readonly", width=14)
+        self.format_menu.pack(side="left", padx=(10, 0))
+
+        ctl = ttk.Frame(card)
+        ctl.pack(fill="x", pady=(10, 6))
+        self.convert_btn = ttk.Button(ctl, text="▶️ Converter", command=self.start_conversion, bootstyle=SUCCESS)
+        self.convert_btn.pack(side="left")
+        self.cancel_btn = ttk.Button(ctl, text="Cancelar", command=self.cancel_conversion, bootstyle=SECONDARY, state=DISABLED)
+        self.cancel_btn.pack(side="left", padx=(10, 0))
+
+        prog = ttk.Frame(card, padding=10, bootstyle="secondary")
+        prog.pack(fill="x", pady=(8, 4))
+        self.progress = ttk.Progressbar(prog, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
+        self.progress.pack(fill="x")
+        self.status_label = ttk.Label(prog, textvariable=self.status_var, font=("Helvetica", 11))
+        self.status_label.pack(anchor="w", pady=(6, 0))
+
+        self.open_btn = ttk.Button(card, text="Abrir pasta do arquivo convertido", command=self.abrir_pasta, bootstyle=INFO, state=DISABLED)
+        self.open_btn.pack(pady=8)
+
+    def _show_format_row(self):
+        if not self.fmt_row_visible:
+            self.fmt_row.pack(fill="x", pady=(8, 5))
+            self.fmt_row_visible = True
+
+    def _hide_format_row(self):
+        if self.fmt_row_visible:
+            self.fmt_row.pack_forget()
+            self.fmt_row_visible = False
+
+    def _update_format_menu(self):
+        if not self.input_files:
+            self._hide_format_row()
+            self.format_menu.config(values=[])
+            return
+
+        all_video = all(is_video_file(p) for p in self.input_files)
+        all_image = all(is_image_file(p) for p in self.input_files)
+        if not (all_video or all_image):
+            messagebox.showerror("Seleção inválida", "Selecione apenas VÍDEO/ÁUDIO ou apenas IMAGEM.")
+            self._hide_format_row()
+            self.format_menu.config(values=[])
+            return
+
+        self.current_mode = "image" if all_image else "video"
+        values = self.image_formats if self.current_mode == "image" else self.video_formats
+
+        if len(self.input_files) == 1:
+            original_ext = _ext(self.input_files[0])
+            if original_ext in values:
+                values = [v for v in values if v != original_ext]
+
+        self.format_menu.config(values=values)
+        if self.formato_destino.get() not in values and values:
+            self.formato_destino.set(values[0])
+
+        (self._show_format_row() if values else self._hide_format_row())
+
+    def selecionar_arquivos(self):
+        tipos = [
+            ("Vídeo/Áudio/Imagem", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v *.wav *.mp3 *.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff *.cr2"),
+            ("Vídeos", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v"),
+            ("Áudio", "*.wav *.mp3"),
+            ("Imagens", "*.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff *.cr2"),
+            ("Todos", "*.*")
+        ]
+        paths = filedialog.askopenfilenames(title="Selecione arquivo(s)", filetypes=tipos)
+        if paths:
+            self._set_selected_files(list(paths))
+
+    def _collect_supported_files(self, items):
+        out = []
+        for it in items:
+            if os.path.isfile(it) and _ext(it) in ALL_EXTS:
+                out.append(os.path.abspath(it))
+            elif os.path.isdir(it):
+                try:
+                    for nm in os.listdir(it):
+                        p = os.path.join(it, nm)
+                        if os.path.isfile(p) and _ext(p) in ALL_EXTS:
+                            out.append(os.path.abspath(p))
+                except Exception:
+                    pass
+
+        seen = set()
+        uniq = []
+        for p in out:
+            low = p.lower()
+            if low not in seen:
+                seen.add(low)
+                uniq.append(p)
+        return uniq
+
+    def _on_drop_files(self, event):
+        items = self.tk.splitlist(event.data)
+        if not items:
+            return
+        paths = self._collect_supported_files(items)
+        if paths:
+            self._set_selected_files(paths)
+
+    def _set_selected_files(self, caminhos):
+        self.input_files = list(caminhos)
+
+        if not self.input_files:
+            self.label_video.config(text="Nenhum arquivo selecionado")
+            self.label_formato.config(text="")
+            self._update_format_menu()
+            return
+
+        if len(self.input_files) == 1:
+            f = self.input_files[0]
+            self.label_video.config(text=f"Arquivo: {os.path.basename(f)}")
+            self.label_formato.config(text=f"Formato original: {_ext(f)}")
+        else:
+            first = os.path.basename(self.input_files[0])
+            self.label_video.config(text=f"{len(self.input_files)} arquivos (ex.: {first})")
+            self.label_formato.config(text="Formatos variados")
+
+        self._update_format_menu()
+
+    def remover_arquivos(self):
+        self.input_files = []
+        self.label_video.config(text="Nenhum arquivo selecionado")
+        self.label_formato.config(text="")
+        self.progress_var.set(0)
+        self.status_var.set("")
+        self.open_btn.config(state=DISABLED)
+        self.current_mode = "video"
+        self.formato_destino.set("mp4")
+        self._hide_format_row()
+        self.format_menu.config(values=[])
+
+    def start_conversion(self):
+        if self.is_converting:
+            return
+        if not self.input_files:
+            messagebox.showerror("Erro", "Selecione arquivo(s) primeiro.")
+            return
+
+        all_video = all(is_video_file(p) for p in self.input_files)
+        all_image = all(is_image_file(p) for p in self.input_files)
+        if not (all_video or all_image):
+            messagebox.showerror("Seleção inválida", "Selecione apenas VÍDEO/ÁUDIO ou apenas IMAGEM.")
+            return
+
+        formato_destino = self.formato_destino.get()
+        if not formato_destino:
+            messagebox.showerror("Erro", "Selecione um formato de saída.")
+            return
+
+        self.is_converting = True
+        self.cancel_requested = False
+        self._current_output_path = None
+
+        self.convert_btn.config(state=DISABLED)
+        self.cancel_btn.config(state=NORMAL)
+        self.open_btn.config(state=DISABLED)
+
+        self.progress_var.set(0)
+        self.status_var.set("Preparando...")
+        self.on_status("Conversão iniciada…")
+
+        threading.Thread(target=self._batch_convert_worker, args=(self.input_files[:], formato_destino), daemon=True).start()
+
+    def cancel_conversion(self):
+        if self.is_converting:
+            self.cancel_requested = True
+            if self.proc and self.proc.poll() is None:
+                try:
+                    self.proc.terminate()
+                except Exception:
+                    pass
+
+    def _batch_convert_worker(self, files, out_ext):
+        try:
+            total = len(files)
+            last_out = None
+            successes = 0
+            failures = 0
+
+            for idx, in_path in enumerate(files, start=1):
+                if self.cancel_requested:
+                    break
+
+                mode = "image" if is_image_file(in_path) and not is_video_file(in_path) else "video"
+                out_path = os.path.join(
+                    os.path.dirname(in_path),
+                    os.path.splitext(os.path.basename(in_path))[0] + f".{out_ext}"
+                )
+                self._current_output_path = out_path
+
+                self.ui_queue.put(("status", f"[{idx}/{total}] Preparando..."))
+                ok = self._convert_single_image(in_path, out_path, idx, total) if mode == "image" else self._convert_single_video(in_path, out_path, idx, total)
+                if not ok:
+                    failures += 1
+                    if self.cancel_requested:
+                        break
+                    continue
+
+                successes += 1
+                last_out = out_path
+
+            if self.cancel_requested:
+                self.ui_queue.put(("canceled", "Conversão cancelada."))
+            else:
+                if failures:
+                    msg = f"Conversão concluída: {successes} de {total} arquivo(s) convertidos. {failures} falharam."
+                else:
+                    msg = f"Conversão concluída: {successes} arquivo(s) convertidos."
+                self.ui_queue.put(("done", {"message": msg, "last_output": last_out, "successes": successes, "failures": failures, "total": total}))
+
+        except Exception as e:
+            if self.cancel_requested:
+                self.ui_queue.put(("canceled", "Conversão cancelada."))
+            else:
+                self.ui_queue.put(("error", f"Erro no processamento: {e}"))
+        finally:
+            self.proc = None
+            self.is_converting = False
+
+    def _convert_single_video(self, in_path, out_path, idx, total):
+        try:
+            duration = self._probe_duration(in_path)
+            total_seconds = float(duration) if duration else None
+
+            if out_path.lower().endswith(".mp3"):
+                cmd = ["ffmpeg", "-y", "-i", in_path, "-vn", "-acodec", "libmp3lame", "-q:a", "2", out_path]
+            else:
+                cmd = ["ffmpeg", "-y", "-i", in_path, out_path]
+
+            self.proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                creationflags=create_no_window_flags()
+            )
+
+            for line in self.proc.stderr:
+                if self.cancel_requested:
+                    break
+                if "time=" in line:
+                    try:
+                        t = line.split("time=")[1].split(" ")[0]
+                        h, m, s = t.split(":")
+                        sec = float(h) * 3600 + float(m) * 60 + float(s)
+                        if total_seconds and total_seconds > 0:
+                            pct = max(0.0, min(100.0, (sec / total_seconds) * 100.0))
+                            self.ui_queue.put(("progress", pct))
+                            self.ui_queue.put(("status", f"[{idx}/{total}] Convertendo... {pct:.1f}% ({seconds_to_hms(sec)} de {seconds_to_hms(total_seconds)})"))
+                        else:
+                            self.ui_queue.put(("status", f"[{idx}/{total}] Convertendo... {seconds_to_hms(sec)}"))
+                    except Exception:
+                        pass
+
+            ret = self.proc.wait()
+
+            if self.cancel_requested:
+                try:
+                    if out_path and os.path.exists(out_path):
+                        os.remove(out_path)
+                except Exception:
+                    pass
+                return False
+
+            if ret == 0:
+                self.ui_queue.put(("status", f"[{idx}/{total}] Arquivo convertido: {os.path.basename(out_path)}"))
+                return True
+
+            self.ui_queue.put(("error", f"Falha na conversão do arquivo: {os.path.basename(in_path)}"))
+            return False
+
+        except FileNotFoundError:
+            self.ui_queue.put(("error", "Não encontrei o ffmpeg/ffprobe. Instale-os e adicione ao PATH."))
+            return False
+        except Exception as e:
+            if self.cancel_requested:
+                try:
+                    if out_path and os.path.exists(out_path):
+                        os.remove(out_path)
+                except Exception:
+                    pass
+                return False
+            self.ui_queue.put(("error", f"Erro: {e}"))
+            return False
+        finally:
+            self.proc = None
+
+    def _convert_single_image(self, in_path, out_path, idx, total):
+        try:
+            if not HAS_PIL or Image is None:
+                self.ui_queue.put(("error", "Conversão de imagens requer Pillow. Instale: pip install pillow"))
+                return False
+
+            self.ui_queue.put(("status", f"[{idx}/{total}] Convertendo imagem..."))
+            src = _ext(in_path)
+            dst = _ext(out_path)
+
+            def _save_image(base_image):
+                fmt = dst.upper()
+                save_kwargs = {}
+                image_to_save = base_image
+                converted = None
+
+                if dst in ("jpg", "jpeg"):
+                    if base_image.mode in ("RGBA", "LA", "P"):
+                        converted = base_image.convert("RGB")
+                        image_to_save = converted
+                    save_kwargs["quality"] = 92
+                    fmt = "JPEG"
+                elif dst == "webp":
+                    fmt = "WEBP"
+                    save_kwargs["quality"] = 92
+                elif dst in ("tif", "tiff"):
+                    fmt = "TIFF"
+                elif dst == "bmp":
+                    fmt = "BMP"
+
+                image_to_save.save(out_path, fmt, **save_kwargs)
+                if converted is not None:
+                    converted.close()
+
+            if src == "cr2":
+                if not HAS_RAWPY:
+                    self.ui_queue.put(("error", "Para converter CR2 instale rawpy: pip install rawpy"))
+                    return False
+                try:
+                    import rawpy
+                except Exception:
+                    self.ui_queue.put(("error", "Falha ao carregar rawpy. Instale com: pip install rawpy"))
+                    return False
+
+                with rawpy.imread(in_path) as raw:
+                    rgb = raw.postprocess()
+
+                im = Image.fromarray(rgb)
+                try:
+                    _save_image(im)
+                finally:
+                    im.close()
+            else:
+                with Image.open(in_path) as im:
+                    _save_image(im)
+
+            if self.cancel_requested:
+                try:
+                    if out_path and os.path.exists(out_path):
+                        os.remove(out_path)
+                except Exception:
+                    pass
+                return False
+
+            self.ui_queue.put(("progress", 100))
+            self.ui_queue.put(("status", f"[{idx}/{total}] Arquivo convertido: {os.path.basename(out_path)}"))
+            return True
+
+        except Exception as e:
+            if self.cancel_requested:
+                try:
+                    if out_path and os.path.exists(out_path):
+                        os.remove(out_path)
+                except Exception:
+                    pass
+                return False
+            self.ui_queue.put(("error", f"Erro na conversão de imagem ({os.path.basename(in_path)}): {e}"))
+            return False
+
+    def _probe_duration(self, path):
+        try:
+            out = subprocess.check_output(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nk=1:nw=1", path],
+                text=True,
+                creationflags=create_no_window_flags(),
+                stderr=subprocess.DEVNULL
+            )
+            return out.strip()
+        except Exception:
+            return None
+
+    def _drain_ui_queue(self):
+        try:
+            while True:
+                kind, payload = self.ui_queue.get_nowait()
+
+                if kind == "progress":
+                    self.progress_var.set(payload)
+
+                elif kind == "status":
+                    self.status_var.set(payload)
+                    self.on_status(payload)
+
+                elif kind == "done":
+                    info = payload if isinstance(payload, dict) else {"message": str(payload)}
+                    message = info.get("message") or "Conversão concluída."
+                    successes = info.get("successes", 0) or 0
+                    failures = info.get("failures", 0) or 0
+                    total = info.get("total")
+                    if total is None:
+                        total = successes + failures
+
+                    self.is_converting = False
+                    self.progress_var.set(100 if total else 0)
+                    self.status_var.set(message)
+                    self.on_status(message)
+
+                    self.convert_btn.config(state=NORMAL)
+                    self.cancel_btn.config(state=DISABLED)
+                    self._current_output_path = None
+
+                    last_out = info.get("last_output")
+                    self.ultimo_arquivo_convertido = last_out or ""
+                    self.open_btn.config(state=NORMAL if last_out else DISABLED)
+
+                    if failures:
+                        messagebox.showwarning("Aviso", message)
+                    else:
+                        messagebox.showinfo("Sucesso", message)
+
+                elif kind == "canceled":
+                    self.is_converting = False
+                    self.status_var.set(payload)
+                    self.on_status(payload)
+                    self.progress_var.set(0)
+                    self.convert_btn.config(state=NORMAL)
+                    self.cancel_btn.config(state=DISABLED)
+                    self.open_btn.config(state=DISABLED)
+                    self._current_output_path = None
+
+                elif kind == "error":
+                    self.on_status("Erro no conversor")
+                    messagebox.showerror("Erro", str(payload))
+
+        except queue.Empty:
+            pass
+        finally:
+            if not self.is_converting and self.cancel_btn["state"] == NORMAL:
+                self.convert_btn.config(state=NORMAL)
+                self.cancel_btn.config(state=DISABLED)
+            self.after(100, self._drain_ui_queue)
+
+    def abrir_pasta(self):
+        if self.ultimo_arquivo_convertido and os.path.exists(self.ultimo_arquivo_convertido):
+            pasta = os.path.dirname(self.ultimo_arquivo_convertido)
+            try:
+                if sys.platform.startswith("win"):
+                    os.startfile(pasta)
+                elif sys.platform == "darwin":
+                    subprocess.Popen(["open", pasta])
+                else:
+                    subprocess.Popen(["xdg-open", pasta])
+            except Exception as e:
+                messagebox.showerror("Erro", f"Não foi possível abrir a pasta: {e}")
+        else:
+            messagebox.showerror("Erro", "Nenhum arquivo convertido encontrado.")
