@@ -14,7 +14,15 @@ from app.utils import HAS_DND, HAS_FW, HAS_DOCX, DND_FILES, _ext
 # ---------- Transcrição ----------
 AUDIO_VIDEO_EXTS = {"mp3", "wav", "m4a", "mp4", "mkv", "mov", "webm"}
 SUPPORTED_EXTS = AUDIO_VIDEO_EXTS
-WHISPER_MODEL = "small"
+
+# Modelo atual (você pode trocar para "medium" se quiser mais qualidade)
+WHISPER_MODEL = "large-v2"
+
+# Ajustes para transcrição mais completa
+PRIMARY_BEAM_SIZE = 10          # mais completo (mais lento)
+FALLBACK_BEAM_SIZE = 16         # fallback ainda mais completo (mais lento)
+MIN_TEXT_CHARS_FOR_OK = 120     # se sair menos que isso, considera fraco e tenta fallback
+
 
 class TranscriberFrame(ttk.Frame):
     def __init__(self, master, on_status):
@@ -61,7 +69,7 @@ class TranscriberFrame(ttk.Frame):
 
         ctl = ttk.Frame(card)
         ctl.pack(fill="x", pady=(10, 6))
-        self.btn_run = ttk.Button(ctl, text="▶️ Transcrever", command=self.start_transcription, bootstyle=SUCCESS)
+        self.btn_run = ttk.Button(ctl, text="▶️ Transcrever (mais completo)", command=self.start_transcription, bootstyle=SUCCESS)
         self.btn_run.pack(side="left")
         self.btn_cancel = ttk.Button(ctl, text="Cancelar", command=self.cancel_transcription, bootstyle=SECONDARY, state=DISABLED)
         self.btn_cancel.pack(side="left", padx=(10, 0))
@@ -76,16 +84,12 @@ class TranscriberFrame(ttk.Frame):
         self.btn_open = ttk.Button(card, text="Abrir pasta do último .docx", command=self.abrir_pasta, bootstyle=INFO, state=DISABLED)
         self.btn_open.pack(pady=8)
 
-    def _use_vad(self) -> bool:
-        # evita VAD no executável (problema do silero onnx em _MEI)
-        return not getattr(sys, "frozen", False)
-
     def selecionar_arquivos(self):
         tipos = [
             ("Áudio/Vídeo", "*.mp3 *.wav *.m4a *.mp4 *.mkv *.mov *.webm"),
             ("Áudio", "*.mp3 *.wav *.m4a"),
             ("Vídeo", "*.mp4 *.mkv *.mov *.webm"),
-            ("Todos", "*.*")
+            ("Todos", "*.*"),
         ]
         paths = filedialog.askopenfilenames(title="Selecione arquivo(s)", filetypes=tipos)
         if paths:
@@ -172,6 +176,7 @@ class TranscriberFrame(ttk.Frame):
             return
         self.ui_queue.put(("status", f"Carregando modelo '{WHISPER_MODEL}'..."))
         from faster_whisper import WhisperModel
+        # CPU int8: bom pra uso geral em PC comum
         self.model = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
         self.ui_queue.put(("status", "Modelo carregado."))
 
@@ -189,9 +194,10 @@ class TranscriberFrame(ttk.Frame):
                     os.path.dirname(path),
                     os.path.splitext(os.path.basename(path))[0] + ".docx"
                 )
-                self.ui_queue.put(("status", f"[{idx}/{total}] Transcrevendo: {os.path.basename(path)}"))
 
+                self.ui_queue.put(("status", f"[{idx}/{total}] Transcrevendo: {os.path.basename(path)}"))
                 ok = self._transcribe_one(path, out_path, idx, total)
+
                 if ok:
                     last_out = out_path
 
@@ -220,37 +226,35 @@ class TranscriberFrame(ttk.Frame):
         doc = Document()
         doc.add_heading("Transcrição", level=1)
 
-        if getattr(info, "language", None):
-            doc.add_paragraph(f"Idioma detectado: {info.language}")
+        # Idioma detectado
+        lang = getattr(info, "language", None)
+        if lang:
+            doc.add_paragraph(f"Idioma detectado: {lang}")
             doc.add_paragraph("")
 
         doc.add_paragraph(text)
         doc.save(out_docx)
         return True
 
+    def _run_transcribe(self, in_path: str, beam_size: int):
+        """
+        Executa transcribe com foco em completude:
+        - language=None (multi-idioma)
+        - vad_filter=False (não cortar fala)
+        - beam_size configurável (mais completo)
+        """
+        return self.model.transcribe(
+            in_path,
+            language=None,
+            vad_filter=False,
+            beam_size=beam_size,
+            condition_on_previous_text=True
+        )
+
     def _transcribe_one(self, in_path, out_docx, idx, total):
         try:
-            # tenta com VAD (se permitido), senão cai no fallback sem VAD
-            try_vad = self._use_vad()
-            try:
-                segments, info = self.model.transcribe(
-                    in_path,
-                    language=None,
-                    vad_filter=try_vad,
-                    beam_size=5,
-                    condition_on_previous_text=True
-                )
-            except Exception as e:
-                if "silero" in str(e).lower() or "onnx" in str(e).lower() or try_vad:
-                    segments, info = self.model.transcribe(
-                        in_path,
-                        language=None,
-                        vad_filter=False,
-                        beam_size=5,
-                        condition_on_previous_text=True
-                    )
-                else:
-                    raise
+            # 1) Primeira tentativa (mais completa que o padrão)
+            segments, info = self._run_transcribe(in_path, beam_size=PRIMARY_BEAM_SIZE)
 
             pieces = []
             for seg in segments:
@@ -264,6 +268,30 @@ class TranscriberFrame(ttk.Frame):
                 return False
 
             full = " ".join(pieces).strip()
+
+            # 2) Fallback automático: se veio pouco texto, tentar ainda mais completo
+            if len(full) < MIN_TEXT_CHARS_FOR_OK:
+                self.ui_queue.put(("status", f"[{idx}/{total}] Resultado curto — tentando modo mais completo..."))
+                segments2, info2 = self._run_transcribe(in_path, beam_size=FALLBACK_BEAM_SIZE)
+
+                pieces2 = []
+                for seg in segments2:
+                    if self.cancel_requested:
+                        break
+                    t = (seg.text or "").strip()
+                    if t:
+                        pieces2.append(t)
+
+                if self.cancel_requested:
+                    return False
+
+                full2 = " ".join(pieces2).strip()
+
+                # usa o melhor (mais longo)
+                if len(full2) > len(full):
+                    full = full2
+                    info = info2
+
             if not full:
                 self.ui_queue.put(("error", f"Nenhum texto reconhecido em: {os.path.basename(in_path)}"))
                 return False
