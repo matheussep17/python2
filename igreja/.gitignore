@@ -1,3 +1,4 @@
 # Ignore build and dist folders
 build/
 dist/
+app/__pycache__/
