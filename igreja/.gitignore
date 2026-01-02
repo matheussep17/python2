@@ -2,4 +2,4 @@
 build/
 dist/
 app/__pycache__/
-app/frameworks/__pycache__/
+app/frames/__pycache__/
