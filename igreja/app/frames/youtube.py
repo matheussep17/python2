@@ -6,6 +6,7 @@ import queue
 import threading
 from pathlib import Path
 from tkinter import filedialog, messagebox
+import tkinter as tk
 
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
@@ -57,6 +58,7 @@ class YouTubeFrame(ttk.Frame):
         ttk.Label(urlrow, text="YouTube URL:", font=("Helvetica", 13)).pack(side="left")
         self.url_entry = ttk.Entry(urlrow, width=60, font=("Helvetica", 12))
         self.url_entry.pack(side="left", fill="x", expand=True, padx=(10, 0))
+        self._add_entry_context_menu(self.url_entry)
 
         dest = ttk.Frame(card)
         dest.pack(fill="x", pady=(10, 0))
@@ -142,6 +144,30 @@ class YouTubeFrame(ttk.Frame):
                     w.pack_forget()
                 except Exception:
                     pass
+
+    def _add_entry_context_menu(self, entry):
+        """Attach a right-click context menu to an Entry-like widget.
+
+        Provides Cut/Copy/Paste and Select All. Works on Windows, macOS and Linux.
+        """
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label="Cortar", command=lambda: entry.event_generate('<<Cut>>'))
+        menu.add_command(label="Copiar", command=lambda: entry.event_generate('<<Copy>>'))
+        menu.add_command(label="Colar", command=lambda: entry.event_generate('<<Paste>>'))
+        menu.add_separator()
+        menu.add_command(label="Selecionar tudo", command=lambda: (entry.select_range(0, 'end'), entry.icursor('end')))
+
+        def _show_menu(event):
+            try:
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                menu.grab_release()
+            return 'break'
+
+        # Bind right-click (Button-3) and common alternatives for different platforms
+        entry.bind("<Button-3>", _show_menu)
+        entry.bind("<Control-Button-1>", _show_menu)
+        entry.bind("<Button-2>", _show_menu)
 
     def _queue_event(self, kind, payload=None):
         try:
