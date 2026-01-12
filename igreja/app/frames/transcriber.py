@@ -9,7 +9,10 @@ from tkinter import filedialog, messagebox
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
-from app.utils import HAS_DND, HAS_FW, HAS_DOCX, DND_FILES, _ext
+import time
+import subprocess
+
+from app.utils import HAS_DND, HAS_FW, HAS_DOCX, DND_FILES, _ext, seconds_to_hms, create_no_window_flags
 
 # ---------- Transcrição ----------
 AUDIO_VIDEO_EXTS = {"mp3", "wav", "m4a", "mp4", "mkv", "mov", "webm"}
@@ -39,6 +42,7 @@ class TranscriberFrame(ttk.Frame):
 
         self.last_output = None
         self.model = None
+        self._completed_file_times = []
 
         self._build_ui()
         self.after(100, self._drain_ui_queue)
@@ -251,18 +255,115 @@ class TranscriberFrame(ttk.Frame):
             condition_on_previous_text=True
         )
 
+    def _probe_duration(self, path):
+        try:
+            out = subprocess.check_output(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nk=1:nw=1", path],
+                text=True,
+                creationflags=create_no_window_flags(),
+                stderr=subprocess.DEVNULL,
+            )
+            try:
+                return float(out.strip())
+            except Exception:
+                return None
+        except Exception:
+            return None
+
     def _transcribe_one(self, in_path, out_docx, idx, total):
         try:
+            file_start = time.time()
+
             # 1) Primeira tentativa (mais completa que o padrão)
-            segments, info = self._run_transcribe(in_path, beam_size=PRIMARY_BEAM_SIZE)
+            # Probe duration to help ETA estimation
+            duration = self._probe_duration(in_path)
+
+            # Run transcribe in a background thread and poll so we can provide ETA/progress
+            model_result = {}
+            def _run_primary():
+                try:
+                    model_result['value'] = self._run_transcribe(in_path, beam_size=PRIMARY_BEAM_SIZE)
+                except Exception as e:
+                    model_result['error'] = e
+
+            t = threading.Thread(target=_run_primary, daemon=True)
+            t.start()
 
             pieces = []
-            for seg in segments:
+            # Poll while the model is running to show ETA even if segments are not yielded incrementally
+            poll_start = time.time()
+            while t.is_alive():
+                if self.cancel_requested:
+                    break
+                elapsed = time.time() - poll_start
+
+                # estimate expected time for this file
+                if self._completed_file_times:
+                    avg_file_time = sum(self._completed_file_times) / len(self._completed_file_times)
+                elif duration:
+                    avg_file_time = max(1.0, duration * 0.6)
+                else:
+                    avg_file_time = max(5.0, elapsed * 2)
+
+                per_file_frac = min(0.95, elapsed / avg_file_time)
+                overall_frac = ((idx - 1) + per_file_frac) / total
+                pct = max(0.0, min(100.0, overall_frac * 100.0))
+
+                overall_remaining = max(0.0, avg_file_time - elapsed) + (total - idx) * avg_file_time
+                eta = seconds_to_hms(overall_remaining)
+
+                try:
+                    self.ui_queue.put(("progress", pct))
+                    self.ui_queue.put(("status", f"[{idx}/{total}] Transcrevendo... {pct:.1f}% — {eta} restante"))
+                except Exception:
+                    pass
+
+                time.sleep(0.6)
+
+            if self.cancel_requested:
+                return False
+
+            # thread finished
+            if 'error' in model_result:
+                raise model_result['error']
+
+            segments, info = model_result.get('value', ([], None))
+            try:
+                segments = list(segments)
+            except Exception:
+                pass
+
+            total_segments = max(1, len(segments))
+            for i, seg in enumerate(segments, start=1):
                 if self.cancel_requested:
                     break
                 t = (seg.text or "").strip()
                 if t:
                     pieces.append(t)
+
+                try:
+                    per_file_frac = i / total_segments
+                    overall_frac = ((idx - 1) + per_file_frac) / total
+                    pct = max(0.0, min(100.0, overall_frac * 100.0))
+
+                    # estimate remaining for current file using elapsed since poll start
+                    elapsed_full = time.time() - poll_start
+                    avg_per_seg = (elapsed_full / i) if i else 0
+                    remaining_segs_curr = total_segments - i
+                    remaining_curr = avg_per_seg * remaining_segs_curr
+
+                    if self._completed_file_times:
+                        avg_file_time = sum(self._completed_file_times) / len(self._completed_file_times)
+                    else:
+                        avg_file_time = elapsed_full + remaining_curr
+
+                    overall_remaining = remaining_curr + (total - idx) * avg_file_time
+                    eta = seconds_to_hms(overall_remaining)
+
+                    self.ui_queue.put(("progress", pct))
+                    self.ui_queue.put(("status", f"[{idx}/{total}] Transcrevendo... {pct:.1f}% — {eta} restante"))
+                except Exception:
+                    pass
 
             if self.cancel_requested:
                 return False
@@ -272,15 +373,90 @@ class TranscriberFrame(ttk.Frame):
             # 2) Fallback automático: se veio pouco texto, tentar ainda mais completo
             if len(full) < MIN_TEXT_CHARS_FOR_OK:
                 self.ui_queue.put(("status", f"[{idx}/{total}] Resultado curto — tentando modo mais completo..."))
-                segments2, info2 = self._run_transcribe(in_path, beam_size=FALLBACK_BEAM_SIZE)
+
+                # Run fallback transcribe in background and poll
+                fb_result = {}
+                def _run_fallback():
+                    try:
+                        fb_result['value'] = self._run_transcribe(in_path, beam_size=FALLBACK_BEAM_SIZE)
+                    except Exception as e:
+                        fb_result['error'] = e
+
+                tfb = threading.Thread(target=_run_fallback, daemon=True)
+                tfb.start()
+
+                fb_start = time.time()
+                while tfb.is_alive():
+                    if self.cancel_requested:
+                        break
+                    elapsed = time.time() - fb_start
+
+                    if self._completed_file_times:
+                        avg_file_time = sum(self._completed_file_times) / len(self._completed_file_times)
+                    elif duration:
+                        avg_file_time = max(1.0, duration * 0.6)
+                    else:
+                        avg_file_time = max(5.0, elapsed * 2)
+
+                    per_file_frac = min(0.95, elapsed / avg_file_time)
+                    overall_frac = ((idx - 1) + per_file_frac) / total
+                    pct = max(0.0, min(100.0, overall_frac * 100.0))
+
+                    overall_remaining = max(0.0, avg_file_time - elapsed) + (total - idx) * avg_file_time
+                    eta = seconds_to_hms(overall_remaining)
+
+                    try:
+                        self.ui_queue.put(("progress", pct))
+                        self.ui_queue.put(("status", f"[{idx}/{total}] Tentando modo mais completo... {pct:.1f}% — {eta} restante"))
+                    except Exception:
+                        pass
+
+                    time.sleep(0.6)
+
+                if self.cancel_requested:
+                    return False
+
+                if 'error' in fb_result:
+                    raise fb_result['error']
+
+                segments2, info2 = fb_result.get('value', ([], None))
+                try:
+                    segments2 = list(segments2)
+                except Exception:
+                    pass
 
                 pieces2 = []
-                for seg in segments2:
+                total_segments2 = max(1, len(segments2))
+                for j, seg in enumerate(segments2, start=1):
                     if self.cancel_requested:
                         break
                     t = (seg.text or "").strip()
                     if t:
                         pieces2.append(t)
+
+                    # update progress during fallback pass + ETA
+                    try:
+                        elapsed_full = time.time() - fb_start
+                        per_file_frac = j / total_segments2
+                        overall_frac = ((idx - 1) + per_file_frac) / total
+                        pct = max(0.0, min(100.0, overall_frac * 100.0))
+
+                        avg_per_seg = (elapsed_full / j) if j else 0
+                        remaining_segs_curr = total_segments2 - j
+                        remaining_curr = avg_per_seg * remaining_segs_curr
+
+                        if self._completed_file_times:
+                            avg_file_time = sum(self._completed_file_times) / len(self._completed_file_times)
+                        else:
+                            avg_file_time = elapsed_full + remaining_curr
+
+                        overall_remaining = remaining_curr + (total - idx) * avg_file_time
+                        eta = seconds_to_hms(overall_remaining)
+
+                        self.ui_queue.put(("progress", pct))
+                        self.ui_queue.put(("status", f"[{idx}/{total}] Tentando modo mais completo... {pct:.1f}% — {eta} restante"))
+                    except Exception:
+                        pass
 
                 if self.cancel_requested:
                     return False
@@ -299,8 +475,21 @@ class TranscriberFrame(ttk.Frame):
             if not self._save_docx(full, out_docx, info):
                 return False
 
-            self.ui_queue.put(("progress", 100))
-            self.ui_queue.put(("status", f"[{idx}/{total}] Salvo: {os.path.basename(out_docx)}"))
+            # record elapsed time for this file
+            try:
+                file_elapsed = time.time() - file_start
+                self._completed_file_times.append(file_elapsed)
+            except Exception:
+                pass
+
+            # mark this file as completed (progress reaches fraction for this file)
+            try:
+                pct_done = (idx / total) * 100.0
+                self.ui_queue.put(("progress", pct_done))
+                self.ui_queue.put(("status", f"[{idx}/{total}] Salvo: {os.path.basename(out_docx)}"))
+            except Exception:
+                pass
+
             return True
 
         except Exception as e:
