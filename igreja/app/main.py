@@ -9,7 +9,7 @@ from ttkbootstrap.constants import *
 
 from app.utils import HAS_DND, HAS_FW, HAS_DOCX, TkinterDnD
 from app.frames.converter import ConverterFrame
-from app.frames.youtube import YouTubeFrame
+from app.frames.baixar_videos import BaixarFrame
 from app.frames.transcriber import TranscriberFrame
 
 class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
@@ -41,7 +41,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         side.grid(row=1, column=0, sticky="ns")
 
         ttk.Button(side, text="⚙️  Conversor", bootstyle=PRIMARY, command=lambda: self._show("converter")).pack(pady=6, fill="x")
-        ttk.Button(side, text="⬇️  YouTube", bootstyle=INFO, command=lambda: self._show("youtube")).pack(pady=6, fill="x")
+        ttk.Button(side, text="⬇️  Baixar", bootstyle=INFO, command=lambda: self._show("baixar")).pack(pady=6, fill="x")
 
         if HAS_FW and HAS_DOCX:
             ttk.Button(side, text="📝  Transcrição", bootstyle=SUCCESS, command=lambda: self._show("transcribe")).pack(pady=6, fill="x")
@@ -61,7 +61,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
         self.frames = {
             "converter": ConverterFrame(self.content, self._set_status),
-            "youtube": YouTubeFrame(self.content, self._set_status),
+            "baixar": BaixarFrame(self.content, self._set_status),
         }
         if HAS_FW and HAS_DOCX:
             self.frames["transcribe"] = TranscriberFrame(self.content, self._set_status)
@@ -72,7 +72,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self._show("converter")
 
         self.bind("<Control-Key-1>", lambda e: self._show("converter"))
-        self.bind("<Control-Key-2>", lambda e: self._show("youtube"))
+        self.bind("<Control-Key-2>", lambda e: self._show("baixar"))
         if "transcribe" in self.frames:
             self.bind("<Control-Key-3>", lambda e: self._show("transcribe"))
 
@@ -81,11 +81,21 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         if not f:
             return
         f.lift()
-        self.title_label.config(text={
+        mapping = {
             "converter": " — Conversor",
-            "youtube": " — YouTube",
+            "baixar": " — Baixar",
             "transcribe": " — Transcrição",
-        }.get(key, ""))
+        }
+        self.title_label.config(text=mapping.get(key, ""))
+        # Update main window title; include service when showing the downloader
+        if key == "baixar":
+            try:
+                svc = self.frames["baixar"].service.get()
+            except Exception:
+                svc = "YouTube"
+            self.title(f"Mídia Suite — Baixar — {svc}")
+        else:
+            self.title(f"Mídia Suite{mapping.get(key, '')}")
         self._set_status("Pronto.")
 
     def _set_status(self, text):

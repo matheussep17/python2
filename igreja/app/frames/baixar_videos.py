@@ -1,4 +1,4 @@
-# app/frames/youtube.py
+# app/frames/baixar_videos.py
 import os
 import sys
 import json
@@ -13,6 +13,7 @@ from ttkbootstrap.constants import *
 
 from app.utils import format_bytes
 
+
 def app_base_dir() -> Path:
     """
     Em DEV: .../igreja
@@ -24,7 +25,7 @@ def app_base_dir() -> Path:
 
 CONFIG_FILE = app_base_dir() / "config.json"
 
-class YouTubeFrame(ttk.Frame):
+class BaixarFrame(ttk.Frame):
     def __init__(self, master, on_status):
         super().__init__(master)
         self.on_status = on_status
@@ -50,12 +51,22 @@ class YouTubeFrame(ttk.Frame):
 
         header = ttk.Frame(card)
         header.pack(fill="x")
-        ttk.Label(header, text="Baixar do YouTube", font=("Helvetica", 18, "bold")).pack(side="left")
+        # service selection and title
+        self.service = ttk.StringVar(value="YouTube")
+        self.header_label = ttk.Label(header, text="Baixar do YouTube", font=("Helvetica", 18, "bold"))
+        self.header_label.pack(side="left")
+        svc_frame = ttk.Frame(header)
+        svc_frame.pack(side="right")
+        ttk.Label(svc_frame, text="Serviço:", font=("Helvetica", 12)).pack(side="left")
+        self.service_menu = ttk.Combobox(svc_frame, textvariable=self.service, values=["YouTube", "Instagram"], state="readonly", width=12)
+        self.service_menu.pack(side="left", padx=(8, 0))
+        self.service_menu.bind("<<ComboboxSelected>>", self._on_service_change)
         ttk.Separator(card).pack(fill="x", pady=12)
 
         urlrow = ttk.Frame(card)
         urlrow.pack(fill="x")
-        ttk.Label(urlrow, text="YouTube URL:", font=("Helvetica", 13)).pack(side="left")
+        self.url_label = ttk.Label(urlrow, text="YouTube URL:", font=("Helvetica", 13))
+        self.url_label.pack(side="left")
         self.url_entry = ttk.Entry(urlrow, width=60, font=("Helvetica", 12))
         self.url_entry.pack(side="left", fill="x", expand=True, padx=(10, 0))
         self._add_entry_context_menu(self.url_entry)
@@ -132,7 +143,8 @@ class YouTubeFrame(ttk.Frame):
         return self.selected_format.get() == "Vídeo"
 
     def _apply_quality_visibility(self):
-        if self._is_video():
+        # show quality only for YouTube when format is Vídeo
+        if getattr(self, "service", None) and self.service.get() == "YouTube" and self._is_video():
             for w in self._quality_widgets:
                 try:
                     w.pack()
@@ -144,6 +156,21 @@ class YouTubeFrame(ttk.Frame):
                     w.pack_forget()
                 except Exception:
                     pass
+
+    def _on_service_change(self, _evt=None):
+        svc = self.service.get()
+        self.header_label.config(text=f"Baixar do {svc}")
+        try:
+            self.url_label.config(text=f"{svc} URL:")
+        except Exception:
+            pass
+        # Update main window title to include the currently selected service
+        try:
+            top = self.winfo_toplevel()
+            top.title(f"Mídia Suite — Baixar — {svc}")
+        except Exception:
+            pass
+        self._apply_quality_visibility()
 
     def _add_entry_context_menu(self, entry):
         """Attach a right-click context menu to an Entry-like widget.
@@ -235,7 +262,8 @@ class YouTubeFrame(ttk.Frame):
     def start_download(self):
         url = self.url_entry.get().strip()
         if not url:
-            messagebox.showerror("Erro", "Insira a URL do YouTube.")
+            svc = getattr(self, "service", None) and self.service.get() or "YouTube"
+            messagebox.showerror("Erro", f"Insira a URL do {svc}.")
             return
         if not self.destination_folder:
             messagebox.showerror("Erro", "Escolha a pasta de destino.")
@@ -381,6 +409,64 @@ class YouTubeFrame(ttk.Frame):
             self._queue_event("status", msg)
             self._queue_event("notify", msg)
 
+    def open_file_location(self):
+        # Open file explorer at the downloaded file's location or the user-selected destination
+        try:
+            path = self.downloaded_file
+
+            # Prefer the configured destination folder when available
+            folder = None
+            file_path = None
+            if self.destination_folder:
+                folder = os.path.abspath(self.destination_folder)
+                if path:
+                    # If downloaded file is not an absolute path, join with destination_folder
+                    if os.path.isabs(path):
+                        file_path = os.path.abspath(path)
+                    else:
+                        file_path = os.path.join(folder, os.path.basename(path))
+                else:
+                    file_path = None
+            else:
+                if not path:
+                    return
+                file_path = os.path.abspath(path)
+                folder = os.path.dirname(file_path)
+
+            if not folder or not os.path.exists(folder):
+                return
+
+            if sys.platform == "win32":
+                # On Windows, open the folder and select the file when possible
+                try:
+                    import subprocess
+                    if file_path and os.path.exists(file_path):
+                        subprocess.run(["explorer", "/select,", file_path])
+                        return
+                    else:
+                        os.startfile(folder)
+                        return
+                except Exception:
+                    try:
+                        os.startfile(folder)
+                    except Exception:
+                        pass
+                    return
+
+            # macOS / Linux
+            try:
+                import subprocess
+                if sys.platform == "darwin":
+                    subprocess.run(["open", folder])
+                else:
+                    subprocess.run(["xdg-open", folder])
+            except Exception:
+                pass
+        except Exception:
+            pass
+        except Exception:
+            pass
+
     def _finish_ok(self):
         self.status.config(text=self.status.cget("text") or "Download concluído!")
         self.open_folder_button.config(state=NORMAL)
@@ -398,23 +484,3 @@ class YouTubeFrame(ttk.Frame):
     def _finish_error(self, msg):
         self.status.config(text="")
         self.download_btn.config(state=NORMAL)
-        self.cancel_btn.config(state=DISABLED)
-        self.on_status("Erro no download")
-        messagebox.showerror("Erro", msg)
-
-    def open_file_location(self):
-        if self.downloaded_file:
-            d = os.path.dirname(self.downloaded_file)
-            try:
-                if sys.platform.startswith("win"):
-                    os.startfile(d)
-                elif sys.platform == "darwin":
-                    import subprocess
-                    subprocess.Popen(["open", d])
-                else:
-                    import subprocess
-                    subprocess.Popen(["xdg-open", d])
-            except Exception as e:
-                messagebox.showerror("Erro", f"Não foi possível abrir o local do arquivo: {e}")
-        else:
-            messagebox.showerror("Erro", "Nenhum arquivo baixado encontrado.")
