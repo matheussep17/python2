@@ -179,7 +179,7 @@ class TranscriberFrame(ttk.Frame):
         if self.model is not None:
             return
         self.ui_queue.put(("status", f"Carregando modelo '{WHISPER_MODEL}'..."))
-        from faster_whisper import WhisperModel
+        from faster_whisper import WhisperModel # type: ignore
         # CPU int8: bom pra uso geral em PC comum
         self.model = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
         self.ui_queue.put(("status", "Modelo carregado."))
@@ -222,7 +222,7 @@ class TranscriberFrame(ttk.Frame):
 
     def _save_docx(self, text, out_docx, info):
         try:
-            from docx import Document
+            from docx import Document # type: ignore
         except Exception:
             messagebox.showerror("Dependências", "Instale: pip install python-docx")
             return False
