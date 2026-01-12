@@ -43,10 +43,11 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         ttk.Button(side, text="⚙️  Conversor", bootstyle=PRIMARY, command=lambda: self._show("converter")).pack(pady=6, fill="x")
         ttk.Button(side, text="⬇️  Baixar", bootstyle=INFO, command=lambda: self._show("baixar")).pack(pady=6, fill="x")
 
-        if HAS_FW and HAS_DOCX:
-            ttk.Button(side, text="📝  Transcrição", bootstyle=SUCCESS, command=lambda: self._show("transcribe")).pack(pady=6, fill="x")
-        else:
-            ttk.Button(side, text="📝  Transcrição (instale deps)", state=DISABLED).pack(pady=6, fill="x")
+        # Always show Transcrição button. The actual transcribe action checks and will
+        # display an error message if required runtime deps are missing at the moment
+        # the user tries to transcribe (e.g. faster-whisper). This avoids the button
+        # staying disabled in frozen builds where imports can be tricky.
+        ttk.Button(side, text="📝  Transcrição", bootstyle=SUCCESS, command=lambda: self._show("transcribe")).pack(pady=6, fill="x")
 
         self.content = ttk.Frame(self, padding=(6, 16, 16, 16))
         self.content.grid(row=1, column=1, sticky="nsew")
@@ -62,9 +63,9 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.frames = {
             "converter": ConverterFrame(self.content, self._set_status),
             "baixar": BaixarFrame(self.content, self._set_status),
+            # Create transcribe frame unconditionally; runtime checks handle missing deps
+            "transcribe": TranscriberFrame(self.content, self._set_status),
         }
-        if HAS_FW and HAS_DOCX:
-            self.frames["transcribe"] = TranscriberFrame(self.content, self._set_status)
 
         for f in self.frames.values():
             f.grid(row=0, column=0, sticky="nsew")

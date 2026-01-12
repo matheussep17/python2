@@ -25,9 +25,17 @@ except Exception:
     Image = None
     HAS_PIL = False
 
-HAS_RAWPY = _has_module("rawpy")          # só importa quando precisa
-HAS_FW    = _has_module("faster_whisper") # idem
-HAS_DOCX  = _has_module("docx")           # idem
+def _try_import(name: str) -> bool:
+    try:
+        import importlib
+        importlib.import_module(name)
+        return True
+    except Exception:
+        return False
+
+HAS_RAWPY = _has_module("rawpy") or _try_import("rawpy")          # só importa quando precisa
+HAS_FW    = _has_module("faster_whisper") or _try_import("faster_whisper") # idem
+HAS_DOCX  = _has_module("docx") or _try_import("docx")           # idem
 
 def create_no_window_flags():
     return subprocess.CREATE_NO_WINDOW if sys.platform.startswith("win") else 0
