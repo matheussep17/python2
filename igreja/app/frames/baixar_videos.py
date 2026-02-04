@@ -117,7 +117,12 @@ class BaixarFrame(ttk.Frame):
         if CONFIG_FILE.exists():
             try:
                 with CONFIG_FILE.open("r", encoding="utf-8") as f:
-                    return json.load(f).get("destination_folder", "")
+                    val = json.load(f).get("destination_folder", "")
+                    try:
+                        # Expand user tilde and return absolute path string
+                        return os.path.abspath(os.path.expanduser(str(val))) if val else ""
+                    except Exception:
+                        return val
             except Exception:
                 return ""
         return ""
@@ -268,6 +273,34 @@ class BaixarFrame(ttk.Frame):
         if not self.destination_folder:
             messagebox.showerror("Erro", "Escolha a pasta de destino.")
             return
+
+        # Normalize destination folder and ensure it's writable/createable
+        try:
+            dest = os.path.abspath(os.path.expanduser(str(self.destination_folder)))
+        except Exception:
+            dest = str(self.destination_folder)
+
+        try:
+            os.makedirs(dest, exist_ok=True)
+        except PermissionError as e:
+            # fallback to app directory
+            fallback = str(app_base_dir())
+            try:
+                os.makedirs(fallback, exist_ok=True)
+                self.destination_folder = fallback
+                self.dest_label.config(text=self.destination_folder)
+                self.save_config()
+                messagebox.showwarning("Permissão", f"Não foi possível criar a pasta selecionada. Usando: {self.destination_folder}")
+                dest = fallback
+            except Exception:
+                messagebox.showerror("Permissão", f"Não é possível criar a pasta: {self.destination_folder}\n{e}")
+                return
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao preparar a pasta de destino: {e}")
+            return
+
+        # store normalized folder back
+        self.destination_folder = dest
 
         try:
             import yt_dlp
