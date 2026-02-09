@@ -23,7 +23,9 @@ def app_base_dir() -> Path:
         return Path(os.path.dirname(sys.executable))
     return Path(__file__).resolve().parents[2]  # .../igreja
 
+
 CONFIG_FILE = app_base_dir() / "config.json"
+
 
 class BaixarFrame(ttk.Frame):
     def __init__(self, master, on_status):
@@ -51,16 +53,24 @@ class BaixarFrame(ttk.Frame):
 
         header = ttk.Frame(card)
         header.pack(fill="x")
-        # service selection and title
+
         self.service = ttk.StringVar(value="YouTube")
         self.header_label = ttk.Label(header, text="Baixar do YouTube", font=("Helvetica", 18, "bold"))
         self.header_label.pack(side="left")
+
         svc_frame = ttk.Frame(header)
         svc_frame.pack(side="right")
         ttk.Label(svc_frame, text="Serviço:", font=("Helvetica", 12)).pack(side="left")
-        self.service_menu = ttk.Combobox(svc_frame, textvariable=self.service, values=["YouTube", "Instagram"], state="readonly", width=12)
+        self.service_menu = ttk.Combobox(
+            svc_frame,
+            textvariable=self.service,
+            values=["YouTube", "Instagram"],
+            state="readonly",
+            width=12,
+        )
         self.service_menu.pack(side="left", padx=(8, 0))
         self.service_menu.bind("<<ComboboxSelected>>", self._on_service_change)
+
         ttk.Separator(card).pack(fill="x", pady=12)
 
         urlrow = ttk.Frame(card)
@@ -73,14 +83,20 @@ class BaixarFrame(ttk.Frame):
 
         dest = ttk.Frame(card)
         dest.pack(fill="x", pady=(10, 0))
-        ttk.Button(dest, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS).pack(side="left")
-        self.dest_label = ttk.Label(dest, text=self.destination_folder or "Nenhuma pasta selecionada", anchor="w", font=("Helvetica", 12))
+        ttk.Button(dest, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS).pack(
+            side="left"
+        )
+        self.dest_label = ttk.Label(
+            dest, text=self.destination_folder or "Nenhuma pasta selecionada", anchor="w", font=("Helvetica", 12)
+        )
         self.dest_label.pack(side="left", fill="x", expand=True, padx=(10, 0))
 
         opts = ttk.Frame(card)
         opts.pack(fill="x", pady=(10, 0))
         ttk.Label(opts, text="Formato:", font=("Helvetica", 13)).pack(side="left")
-        self.format_menu = ttk.Combobox(opts, textvariable=self.selected_format, values=["Música", "Vídeo"], state="readonly", width=12)
+        self.format_menu = ttk.Combobox(
+            opts, textvariable=self.selected_format, values=["Música", "Vídeo"], state="readonly", width=12
+        )
         self.format_menu.pack(side="left", padx=(8, 20))
         self.format_menu.bind("<<ComboboxSelected>>", self._on_format_change)
 
@@ -91,7 +107,7 @@ class BaixarFrame(ttk.Frame):
             textvariable=self.selected_quality,
             values=["best", "144p", "240p", "360p", "480p", "720p", "1080p", "1440p", "2160p"],
             state="readonly",
-            width=12
+            width=12,
         )
         self.quality_menu.pack(side="left", padx=(8, 0))
         self._quality_widgets = [self.quality_label, self.quality_menu]
@@ -110,7 +126,9 @@ class BaixarFrame(ttk.Frame):
         self.status = ttk.Label(prog, text="", font=("Helvetica", 11))
         self.status.pack(anchor="w", pady=(6, 0))
 
-        self.open_folder_button = ttk.Button(card, text="Abrir local do arquivo", command=self.open_file_location, bootstyle=INFO, state=DISABLED)
+        self.open_folder_button = ttk.Button(
+            card, text="Abrir local do arquivo", command=self.open_file_location, bootstyle=INFO, state=DISABLED
+        )
         self.open_folder_button.pack(pady=8)
 
     def load_config(self):
@@ -119,7 +137,6 @@ class BaixarFrame(ttk.Frame):
                 with CONFIG_FILE.open("r", encoding="utf-8") as f:
                     val = json.load(f).get("destination_folder", "")
                     try:
-                        # Expand user tilde and return absolute path string
                         return os.path.abspath(os.path.expanduser(str(val))) if val else ""
                     except Exception:
                         return val
@@ -148,7 +165,6 @@ class BaixarFrame(ttk.Frame):
         return self.selected_format.get() == "Vídeo"
 
     def _apply_quality_visibility(self):
-        # show quality only for YouTube when format is Vídeo
         if getattr(self, "service", None) and self.service.get() == "YouTube" and self._is_video():
             for w in self._quality_widgets:
                 try:
@@ -169,7 +185,6 @@ class BaixarFrame(ttk.Frame):
             self.url_label.config(text=f"{svc} URL:")
         except Exception:
             pass
-        # Update main window title to include the currently selected service
         try:
             top = self.winfo_toplevel()
             top.title(f"Mídia Suite — Baixar — {svc}")
@@ -178,25 +193,20 @@ class BaixarFrame(ttk.Frame):
         self._apply_quality_visibility()
 
     def _add_entry_context_menu(self, entry):
-        """Attach a right-click context menu to an Entry-like widget.
-
-        Provides Cut/Copy/Paste and Select All. Works on Windows, macOS and Linux.
-        """
         menu = tk.Menu(self, tearoff=0)
-        menu.add_command(label="Cortar", command=lambda: entry.event_generate('<<Cut>>'))
-        menu.add_command(label="Copiar", command=lambda: entry.event_generate('<<Copy>>'))
-        menu.add_command(label="Colar", command=lambda: entry.event_generate('<<Paste>>'))
+        menu.add_command(label="Cortar", command=lambda: entry.event_generate("<<Cut>>"))
+        menu.add_command(label="Copiar", command=lambda: entry.event_generate("<<Copy>>"))
+        menu.add_command(label="Colar", command=lambda: entry.event_generate("<<Paste>>"))
         menu.add_separator()
-        menu.add_command(label="Selecionar tudo", command=lambda: (entry.select_range(0, 'end'), entry.icursor('end')))
+        menu.add_command(label="Selecionar tudo", command=lambda: (entry.select_range(0, "end"), entry.icursor("end")))
 
         def _show_menu(event):
             try:
                 menu.tk_popup(event.x_root, event.y_root)
             finally:
                 menu.grab_release()
-            return 'break'
+            return "break"
 
-        # Bind right-click (Button-3) and common alternatives for different platforms
         entry.bind("<Button-3>", _show_menu)
         entry.bind("<Control-Button-1>", _show_menu)
         entry.bind("<Button-2>", _show_menu)
@@ -244,22 +254,34 @@ class BaixarFrame(ttk.Frame):
     # --------- seleção de qualidade (EXATO e depois <= alvo) ---------
     def _build_yt_format(self, quality_choice):
         """
-        Retorna uma única string 'format' que:
-          1) tenta altura EXATA (mp4 -> qualquer),
-          2) depois altura <= alvo (mp4 -> qualquer),
-          3) junta com melhor áudio (m4a preferido, senão bestaudio),
-          4) e por fim cai para 'best' como último recurso de segurança.
-        Isso evita "travar" em 480p mp4 quando existem 720p/1080p em VP9/AV1.
+        Garante MP4 com H.264 (avc1) + áudio AAC (mp4a), com fallback seguro.
+        Mantém sua lógica:
+          1) tenta altura EXATA,
+          2) depois altura <= alvo,
+          3) junta com melhor áudio,
+          4) fallback final.
         """
+        # filtros de codec para Holyrics: H.264 + AAC
+        vfilter = "[vcodec^=avc1]"
+        afilter = "[acodec^=mp4a]"
+
         if quality_choice == "best":
-            return "(bv*[ext=mp4]/bv*)+ba[ext=m4a]/ba/b[ext=mp4]/b"
+            # Prioriza H.264 MP4 + AAC (m4a). Se não der, cai pra melhor vídeo H.264 e depois qualquer áudio.
+            return (
+                f"(bv*{vfilter}[ext=mp4]/bv*{vfilter})"
+                f"+(ba{afilter}[ext=m4a]/ba{afilter}/ba)"
+                f"/b{vfilter}[ext=mp4]/b{vfilter}"
+                f"/b[ext=mp4]/b"
+            )
 
         h = "".join(ch for ch in quality_choice if ch.isdigit()) or "1080"
 
+        # EXATO -> <= alvo, sempre forçando avc1 no vídeo; áudio tenta AAC primeiro.
         fmt = (
-            f"((bv*[ext=mp4][height={h}]/bv*[height={h}])"
-            f"/(bv*[ext=mp4][height<={h}]/bv*[height<={h}]))"
-            f"+(ba[ext=m4a]/ba)"
+            f"((bv*{vfilter}[ext=mp4][height={h}]/bv*{vfilter}[height={h}])"
+            f"/(bv*{vfilter}[ext=mp4][height<={h}]/bv*{vfilter}[height<={h}]))"
+            f"+(ba{afilter}[ext=m4a]/ba{afilter}/ba)"
+            f"/b{vfilter}[ext=mp4]/b{vfilter}"
             f"/b[ext=mp4]/b"
         )
         return fmt
@@ -274,7 +296,6 @@ class BaixarFrame(ttk.Frame):
             messagebox.showerror("Erro", "Escolha a pasta de destino.")
             return
 
-        # Normalize destination folder and ensure it's writable/createable
         try:
             dest = os.path.abspath(os.path.expanduser(str(self.destination_folder)))
         except Exception:
@@ -283,7 +304,6 @@ class BaixarFrame(ttk.Frame):
         try:
             os.makedirs(dest, exist_ok=True)
         except PermissionError as e:
-            # fallback to app directory
             fallback = str(app_base_dir())
             try:
                 os.makedirs(fallback, exist_ok=True)
@@ -299,7 +319,6 @@ class BaixarFrame(ttk.Frame):
             messagebox.showerror("Erro", f"Erro ao preparar a pasta de destino: {e}")
             return
 
-        # store normalized folder back
         self.destination_folder = dest
 
         try:
@@ -351,6 +370,13 @@ class BaixarFrame(ttk.Frame):
 
     def download_media(self, url, fmt_mode, quality_choice):
         try:
+            # Pós-processo para GARANTIR AAC no resultado final (sem mudar sua lógica de fluxo)
+            # Se já vier AAC, o ffmpeg costuma "copiar" rápido quando possível.
+            ensure_aac_pp = {
+                "key": "FFmpegVideoConvertor",
+                "preferedformat": "mp4",
+            }
+
             common_args = {
                 "noprogress": True,
                 "nocolor": True,
@@ -370,7 +396,27 @@ class BaixarFrame(ttk.Frame):
                 }
             else:
                 fmt = self._build_yt_format(quality_choice)
-                ydl_opts = {**common_args, "format": fmt}
+
+                # Além de selecionar H.264/AAC, garante que o final seja MP4 "normalizado"
+                # (útil quando o áudio vem Opus e precisa virar AAC).
+                ydl_opts = {
+                    **common_args,
+                    "format": fmt,
+                    "postprocessors": [
+                        ensure_aac_pp,
+                        # recodifica/normaliza áudio para AAC se necessário
+                        {
+                            "key": "FFmpegMetadata",
+                        },
+                    ],
+                    # Força recode apenas quando necessário: usa ffmpeg e parâmetros seguros.
+                    "postprocessor_args": [
+                        "-c:v", "copy",        # mantém H.264 selecionado (rápido)
+                        "-c:a", "aac",         # garante AAC (Holyrics)
+                        "-b:a", "192k",
+                        "-movflags", "+faststart",
+                    ],
+                }
 
             y = self._yt_dlp
             with y.YoutubeDL(ydl_opts) as ydl:
@@ -443,17 +489,14 @@ class BaixarFrame(ttk.Frame):
             self._queue_event("notify", msg)
 
     def open_file_location(self):
-        # Open file explorer at the downloaded file's location or the user-selected destination
         try:
             path = self.downloaded_file
 
-            # Prefer the configured destination folder when available
             folder = None
             file_path = None
             if self.destination_folder:
                 folder = os.path.abspath(self.destination_folder)
                 if path:
-                    # If downloaded file is not an absolute path, join with destination_folder
                     if os.path.isabs(path):
                         file_path = os.path.abspath(path)
                     else:
@@ -470,7 +513,6 @@ class BaixarFrame(ttk.Frame):
                 return
 
             if sys.platform == "win32":
-                # On Windows, open the folder and select the file when possible
                 try:
                     import subprocess
                     if file_path and os.path.exists(file_path):
@@ -486,7 +528,6 @@ class BaixarFrame(ttk.Frame):
                         pass
                     return
 
-            # macOS / Linux
             try:
                 import subprocess
                 if sys.platform == "darwin":
@@ -515,5 +556,8 @@ class BaixarFrame(ttk.Frame):
         self.on_status("Download cancelado")
 
     def _finish_error(self, msg):
-        self.status.config(text="")
+        self.status.config(text=msg or "Erro no download.")
         self.download_btn.config(state=NORMAL)
+        self.cancel_btn.config(state=DISABLED)
+        self.open_folder_button.config(state=DISABLED)
+        self.on_status(f"Erro: {msg or 'falha no download'}")
