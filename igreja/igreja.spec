@@ -1,12 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_data_files
+
+tkdnd_datas = collect_data_files("tkinterdnd2")
 
 a = Analysis(
     ['run.py'],
     pathex=[],
     binaries=[],
-    datas=[],
-    hiddenimports=[],
+    datas=tkdnd_datas,
+    hiddenimports=['tkinterdnd2', 'tkinterdnd2.TkinterDnD'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
