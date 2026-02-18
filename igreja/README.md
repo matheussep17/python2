@@ -9,7 +9,7 @@ Breve nota sobre mudanças recentes:
 
 Como testar rapidamente:
 
-1. Instale dependências: `pip install -r requirements.txt` ou pelo menos `pip install yt-dlp`.
+1. Instale dependências: `pip install -r requirements.txt` (ou, no mínimo, `pip install yt-dlp` para a aba de download).
 2. Rode a app: `python -m app.main`.
 3. Vá em **⬇️  Baixar**, altere o "Serviço" entre **YouTube** e **Instagram**, cole uma URL e faça um download de teste.
 4. Após finalizar, clique em **Abrir local do arquivo**: a pasta escolhida em *Configurações* deverá abrir (e o arquivo deverá ser selecionado no Windows).

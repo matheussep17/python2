@@ -189,6 +189,8 @@ class TranscriberFrame(ttk.Frame):
             self._ensure_model()
             total = len(files)
             last_out = None
+            successes = 0
+            failures = 0
 
             for idx, path in enumerate(files, start=1):
                 if self.cancel_requested:
@@ -204,13 +206,27 @@ class TranscriberFrame(ttk.Frame):
 
                 if ok:
                     last_out = out_path
+                    successes += 1
+                else:
+                    failures += 1
 
             if self.cancel_requested:
                 self.ui_queue.put(("canceled", "Transcrição cancelada."))
             else:
-                if last_out:
-                    self.last_output = last_out
-                self.ui_queue.put(("done", f"Transcrição concluída de {total} arquivo(s)."))
+                if failures:
+                    message = f"Transcrição concluída: {successes} de {total} arquivo(s). {failures} falharam."
+                else:
+                    message = f"Transcrição concluída de {successes} arquivo(s)."
+                self.ui_queue.put((
+                    "done",
+                    {
+                        "message": message,
+                        "successes": successes,
+                        "failures": failures,
+                        "total": total,
+                        "last_output": last_out,
+                    },
+                ))
 
         except Exception as e:
             if self.cancel_requested:
@@ -223,9 +239,8 @@ class TranscriberFrame(ttk.Frame):
     def _save_docx(self, text, out_docx, info):
         try:
             from docx import Document # type: ignore
-        except Exception:
-            messagebox.showerror("Dependências", "Instale: pip install python-docx")
-            return False
+        except Exception as e:
+            raise RuntimeError("Dependências ausentes: instale python-docx (pip install python-docx).") from e
 
         doc = Document()
         doc.add_heading("Transcrição", level=1)
@@ -472,7 +487,10 @@ class TranscriberFrame(ttk.Frame):
                 self.ui_queue.put(("error", f"Nenhum texto reconhecido em: {os.path.basename(in_path)}"))
                 return False
 
-            if not self._save_docx(full, out_docx, info):
+            try:
+                self._save_docx(full, out_docx, info)
+            except RuntimeError as e:
+                self.ui_queue.put(("error", str(e)))
                 return False
 
             # record elapsed time for this file
@@ -509,14 +527,29 @@ class TranscriberFrame(ttk.Frame):
                     self.on_status(payload)
 
                 elif kind == "done":
-                    self.progress_var.set(100)
-                    self.status_var.set(payload)
-                    self.on_status("Transcrição finalizada")
+                    info = payload if isinstance(payload, dict) else {"message": str(payload)}
+                    message = info.get("message") or "Transcrição concluída."
+                    successes = int(info.get("successes", 0) or 0)
+                    failures = int(info.get("failures", 0) or 0)
+                    last_output = info.get("last_output")
+
+                    if last_output:
+                        self.last_output = last_output
+
+                    self.progress_var.set(100 if successes > 0 else 0)
+                    self.status_var.set(message)
+                    self.on_status(message)
 
                     self.btn_run.config(state=NORMAL)
                     self.btn_cancel.config(state=DISABLED)
                     self.btn_open.config(state=NORMAL if self.last_output else DISABLED)
-                    messagebox.showinfo("Sucesso", "Transcrição concluída!")
+
+                    if failures:
+                        messagebox.showwarning("Aviso", message)
+                    elif successes > 0:
+                        messagebox.showinfo("Sucesso", message)
+                    else:
+                        messagebox.showerror("Erro", message)
 
                 elif kind == "canceled":
                     self.status_var.set(payload)

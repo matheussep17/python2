@@ -1,0 +1,7 @@
+ttkbootstrap
+yt-dlp
+python-docx
+faster-whisper
+pillow
+rawpy
+tkinterdnd2

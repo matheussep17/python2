@@ -40,6 +40,7 @@ class BaixarFrame(ttk.Frame):
         self.cancel_requested = False
         self._last_tmp_file = None
         self._yt_dlp = None
+        self._quality_pack_options = {}
 
         self._build_ui()
 
@@ -55,7 +56,7 @@ class BaixarFrame(ttk.Frame):
         header.pack(fill="x")
 
         self.service = ttk.StringVar(value="YouTube")
-        self.header_label = ttk.Label(header, text="Baixar do YouTube", font=("Helvetica", 18, "bold"))
+        self.header_label = ttk.Label(header, text="Downloader de mídia - YouTube", font=("Helvetica", 18, "bold"))
         self.header_label.pack(side="left")
 
         svc_frame = ttk.Frame(header)
@@ -111,10 +112,11 @@ class BaixarFrame(ttk.Frame):
         )
         self.quality_menu.pack(side="left", padx=(8, 0))
         self._quality_widgets = [self.quality_label, self.quality_menu]
+        self._quality_pack_options = {w: w.pack_info() for w in self._quality_widgets}
 
         ctl = ttk.Frame(card)
         ctl.pack(fill="x", pady=(14, 8))
-        self.download_btn = ttk.Button(ctl, text="▶️ Baixar", command=self.start_download, bootstyle=PRIMARY)
+        self.download_btn = ttk.Button(ctl, text="Baixar agora", command=self.start_download, bootstyle=PRIMARY)
         self.download_btn.pack(side="left")
         self.cancel_btn = ttk.Button(ctl, text="Cancelar", command=self.cancel_download, bootstyle=SECONDARY, state=DISABLED)
         self.cancel_btn.pack(side="left", padx=(10, 0))
@@ -127,19 +129,22 @@ class BaixarFrame(ttk.Frame):
         self.status.pack(anchor="w", pady=(6, 0))
 
         self.open_folder_button = ttk.Button(
-            card, text="Abrir local do arquivo", command=self.open_file_location, bootstyle=INFO, state=DISABLED
+            card, text="Abrir pasta do arquivo", command=self.open_file_location, bootstyle=INFO, state=DISABLED
         )
         self.open_folder_button.pack(pady=8)
+
+    def _normalize_path(self, path_value):
+        try:
+            return os.path.abspath(os.path.expanduser(str(path_value))) if path_value else ""
+        except Exception:
+            return str(path_value)
 
     def load_config(self):
         if CONFIG_FILE.exists():
             try:
                 with CONFIG_FILE.open("r", encoding="utf-8") as f:
                     val = json.load(f).get("destination_folder", "")
-                    try:
-                        return os.path.abspath(os.path.expanduser(str(val))) if val else ""
-                    except Exception:
-                        return val
+                    return self._normalize_path(val)
             except Exception:
                 return ""
         return ""
@@ -148,8 +153,11 @@ class BaixarFrame(ttk.Frame):
         try:
             with CONFIG_FILE.open("w", encoding="utf-8") as f:
                 json.dump({"destination_folder": self.destination_folder}, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+        except Exception as e:
+            try:
+                self.on_status(f"Aviso: não foi possível salvar a configuração ({e})")
+            except Exception:
+                pass
 
     def choose_dest_folder(self):
         folder = filedialog.askdirectory()
@@ -168,7 +176,8 @@ class BaixarFrame(ttk.Frame):
         if getattr(self, "service", None) and self.service.get() == "YouTube" and self._is_video():
             for w in self._quality_widgets:
                 try:
-                    w.pack()
+                    if not w.winfo_ismapped():
+                        w.pack(**self._quality_pack_options.get(w, {}))
                 except Exception:
                     pass
         else:
@@ -180,7 +189,7 @@ class BaixarFrame(ttk.Frame):
 
     def _on_service_change(self, _evt=None):
         svc = self.service.get()
-        self.header_label.config(text=f"Baixar do {svc}")
+        self.header_label.config(text=f"Downloader de mídia - {svc}")
         try:
             self.url_label.config(text=f"{svc} URL:")
         except Exception:
@@ -296,10 +305,7 @@ class BaixarFrame(ttk.Frame):
             messagebox.showerror("Erro", "Escolha a pasta de destino.")
             return
 
-        try:
-            dest = os.path.abspath(os.path.expanduser(str(self.destination_folder)))
-        except Exception:
-            dest = str(self.destination_folder)
+        dest = self._normalize_path(self.destination_folder)
 
         try:
             os.makedirs(dest, exist_ok=True)
@@ -536,8 +542,6 @@ class BaixarFrame(ttk.Frame):
                     subprocess.run(["xdg-open", folder])
             except Exception:
                 pass
-        except Exception:
-            pass
         except Exception:
             pass
 
