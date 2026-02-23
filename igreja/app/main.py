@@ -1,4 +1,4 @@
-# app/main.py
+import os
 import sys
 import socket
 import tkinter as tk
@@ -7,10 +7,19 @@ from tkinter import messagebox
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
+# Permite executar este arquivo diretamente: `python app/main.py`
+# sem quebrar os imports absolutos `from app...`.
+if __package__ in (None, ""):
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+
 from app.utils import HAS_DND, HAS_FW, HAS_DOCX, TkinterDnD
 from app.frames.converter import ConverterFrame
+from app.frames.compressor import CompressorFrame
 from app.frames.baixar_videos import BaixarFrame
 from app.frames.transcriber import TranscriberFrame
+
 
 class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
     def __init__(self):
@@ -23,7 +32,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             super().__init__(
                 title="Mídia Suite — Conversor • YouTube • Transcrição",
                 themename="darkly",
-                size=(1040, 620)
+                size=(1040, 620),
             )
 
         self.minsize(980, 580)
@@ -32,21 +41,15 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
         top = ttk.Frame(self, padding=(16, 12))
         top.grid(row=0, column=0, columnspan=2, sticky="ew")
-
         ttk.Label(top, text="Mídia Suite", font=("Helvetica", 22, "bold")).pack(side="left")
         self.title_label = ttk.Label(top, text=" — Conversor", font=("Helvetica", 16))
         self.title_label.pack(side="left")
 
         side = ttk.Frame(self, padding=16)
         side.grid(row=1, column=0, sticky="ns")
-
         ttk.Button(side, text="⚙️  Conversor", bootstyle=PRIMARY, command=lambda: self._show("converter")).pack(pady=6, fill="x")
+        ttk.Button(side, text="🗜️  Comprimir", bootstyle=WARNING, command=lambda: self._show("compressor")).pack(pady=6, fill="x")
         ttk.Button(side, text="⬇️  Baixar", bootstyle=INFO, command=lambda: self._show("baixar")).pack(pady=6, fill="x")
-
-        # Always show Transcrição button. The actual transcribe action checks and will
-        # display an error message if required runtime deps are missing at the moment
-        # the user tries to transcribe (e.g. faster-whisper). This avoids the button
-        # staying disabled in frozen builds where imports can be tricky.
         ttk.Button(side, text="📝  Transcrição", bootstyle=SUCCESS, command=lambda: self._show("transcribe")).pack(pady=6, fill="x")
 
         self.content = ttk.Frame(self, padding=(6, 16, 16, 16))
@@ -56,45 +59,44 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
         sb = ttk.Frame(self, padding=(16, 8))
         sb.grid(row=2, column=0, columnspan=2, sticky="ew")
-
         self.statusbar_var = tk.StringVar(value="Pronto.")
         ttk.Label(sb, textvariable=self.statusbar_var, anchor="w").pack(side="left")
 
         self.frames = {
             "converter": ConverterFrame(self.content, self._set_status),
+            "compressor": CompressorFrame(self.content, self._set_status),
             "baixar": BaixarFrame(self.content, self._set_status),
-            # Create transcribe frame unconditionally; runtime checks handle missing deps
             "transcribe": TranscriberFrame(self.content, self._set_status),
         }
-
-        for f in self.frames.values():
-            f.grid(row=0, column=0, sticky="nsew")
+        for frame in self.frames.values():
+            frame.grid(row=0, column=0, sticky="nsew")
 
         self._show("converter")
 
         self.bind("<Control-Key-1>", lambda e: self._show("converter"))
         self.bind("<Control-Key-2>", lambda e: self._show("baixar"))
+        self.bind("<Control-Key-3>", lambda e: self._show("compressor"))
         if "transcribe" in self.frames:
-            self.bind("<Control-Key-3>", lambda e: self._show("transcribe"))
+            self.bind("<Control-Key-4>", lambda e: self._show("transcribe"))
 
     def _show(self, key):
-        f = self.frames.get(key)
-        if not f:
+        frame = self.frames.get(key)
+        if not frame:
             return
-        f.lift()
+        frame.lift()
         mapping = {
             "converter": " — Conversor",
+            "compressor": " — Comprimir",
             "baixar": " — Baixar",
             "transcribe": " — Transcrição",
         }
         self.title_label.config(text=mapping.get(key, ""))
-        # Update main window title; include service when showing the downloader
         if key == "baixar":
             try:
-                svc = self.frames["baixar"].service.get()
+                service = self.frames["baixar"].service.get()
             except Exception:
-                svc = "YouTube"
-            self.title(f"Mídia Suite — Baixar — {svc}")
+                service = "YouTube"
+            self.title(f"Mídia Suite — Baixar — {service}")
         else:
             self.title(f"Mídia Suite{mapping.get(key, '')}")
         self._set_status("Pronto.")
@@ -102,24 +104,25 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
     def _set_status(self, text):
         self.statusbar_var.set(text)
 
+
 def single_instance_or_exit(port=54321):
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        s.bind(("127.0.0.1", port))
+        sock.bind(("127.0.0.1", port))
     except OSError:
         try:
             messagebox.showinfo("Já está aberto", "O aplicativo já está em execução.")
         except Exception:
             pass
         sys.exit(0)
-    return s
+    return sock
+
 
 def main():
     _lock = single_instance_or_exit()
     app = SuperApp()
     app.mainloop()
 
+
 if __name__ == "__main__":
     main()
-
-#python -m app.main
