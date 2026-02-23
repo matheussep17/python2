@@ -25,6 +25,7 @@ WHISPER_MODEL = "large-v2"
 PRIMARY_BEAM_SIZE = 10          # mais completo (mais lento)
 FALLBACK_BEAM_SIZE = 16         # fallback ainda mais completo (mais lento)
 MIN_TEXT_CHARS_FOR_OK = 120     # se sair menos que isso, considera fraco e tenta fallback
+HEARTBEAT_IDLE_SECONDS = 3.0
 
 
 class TranscriberFrame(ttk.Frame):
@@ -43,6 +44,8 @@ class TranscriberFrame(ttk.Frame):
         self.last_output = None
         self.model = None
         self._completed_file_times = []
+        self._last_progress_ts = 0.0
+        self._heartbeat_running = False
 
         self._build_ui()
         self.after(100, self._drain_ui_queue)
@@ -168,12 +171,37 @@ class TranscriberFrame(ttk.Frame):
         self.progress_var.set(0)
         self.status_var.set("Preparando...")
         self.on_status("Transcrição iniciada…")
+        self._last_progress_ts = time.time()
+        self._set_progress_mode("determinate")
 
         threading.Thread(target=self._batch_transcribe_worker, args=(self.input_files[:],), daemon=True).start()
 
     def cancel_transcription(self):
         if self.is_running:
             self.cancel_requested = True
+
+    def _set_progress_mode(self, mode):
+        if mode == "indeterminate":
+            if not self._heartbeat_running:
+                self.progress.configure(mode="indeterminate")
+                self.progress.start(10)
+                self._heartbeat_running = True
+            return
+
+        if self._heartbeat_running:
+            self.progress.stop()
+            self._heartbeat_running = False
+        self.progress.configure(mode="determinate")
+
+    def _update_heartbeat_state(self):
+        if not self.is_running:
+            self._set_progress_mode("determinate")
+            return
+        idle = time.time() - self._last_progress_ts
+        if idle >= HEARTBEAT_IDLE_SECONDS:
+            self._set_progress_mode("indeterminate")
+        else:
+            self._set_progress_mode("determinate")
 
     def _ensure_model(self):
         if self.model is not None:
@@ -320,7 +348,7 @@ class TranscriberFrame(ttk.Frame):
                 else:
                     avg_file_time = max(5.0, elapsed * 2)
 
-                per_file_frac = min(0.95, elapsed / avg_file_time)
+                per_file_frac = elapsed / (elapsed + avg_file_time)
                 overall_frac = ((idx - 1) + per_file_frac) / total
                 pct = max(0.0, min(100.0, overall_frac * 100.0))
 
@@ -343,12 +371,6 @@ class TranscriberFrame(ttk.Frame):
                 raise model_result['error']
 
             segments, info = model_result.get('value', ([], None))
-            try:
-                segments = list(segments)
-            except Exception:
-                pass
-
-            total_segments = max(1, len(segments))
             for i, seg in enumerate(segments, start=1):
                 if self.cancel_requested:
                     break
@@ -357,15 +379,31 @@ class TranscriberFrame(ttk.Frame):
                     pieces.append(t)
 
                 try:
-                    per_file_frac = i / total_segments
+                    if duration:
+                        seg_end = getattr(seg, "end", None)
+                        if seg_end is not None:
+                            per_file_frac = max(0.0, min(1.0, float(seg_end) / max(duration, 1e-9)))
+                        else:
+                            elapsed_full = time.time() - poll_start
+                            avg_file_time = max(1.0, duration * 0.6)
+                            per_file_frac = elapsed_full / (elapsed_full + avg_file_time)
+                    else:
+                        elapsed_full = time.time() - poll_start
+                        if self._completed_file_times:
+                            avg_file_time = sum(self._completed_file_times) / len(self._completed_file_times)
+                        else:
+                            avg_file_time = max(5.0, elapsed_full * 2)
+                        per_file_frac = elapsed_full / (elapsed_full + avg_file_time)
+
                     overall_frac = ((idx - 1) + per_file_frac) / total
                     pct = max(0.0, min(100.0, overall_frac * 100.0))
 
-                    # estimate remaining for current file using elapsed since poll start
                     elapsed_full = time.time() - poll_start
-                    avg_per_seg = (elapsed_full / i) if i else 0
-                    remaining_segs_curr = total_segments - i
-                    remaining_curr = avg_per_seg * remaining_segs_curr
+                    if per_file_frac > 0:
+                        expected_total = elapsed_full / per_file_frac
+                    else:
+                        expected_total = elapsed_full
+                    remaining_curr = max(0.0, expected_total - elapsed_full)
 
                     if self._completed_file_times:
                         avg_file_time = sum(self._completed_file_times) / len(self._completed_file_times)
@@ -413,7 +451,7 @@ class TranscriberFrame(ttk.Frame):
                     else:
                         avg_file_time = max(5.0, elapsed * 2)
 
-                    per_file_frac = min(0.95, elapsed / avg_file_time)
+                    per_file_frac = elapsed / (elapsed + avg_file_time)
                     overall_frac = ((idx - 1) + per_file_frac) / total
                     pct = max(0.0, min(100.0, overall_frac * 100.0))
 
@@ -435,13 +473,7 @@ class TranscriberFrame(ttk.Frame):
                     raise fb_result['error']
 
                 segments2, info2 = fb_result.get('value', ([], None))
-                try:
-                    segments2 = list(segments2)
-                except Exception:
-                    pass
-
                 pieces2 = []
-                total_segments2 = max(1, len(segments2))
                 for j, seg in enumerate(segments2, start=1):
                     if self.cancel_requested:
                         break
@@ -452,13 +484,28 @@ class TranscriberFrame(ttk.Frame):
                     # update progress during fallback pass + ETA
                     try:
                         elapsed_full = time.time() - fb_start
-                        per_file_frac = j / total_segments2
+                        if duration:
+                            seg_end = getattr(seg, "end", None)
+                            if seg_end is not None:
+                                per_file_frac = max(0.0, min(1.0, float(seg_end) / max(duration, 1e-9)))
+                            else:
+                                avg_file_time = max(1.0, duration * 0.6)
+                                per_file_frac = elapsed_full / (elapsed_full + avg_file_time)
+                        else:
+                            if self._completed_file_times:
+                                avg_file_time = sum(self._completed_file_times) / len(self._completed_file_times)
+                            else:
+                                avg_file_time = max(5.0, elapsed_full * 2)
+                            per_file_frac = elapsed_full / (elapsed_full + avg_file_time)
+
                         overall_frac = ((idx - 1) + per_file_frac) / total
                         pct = max(0.0, min(100.0, overall_frac * 100.0))
 
-                        avg_per_seg = (elapsed_full / j) if j else 0
-                        remaining_segs_curr = total_segments2 - j
-                        remaining_curr = avg_per_seg * remaining_segs_curr
+                        if per_file_frac > 0:
+                            expected_total = elapsed_full / per_file_frac
+                        else:
+                            expected_total = elapsed_full
+                        remaining_curr = max(0.0, expected_total - elapsed_full)
 
                         if self._completed_file_times:
                             avg_file_time = sum(self._completed_file_times) / len(self._completed_file_times)
@@ -521,6 +568,8 @@ class TranscriberFrame(ttk.Frame):
 
                 if kind == "progress":
                     self.progress_var.set(payload)
+                    self._last_progress_ts = time.time()
+                    self._set_progress_mode("determinate")
 
                 elif kind == "status":
                     self.status_var.set(payload)
@@ -543,6 +592,7 @@ class TranscriberFrame(ttk.Frame):
                     self.btn_run.config(state=NORMAL)
                     self.btn_cancel.config(state=DISABLED)
                     self.btn_open.config(state=NORMAL if self.last_output else DISABLED)
+                    self._set_progress_mode("determinate")
 
                     if failures:
                         messagebox.showwarning("Aviso", message)
@@ -559,14 +609,17 @@ class TranscriberFrame(ttk.Frame):
                     self.btn_run.config(state=NORMAL)
                     self.btn_cancel.config(state=DISABLED)
                     self.btn_open.config(state=DISABLED)
+                    self._set_progress_mode("determinate")
 
                 elif kind == "error":
                     self.on_status("Erro na transcrição")
                     messagebox.showerror("Erro", str(payload))
+                    self._set_progress_mode("determinate")
 
         except queue.Empty:
             pass
         finally:
+            self._update_heartbeat_state()
             if not self.is_running and self.btn_cancel["state"] == NORMAL:
                 self.btn_run.config(state=NORMAL)
                 self.btn_cancel.config(state=DISABLED)
