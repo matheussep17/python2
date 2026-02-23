@@ -3,6 +3,7 @@ import sys
 import socket
 import tkinter as tk
 from tkinter import messagebox
+from pathlib import Path
 
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
@@ -35,6 +36,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
                 size=(1040, 620),
             )
 
+        self._apply_window_icon()
         self.minsize(980, 580)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(1, weight=1)
@@ -103,6 +105,27 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
     def _set_status(self, text):
         self.statusbar_var.set(text)
+
+    def _apply_window_icon(self):
+        if not sys.platform.startswith("win"):
+            return
+
+        # No executavel empacotado, usa o proprio .exe para herdar o icone embutido.
+        candidates = [Path(sys.executable)] if getattr(sys, "frozen", False) else []
+        candidates.extend(
+            [
+                Path(__file__).resolve().parents[1] / "assets" / "app_icon.ico",
+                Path.cwd() / "app" / "assets" / "app_icon.ico",
+            ]
+        )
+
+        for icon_path in candidates:
+            try:
+                if icon_path.exists():
+                    self.iconbitmap(default=str(icon_path))
+                    return
+            except Exception:
+                continue
 
 
 def single_instance_or_exit(port=54321):

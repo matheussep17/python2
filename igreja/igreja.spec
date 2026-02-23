@@ -26,6 +26,7 @@ exe = EXE(
     a.datas,
     [],
     name='Igreja',
+    icon='app/assets/app_icon.ico',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
