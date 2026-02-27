@@ -415,7 +415,7 @@ class ConverterFrame(ttk.Frame):
                     self.ui_queue.put(("error", "Para converter CR2 instale rawpy: pip install rawpy"))
                     return False
                 try:
-                    import rawpy
+                    import rawpy # pyright: ignore[reportMissingImports]
                 except Exception:
                     self.ui_queue.put(("error", "Falha ao carregar rawpy. Instale com: pip install rawpy"))
                     return False
