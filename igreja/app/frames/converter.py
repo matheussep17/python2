@@ -56,18 +56,18 @@ class ConverterFrame(ttk.Frame):
                 pass
 
     def _build_ui(self):
-        card = ttk.Frame(self, padding=18, bootstyle="dark")
+        card = ttk.Frame(self, padding=18)
         card.pack(fill="both", expand=True)
 
         header = ttk.Frame(card)
         header.pack(fill="x")
-        ttk.Label(header, text="Conversor de Vídeo / Imagem", font=("Helvetica", 18, "bold")).pack(side="left")
+        ttk.Label(header, text="Conversor de Video / Imagem", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
 
         row = ttk.Frame(card)
         row.pack(fill="x")
         ttk.Button(row, text="Selecionar Arquivo(s)", command=self.selecionar_arquivos, bootstyle=WARNING).pack(side="left")
-        ttk.Button(row, text="🗑 Remover", command=self.remover_arquivos, bootstyle=DANGER).pack(side="left", padx=(10, 0))
+        ttk.Button(row, text="Remover", command=self.remover_arquivos, bootstyle=DANGER).pack(side="left", padx=(10, 0))
 
         info = ttk.Frame(card)
         info.pack(fill="x", pady=(10, 0))
@@ -77,12 +77,7 @@ class ConverterFrame(ttk.Frame):
         self.label_formato.pack(anchor="w", pady=(2, 0))
 
         if HAS_DND:
-            ttk.Label(
-                card,
-                text="Arraste e solte vídeos/áudios (mp4, mkv, mp3...) ou imagens (jpg, png, cr2...)",
-                font=("Helvetica", 10, "italic"),
-                foreground="#9aa0a6"
-            ).pack(anchor="w", pady=(6, 4))
+            ttk.Label(card, text="Arraste e solte videos/audios (mp4, mkv, mp3...) ou imagens (jpg, png, cr2...)", style="Muted.TLabel").pack(anchor="w", pady=(6, 4))
 
         self.fmt_row = ttk.Frame(card)
         self.fmt_row_visible = False
@@ -92,12 +87,12 @@ class ConverterFrame(ttk.Frame):
 
         ctl = ttk.Frame(card)
         ctl.pack(fill="x", pady=(10, 6))
-        self.convert_btn = ttk.Button(ctl, text="▶️ Converter", command=self.start_conversion, bootstyle=SUCCESS)
+        self.convert_btn = ttk.Button(ctl, text="Converter", command=self.start_conversion, bootstyle=SUCCESS)
         self.convert_btn.pack(side="left")
         self.cancel_btn = ttk.Button(ctl, text="Cancelar", command=self.cancel_conversion, bootstyle=SECONDARY, state=DISABLED)
         self.cancel_btn.pack(side="left", padx=(10, 0))
 
-        prog = ttk.Frame(card, padding=10, bootstyle="secondary")
+        prog = ttk.Frame(card, padding=10)
         prog.pack(fill="x", pady=(8, 4))
         self.progress = ttk.Progressbar(prog, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
         self.progress.pack(fill="x")

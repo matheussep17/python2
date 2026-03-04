@@ -49,19 +49,19 @@ class BaixarFrame(ttk.Frame):
         self._apply_quality_visibility()
 
     def _build_ui(self):
-        card = ttk.Frame(self, padding=18, bootstyle="dark")
+        card = ttk.Frame(self, padding=18)
         card.pack(fill="both", expand=True)
 
         header = ttk.Frame(card)
         header.pack(fill="x")
 
         self.service = ttk.StringVar(value="YouTube")
-        self.header_label = ttk.Label(header, text="Downloader de mídia - YouTube", font=("Helvetica", 18, "bold"))
+        self.header_label = ttk.Label(header, text="Downloader de midia - YouTube", style="SectionTitle.TLabel")
         self.header_label.pack(side="left")
 
         svc_frame = ttk.Frame(header)
         svc_frame.pack(side="right")
-        ttk.Label(svc_frame, text="Serviço:", font=("Helvetica", 12)).pack(side="left")
+        ttk.Label(svc_frame, text="Servico:", font=("Helvetica", 12)).pack(side="left")
         self.service_menu = ttk.Combobox(
             svc_frame,
             textvariable=self.service,
@@ -101,7 +101,7 @@ class BaixarFrame(ttk.Frame):
         self.format_menu.pack(side="left", padx=(8, 20))
         self.format_menu.bind("<<ComboboxSelected>>", self._on_format_change)
 
-        self.quality_label = ttk.Label(opts, text="Qualidade do vídeo:", font=("Helvetica", 13))
+        self.quality_label = ttk.Label(opts, text="Qualidade do video:", font=("Helvetica", 13))
         self.quality_label.pack(side="left")
         self.quality_menu = ttk.Combobox(
             opts,
@@ -121,7 +121,7 @@ class BaixarFrame(ttk.Frame):
         self.cancel_btn = ttk.Button(ctl, text="Cancelar", command=self.cancel_download, bootstyle=SECONDARY, state=DISABLED)
         self.cancel_btn.pack(side="left", padx=(10, 0))
 
-        prog = ttk.Frame(card, padding=10, bootstyle="secondary")
+        prog = ttk.Frame(card, padding=10)
         prog.pack(fill="x", pady=(8, 4))
         self.progress = ttk.Progressbar(prog, orient="horizontal", mode="determinate")
         self.progress.pack(fill="x")
@@ -189,7 +189,7 @@ class BaixarFrame(ttk.Frame):
 
     def _on_service_change(self, _evt=None):
         svc = self.service.get()
-        self.header_label.config(text=f"Downloader de mídia - {svc}")
+        self.header_label.config(text=f"Downloader de midia - {svc}")
         try:
             self.url_label.config(text=f"{svc} URL:")
         except Exception:

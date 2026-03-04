@@ -63,12 +63,12 @@ class CompressorFrame(ttk.Frame):
                 pass
 
     def _build_ui(self):
-        card = ttk.Frame(self, padding=18, bootstyle="dark")
+        card = ttk.Frame(self, padding=18)
         card.pack(fill="both", expand=True)
 
         header = ttk.Frame(card)
         header.pack(fill="x")
-        ttk.Label(header, text="Compressor de Video / Foto", font=("Helvetica", 18, "bold")).pack(side="left")
+        ttk.Label(header, text="Compressor de Video / Foto", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
 
         row = ttk.Frame(card)
@@ -110,7 +110,7 @@ class CompressorFrame(ttk.Frame):
         self.btn_cancel = ttk.Button(ctl, text="Cancelar", command=self.cancel, bootstyle=SECONDARY, state=DISABLED)
         self.btn_cancel.pack(side="left", padx=(10, 0))
 
-        prog = ttk.Frame(card, padding=10, bootstyle="secondary")
+        prog = ttk.Frame(card, padding=10)
         prog.pack(fill="x", pady=(8, 4))
         self.progress = ttk.Progressbar(prog, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
         self.progress.pack(fill="x")

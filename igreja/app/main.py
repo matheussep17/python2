@@ -1,9 +1,9 @@
-import os
-import sys
+﻿import os
 import socket
+import sys
 import tkinter as tk
-from tkinter import messagebox
 from pathlib import Path
+from tkinter import messagebox
 
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
@@ -15,54 +15,104 @@ if __package__ in (None, ""):
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
 
-from app.utils import HAS_DND, HAS_FW, HAS_DOCX, TkinterDnD
-from app.frames.converter import ConverterFrame
-from app.frames.compressor import CompressorFrame
 from app.frames.baixar_videos import BaixarFrame
+from app.frames.compressor import CompressorFrame
+from app.frames.converter import ConverterFrame
 from app.frames.transcriber import TranscriberFrame
+from app.ui.alerts import install_messagebox_hooks, show_info
+from app.ui.theme import apply_design_system, resolve_ttk_theme
+from app.utils import HAS_DND, TkinterDnD
 
 
 class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
     def __init__(self):
+        initial_mode = "Escuro"
+        initial_theme = resolve_ttk_theme(initial_mode)
+
         if HAS_DND:
             super().__init__()
-            self.title("Mídia Suite — Conversor • YouTube • Transcrição")
-            self.style = ttk.Style(theme="darkly")
-            self.geometry("1040x620")
+            self.style = ttk.Style(theme=initial_theme)
+            self.geometry("1080x660")
         else:
             super().__init__(
-                title="Mídia Suite — Conversor • YouTube • Transcrição",
-                themename="darkly",
-                size=(1040, 620),
+                title="Media Suite - Conversor",
+                themename=initial_theme,
+                size=(1080, 660),
             )
+            self.style = ttk.Style()
+
+        self.theme_mode = tk.StringVar(value=initial_mode)
+        self.nav_bootstyles = {
+            "converter": "primary",
+            "compressor": "warning",
+            "baixar": "info",
+            "transcribe": "success",
+        }
+        self.nav_buttons = {}
 
         self._apply_window_icon()
+        install_messagebox_hooks(self)
+        apply_design_system(self, self.style, self.theme_mode.get())
+
+        self.title("Media Suite - Conversor")
         self.minsize(980, 580)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        top = ttk.Frame(self, padding=(16, 12))
+        top = ttk.Frame(self, padding=(18, 12), style="TopBar.TFrame")
         top.grid(row=0, column=0, columnspan=2, sticky="ew")
-        ttk.Label(top, text="Mídia Suite", font=("Helvetica", 22, "bold")).pack(side="left")
-        self.title_label = ttk.Label(top, text=" — Conversor", font=("Helvetica", 16))
-        self.title_label.pack(side="left")
 
-        side = ttk.Frame(self, padding=16)
+        ttk.Label(top, text="Media Suite", style="AppHeader.TLabel").pack(side="left")
+        self.title_label = ttk.Label(top, text="• Conversor", style="AppSubHeader.TLabel")
+        self.title_label.pack(side="left", padx=(8, 0))
+
+        top_right = ttk.Frame(top, style="TopBar.TFrame")
+        top_right.pack(side="right")
+        ttk.Label(top_right, text="Tema", style="SidebarHint.TLabel").pack(side="left", padx=(0, 6))
+        self.theme_box = ttk.Combobox(
+            top_right,
+            textvariable=self.theme_mode,
+            values=["Escuro", "Claro"],
+            state="readonly",
+            width=9,
+        )
+        self.theme_box.pack(side="left")
+        self.theme_box.bind("<<ComboboxSelected>>", self._on_theme_changed)
+        ttk.Button(
+            top_right,
+            text="Sobre",
+            bootstyle="secondary-outline",
+            command=self._open_about,
+        ).pack(side="left", padx=(8, 0))
+
+        side = ttk.Frame(self, padding=14, style="SideBar.TFrame")
         side.grid(row=1, column=0, sticky="ns")
-        ttk.Button(side, text="⚙️  Conversor", bootstyle=PRIMARY, command=lambda: self._show("converter")).pack(pady=6, fill="x")
-        ttk.Button(side, text="🗜️  Comprimir", bootstyle=WARNING, command=lambda: self._show("compressor")).pack(pady=6, fill="x")
-        ttk.Button(side, text="⬇️  Baixar", bootstyle=INFO, command=lambda: self._show("baixar")).pack(pady=6, fill="x")
-        ttk.Button(side, text="📝  Transcrição", bootstyle=SUCCESS, command=lambda: self._show("transcribe")).pack(pady=6, fill="x")
+        ttk.Label(side, text="Navegacao", style="SidebarHint.TLabel").pack(anchor="w", pady=(0, 8))
 
-        self.content = ttk.Frame(self, padding=(6, 16, 16, 16))
+        for key, label, emoji in [
+            ("converter", "Conversor", "⚙️"),
+            ("compressor", "Comprimir", "🗜️"),
+            ("baixar", "Baixar", "⬇️"),
+            ("transcribe", "Transcricao", "📝"),
+        ]:
+            btn = ttk.Button(
+                side,
+                text=f"{emoji}  {label}",
+                style="Nav.TButton",
+                command=lambda k=key: self._show(k),
+            )
+            btn.pack(fill="x", pady=5)
+            self.nav_buttons[key] = btn
+
+        self.content = ttk.Frame(self, padding=(8, 16, 16, 16), style="ContentArea.TFrame")
         self.content.grid(row=1, column=1, sticky="nsew")
         self.content.grid_columnconfigure(0, weight=1)
         self.content.grid_rowconfigure(0, weight=1)
 
-        sb = ttk.Frame(self, padding=(16, 8))
+        sb = ttk.Frame(self, padding=(16, 8), style="StatusBar.TFrame")
         sb.grid(row=2, column=0, columnspan=2, sticky="ew")
         self.statusbar_var = tk.StringVar(value="Pronto.")
-        ttk.Label(sb, textvariable=self.statusbar_var, anchor="w").pack(side="left")
+        ttk.Label(sb, textvariable=self.statusbar_var, style="Status.TLabel", anchor="w").pack(side="left")
 
         self.frames = {
             "converter": ConverterFrame(self.content, self._set_status),
@@ -75,33 +125,62 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
         self._show("converter")
 
-        self.bind("<Control-Key-1>", lambda e: self._show("converter"))
-        self.bind("<Control-Key-2>", lambda e: self._show("baixar"))
-        self.bind("<Control-Key-3>", lambda e: self._show("compressor"))
-        if "transcribe" in self.frames:
-            self.bind("<Control-Key-4>", lambda e: self._show("transcribe"))
+        self.bind("<Control-Key-1>", lambda _e: self._show("converter"))
+        self.bind("<Control-Key-2>", lambda _e: self._show("baixar"))
+        self.bind("<Control-Key-3>", lambda _e: self._show("compressor"))
+        self.bind("<Control-Key-4>", lambda _e: self._show("transcribe"))
+
+    def _on_theme_changed(self, _event=None):
+        mode = self.theme_mode.get()
+        self.style.theme_use(resolve_ttk_theme(mode))
+        apply_design_system(self, self.style, mode)
+        current = getattr(self, "current_screen", "converter")
+        self._update_nav_appearance(current)
 
     def _show(self, key):
         frame = self.frames.get(key)
         if not frame:
             return
+
         frame.lift()
+        self.current_screen = key
+        self._update_nav_appearance(key)
+
         mapping = {
-            "converter": " — Conversor",
-            "compressor": " — Comprimir",
-            "baixar": " — Baixar",
-            "transcribe": " — Transcrição",
+            "converter": "• Conversor",
+            "compressor": "• Comprimir",
+            "baixar": "• Baixar",
+            "transcribe": "• Transcricao",
         }
         self.title_label.config(text=mapping.get(key, ""))
+
         if key == "baixar":
             try:
                 service = self.frames["baixar"].service.get()
             except Exception:
                 service = "YouTube"
-            self.title(f"Mídia Suite — Baixar — {service}")
+            self.title(f"Media Suite - Baixar - {service}")
         else:
-            self.title(f"Mídia Suite{mapping.get(key, '')}")
+            window_title = mapping.get(key, "• Conversor").replace("• ", "")
+            self.title(f"Media Suite - {window_title}")
+
         self._set_status("Pronto.")
+
+    def _update_nav_appearance(self, active_key):
+        for key, btn in self.nav_buttons.items():
+            color = self.nav_bootstyles.get(key, "secondary")
+            bootstyle = color if key == active_key else f"{color}-outline"
+            btn.configure(bootstyle=bootstyle)
+
+    def _open_about(self):
+        show_info(
+            self,
+            (
+                "Desenvolvido por Matheus Torres para utilizacao na igreja.\n"
+                "Projeto sem fins lucrativos, criado para facilitar o trabalho diario."
+            ),
+            "Sobre o app",
+        )
 
     def _set_status(self, text):
         self.statusbar_var.set(text)
@@ -110,7 +189,6 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         if not sys.platform.startswith("win"):
             return
 
-        # No executavel empacotado, usa o proprio .exe para herdar o icone embutido.
         candidates = [Path(sys.executable)] if getattr(sys, "frozen", False) else []
         candidates.extend(
             [
@@ -134,7 +212,7 @@ def single_instance_or_exit(port=54321):
         sock.bind(("127.0.0.1", port))
     except OSError:
         try:
-            messagebox.showinfo("Já está aberto", "O aplicativo já está em execução.")
+            messagebox.showinfo("Ja esta aberto", "O aplicativo ja esta em execucao.")
         except Exception:
             pass
         sys.exit(0)

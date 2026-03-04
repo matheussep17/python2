@@ -58,44 +58,44 @@ class TranscriberFrame(ttk.Frame):
                 pass
 
     def _build_ui(self):
-        card = ttk.Frame(self, padding=18, bootstyle="dark")
+        card = ttk.Frame(self, padding=18)
         card.pack(fill="both", expand=True)
 
         header = ttk.Frame(card)
         header.pack(fill="x")
-        ttk.Label(header, text="Transcritor de Áudio (Word)", font=("Helvetica", 18, "bold")).pack(side="left")
+        ttk.Label(header, text="Transcritor de Audio (Word)", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
 
         row = ttk.Frame(card)
         row.pack(fill="x")
         ttk.Button(row, text="Selecionar Arquivo(s)", command=self.selecionar_arquivos, bootstyle=WARNING).pack(side="left")
-        ttk.Button(row, text="🗑 Remover", command=self.remover_arquivos, bootstyle=DANGER).pack(side="left", padx=(10, 0))
+        ttk.Button(row, text="Remover", command=self.remover_arquivos, bootstyle=DANGER).pack(side="left", padx=(10, 0))
 
         self.label_sel = ttk.Label(card, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
         self.label_sel.pack(anchor="w", pady=(10, 0))
 
         ctl = ttk.Frame(card)
         ctl.pack(fill="x", pady=(10, 6))
-        self.btn_run = ttk.Button(ctl, text="▶️ Transcrever (mais completo)", command=self.start_transcription, bootstyle=SUCCESS)
+        self.btn_run = ttk.Button(ctl, text="Transcrever (mais completo)", command=self.start_transcription, bootstyle=SUCCESS)
         self.btn_run.pack(side="left")
         self.btn_cancel = ttk.Button(ctl, text="Cancelar", command=self.cancel_transcription, bootstyle=SECONDARY, state=DISABLED)
         self.btn_cancel.pack(side="left", padx=(10, 0))
 
-        prog = ttk.Frame(card, padding=10, bootstyle="secondary")
+        prog = ttk.Frame(card, padding=10)
         prog.pack(fill="x", pady=(8, 4))
         self.progress = ttk.Progressbar(prog, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
         self.progress.pack(fill="x")
         self.status_lbl = ttk.Label(prog, textvariable=self.status_var, font=("Helvetica", 11))
         self.status_lbl.pack(anchor="w", pady=(6, 0))
 
-        self.btn_open = ttk.Button(card, text="Abrir pasta do último .docx", command=self.abrir_pasta, bootstyle=INFO, state=DISABLED)
+        self.btn_open = ttk.Button(card, text="Abrir pasta do ultimo .docx", command=self.abrir_pasta, bootstyle=INFO, state=DISABLED)
         self.btn_open.pack(pady=8)
 
     def selecionar_arquivos(self):
         tipos = [
-            ("Áudio/Vídeo", "*.mp3 *.wav *.m4a *.mp4 *.mkv *.mov *.webm"),
-            ("Áudio", "*.mp3 *.wav *.m4a"),
-            ("Vídeo", "*.mp4 *.mkv *.mov *.webm"),
+            ("Audio/Video", "*.mp3 *.wav *.m4a *.mp4 *.mkv *.mov *.webm"),
+            ("Audio", "*.mp3 *.wav *.m4a"),
+            ("Video", "*.mp4 *.mkv *.mov *.webm"),
             ("Todos", "*.*"),
         ]
         paths = filedialog.askopenfilenames(title="Selecione arquivo(s)", filetypes=tipos)
