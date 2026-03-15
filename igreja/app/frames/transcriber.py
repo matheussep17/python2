@@ -36,6 +36,7 @@ class TranscriberFrame(ttk.Frame):
         self.input_files = []
         self.progress_var = tk.DoubleVar(value=0)
         self.status_var = tk.StringVar(value="")
+        self.output_name_var = tk.StringVar()
 
         self.is_running = False
         self.cancel_requested = False
@@ -74,9 +75,17 @@ class TranscriberFrame(ttk.Frame):
         self.label_sel = ttk.Label(card, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
         self.label_sel.pack(anchor="w", pady=(10, 0))
 
+        output_row = ttk.Frame(card)
+        output_row.pack(fill="x", pady=(10, 0))
+        ttk.Label(output_row, text="Nome do arquivo:", font=("Helvetica", 13, "bold")).pack(side="left")
+        self.output_name_entry = ttk.Entry(output_row, textvariable=self.output_name_var, width=32)
+        self.output_name_entry.pack(side="left", padx=(10, 0))
+        ttk.Label(output_row, text="Editavel quando houver 1 arquivo selecionado.", style="Muted.TLabel").pack(side="left", padx=(10, 0))
+        self.output_name_entry.configure(state=DISABLED)
+
         ctl = ttk.Frame(card)
         ctl.pack(fill="x", pady=(10, 6))
-        self.btn_run = ttk.Button(ctl, text="Transcrever (mais completo)", command=self.start_transcription, bootstyle=SUCCESS)
+        self.btn_run = ttk.Button(ctl, text="Transcrever (mais completo)", command=self.start_transcription, bootstyle=SUCCESS, state=DISABLED)
         self.btn_run.pack(side="left")
         self.btn_cancel = ttk.Button(ctl, text="Cancelar", command=self.cancel_transcription, bootstyle=SECONDARY, state=DISABLED)
         self.btn_cancel.pack(side="left", padx=(10, 0))
@@ -90,6 +99,7 @@ class TranscriberFrame(ttk.Frame):
 
         self.btn_open = ttk.Button(card, text="Abrir pasta do ultimo .docx", command=self.abrir_pasta, bootstyle=INFO, state=DISABLED)
         self.btn_open.pack(pady=8)
+        self._update_action_state()
 
     def selecionar_arquivos(self):
         tipos = [
@@ -135,12 +145,52 @@ class TranscriberFrame(ttk.Frame):
 
         if not self.input_files:
             self.label_sel.config(text="Nenhum arquivo selecionado")
+            self._refresh_output_name()
+            self._update_action_state()
             return
 
         self.label_sel.config(
             text=f"Arquivo: {os.path.basename(paths[0])}"
             if len(paths) == 1 else f"{len(paths)} arquivos (ex.: {os.path.basename(paths[0])})"
         )
+        self._refresh_output_name()
+        self._update_action_state()
+
+    def _refresh_output_name(self):
+        if not self.input_files:
+            self.output_name_var.set("")
+            self.output_name_entry.configure(state=DISABLED)
+            return
+
+        if len(self.input_files) > 1:
+            self.output_name_var.set("")
+            self.output_name_entry.configure(state=DISABLED)
+            return
+
+        filename = os.path.splitext(os.path.basename(self.input_files[0]))[0]
+        self.output_name_var.set(f"{filename}.docx")
+        self.output_name_entry.configure(state=NORMAL)
+
+    def _build_output_path(self, in_path):
+        if len(self.input_files) == 1:
+            custom_name = (self.output_name_var.get() or "").strip()
+            if custom_name:
+                if "." not in os.path.basename(custom_name):
+                    custom_name += ".docx"
+                return os.path.join(os.path.dirname(in_path), custom_name)
+        return os.path.join(
+            os.path.dirname(in_path),
+            os.path.splitext(os.path.basename(in_path))[0] + ".docx"
+        )
+
+    def _update_action_state(self):
+        if self.is_running:
+            self.btn_run.config(state=DISABLED)
+            self.btn_cancel.config(state=NORMAL)
+            return
+
+        self.btn_run.config(state=NORMAL if self.input_files else DISABLED)
+        self.btn_cancel.config(state=DISABLED)
 
     def remover_arquivos(self):
         self.input_files = []
@@ -148,6 +198,9 @@ class TranscriberFrame(ttk.Frame):
         self.progress_var.set(0)
         self.status_var.set("")
         self.btn_open.config(state=DISABLED)
+        self.output_name_var.set("")
+        self.output_name_entry.configure(state=DISABLED)
+        self._update_action_state()
 
     def start_transcription(self):
         if self.is_running:
@@ -161,12 +214,23 @@ class TranscriberFrame(ttk.Frame):
             messagebox.showerror("Erro", "Selecione pelo menos um arquivo.")
             return
 
+        if len(self.input_files) == 1:
+            custom_name = (self.output_name_var.get() or "").strip()
+            if not custom_name:
+                messagebox.showerror("Erro", "Informe um nome para o arquivo de saida.")
+                return
+            proposed_output = self._build_output_path(self.input_files[0])
+            if os.path.abspath(proposed_output).lower() == os.path.abspath(self.input_files[0]).lower():
+                messagebox.showerror("Erro", "Escolha um nome diferente do arquivo original.")
+                return
+
         self.is_running = True
         self.cancel_requested = False
 
         self.btn_run.config(state=DISABLED)
         self.btn_cancel.config(state=NORMAL)
         self.btn_open.config(state=DISABLED)
+        self._update_action_state()
 
         self.progress_var.set(0)
         self.status_var.set("Preparando...")
@@ -224,10 +288,7 @@ class TranscriberFrame(ttk.Frame):
                 if self.cancel_requested:
                     break
 
-                out_path = os.path.join(
-                    os.path.dirname(path),
-                    os.path.splitext(os.path.basename(path))[0] + ".docx"
-                )
+                out_path = self._build_output_path(path)
 
                 self.ui_queue.put(("status", f"[{idx}/{total}] Transcrevendo: {os.path.basename(path)}"))
                 ok = self._transcribe_one(path, out_path, idx, total)
@@ -589,8 +650,7 @@ class TranscriberFrame(ttk.Frame):
                     self.status_var.set(message)
                     self.on_status(message)
 
-                    self.btn_run.config(state=NORMAL)
-                    self.btn_cancel.config(state=DISABLED)
+                    self._update_action_state()
                     self.btn_open.config(state=NORMAL if self.last_output else DISABLED)
                     self._set_progress_mode("determinate")
 
@@ -606,8 +666,7 @@ class TranscriberFrame(ttk.Frame):
                     self.on_status(payload)
                     self.progress_var.set(0)
 
-                    self.btn_run.config(state=NORMAL)
-                    self.btn_cancel.config(state=DISABLED)
+                    self._update_action_state()
                     self.btn_open.config(state=DISABLED)
                     self._set_progress_mode("determinate")
 
@@ -621,8 +680,7 @@ class TranscriberFrame(ttk.Frame):
         finally:
             self._update_heartbeat_state()
             if not self.is_running and self.btn_cancel["state"] == NORMAL:
-                self.btn_run.config(state=NORMAL)
-                self.btn_cancel.config(state=DISABLED)
+                self._update_action_state()
             self.after(100, self._drain_ui_queue)
 
     def abrir_pasta(self):

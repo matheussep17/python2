@@ -32,6 +32,7 @@ class ConverterFrame(ttk.Frame):
         self.input_files = []
         self.ultimo_arquivo_convertido = ""
         self.formato_destino = tk.StringVar(value="mp4")
+        self.output_name_var = tk.StringVar()
 
         self.progress_var = tk.DoubleVar(value=0)
         self.status_var = tk.StringVar(value="")
@@ -84,10 +85,19 @@ class ConverterFrame(ttk.Frame):
         ttk.Label(self.fmt_row, text="Converter para:", font=("Helvetica", 13, "bold")).pack(side="left")
         self.format_menu = ttk.Combobox(self.fmt_row, textvariable=self.formato_destino, values=[], state="readonly", width=14)
         self.format_menu.pack(side="left", padx=(10, 0))
+        self.format_menu.bind("<<ComboboxSelected>>", lambda _e: self._refresh_output_name())
+
+        self.output_row = ttk.Frame(card)
+        ttk.Label(self.output_row, text="Nome do arquivo:", font=("Helvetica", 13, "bold")).pack(side="left")
+        self.output_name_entry = ttk.Entry(self.output_row, textvariable=self.output_name_var, width=32)
+        self.output_name_entry.pack(side="left", padx=(10, 0))
+        ttk.Label(self.output_row, text="Editavel quando houver 1 arquivo selecionado.", style="Muted.TLabel").pack(side="left", padx=(10, 0))
+        self.output_row.pack(fill="x", pady=(8, 0))
+        self.output_name_entry.configure(state=DISABLED)
 
         ctl = ttk.Frame(card)
         ctl.pack(fill="x", pady=(10, 6))
-        self.convert_btn = ttk.Button(ctl, text="Converter", command=self.start_conversion, bootstyle=SUCCESS)
+        self.convert_btn = ttk.Button(ctl, text="Converter", command=self.start_conversion, bootstyle=SUCCESS, state=DISABLED)
         self.convert_btn.pack(side="left")
         self.cancel_btn = ttk.Button(ctl, text="Cancelar", command=self.cancel_conversion, bootstyle=SECONDARY, state=DISABLED)
         self.cancel_btn.pack(side="left", padx=(10, 0))
@@ -101,6 +111,7 @@ class ConverterFrame(ttk.Frame):
 
         self.open_btn = ttk.Button(card, text="Abrir pasta do arquivo convertido", command=self.abrir_pasta, bootstyle=INFO, state=DISABLED)
         self.open_btn.pack(pady=8)
+        self._update_action_state()
 
     def _show_format_row(self):
         if not self.fmt_row_visible:
@@ -112,10 +123,51 @@ class ConverterFrame(ttk.Frame):
             self.fmt_row.pack_forget()
             self.fmt_row_visible = False
 
+    def _refresh_output_name(self):
+        if not self.input_files:
+            self.output_name_var.set("")
+            self.output_name_entry.configure(state=DISABLED)
+            return
+
+        if len(self.input_files) > 1:
+            self.output_name_var.set("")
+            self.output_name_entry.configure(state=DISABLED)
+            return
+
+        filename = os.path.splitext(os.path.basename(self.input_files[0]))[0]
+        target_ext = self.formato_destino.get().strip()
+        self.output_name_var.set(f"{filename}.{target_ext}" if target_ext else filename)
+        self.output_name_entry.configure(state=NORMAL)
+
+    def _build_output_path(self, in_path, out_ext):
+        if len(self.input_files) == 1:
+            custom_name = (self.output_name_var.get() or "").strip()
+            if custom_name:
+                if "." not in os.path.basename(custom_name):
+                    custom_name = f"{custom_name}.{out_ext}"
+                return os.path.join(os.path.dirname(in_path), custom_name)
+
+        return os.path.join(
+            os.path.dirname(in_path),
+            os.path.splitext(os.path.basename(in_path))[0] + f".{out_ext}"
+        )
+
+    def _update_action_state(self):
+        if self.is_converting:
+            self.convert_btn.config(state=DISABLED)
+            self.cancel_btn.config(state=NORMAL)
+            return
+
+        has_files = bool(self.input_files)
+        has_format = bool(self.formato_destino.get())
+        self.convert_btn.config(state=NORMAL if has_files and has_format else DISABLED)
+        self.cancel_btn.config(state=DISABLED)
+
     def _update_format_menu(self):
         if not self.input_files:
             self._hide_format_row()
             self.format_menu.config(values=[])
+            self._refresh_output_name()
             return
 
         all_video = all(is_video_file(p) for p in self.input_files)
@@ -124,6 +176,7 @@ class ConverterFrame(ttk.Frame):
             messagebox.showerror("Seleção inválida", "Selecione apenas VÍDEO/ÁUDIO ou apenas IMAGEM.")
             self._hide_format_row()
             self.format_menu.config(values=[])
+            self._refresh_output_name()
             return
 
         self.current_mode = "image" if all_image else "video"
@@ -139,6 +192,8 @@ class ConverterFrame(ttk.Frame):
             self.formato_destino.set(values[0])
 
         (self._show_format_row() if values else self._hide_format_row())
+        self._refresh_output_name()
+        self._update_action_state()
 
     def selecionar_arquivos(self):
         tipos = [
@@ -212,8 +267,11 @@ class ConverterFrame(ttk.Frame):
         self.open_btn.config(state=DISABLED)
         self.current_mode = "video"
         self.formato_destino.set("mp4")
+        self.output_name_var.set("")
+        self.output_name_entry.configure(state=DISABLED)
         self._hide_format_row()
         self.format_menu.config(values=[])
+        self._update_action_state()
 
     def start_conversion(self):
         if self.is_converting:
@@ -233,6 +291,16 @@ class ConverterFrame(ttk.Frame):
             messagebox.showerror("Erro", "Selecione um formato de saída.")
             return
 
+        if len(self.input_files) == 1:
+            custom_name = (self.output_name_var.get() or "").strip()
+            if not custom_name:
+                messagebox.showerror("Erro", "Informe um nome para o arquivo de saida.")
+                return
+            proposed_output = self._build_output_path(self.input_files[0], formato_destino)
+            if os.path.abspath(proposed_output).lower() == os.path.abspath(self.input_files[0]).lower():
+                messagebox.showerror("Erro", "Escolha um nome diferente do arquivo original.")
+                return
+
         self.is_converting = True
         self.cancel_requested = False
         self._current_output_path = None
@@ -240,6 +308,7 @@ class ConverterFrame(ttk.Frame):
         self.convert_btn.config(state=DISABLED)
         self.cancel_btn.config(state=NORMAL)
         self.open_btn.config(state=DISABLED)
+        self._update_action_state()
 
         self.progress_var.set(0)
         self.status_var.set("Preparando...")
@@ -268,10 +337,7 @@ class ConverterFrame(ttk.Frame):
                     break
 
                 mode = "image" if is_image_file(in_path) and not is_video_file(in_path) else "video"
-                out_path = os.path.join(
-                    os.path.dirname(in_path),
-                    os.path.splitext(os.path.basename(in_path))[0] + f".{out_ext}"
-                )
+                out_path = self._build_output_path(in_path, out_ext)
                 self._current_output_path = out_path
 
                 self.ui_queue.put(("status", f"[{idx}/{total}] Preparando..."))
@@ -488,8 +554,7 @@ class ConverterFrame(ttk.Frame):
                     self.status_var.set(message)
                     self.on_status(message)
 
-                    self.convert_btn.config(state=NORMAL)
-                    self.cancel_btn.config(state=DISABLED)
+                    self._update_action_state()
                     self._current_output_path = None
 
                     last_out = info.get("last_output")
@@ -506,8 +571,7 @@ class ConverterFrame(ttk.Frame):
                     self.status_var.set(payload)
                     self.on_status(payload)
                     self.progress_var.set(0)
-                    self.convert_btn.config(state=NORMAL)
-                    self.cancel_btn.config(state=DISABLED)
+                    self._update_action_state()
                     self.open_btn.config(state=DISABLED)
                     self._current_output_path = None
 
@@ -519,8 +583,7 @@ class ConverterFrame(ttk.Frame):
             pass
         finally:
             if not self.is_converting and self.cancel_btn["state"] == NORMAL:
-                self.convert_btn.config(state=NORMAL)
-                self.cancel_btn.config(state=DISABLED)
+                self._update_action_state()
             self.after(100, self._drain_ui_queue)
 
     def abrir_pasta(self):

@@ -1,5 +1,6 @@
 # app/frames/baixar_videos.py
 import os
+import re
 import sys
 import json
 import queue
@@ -41,6 +42,7 @@ class BaixarFrame(ttk.Frame):
         self._last_tmp_file = None
         self._yt_dlp = None
         self._quality_pack_options = {}
+        self.is_running = False
 
         self._build_ui()
 
@@ -81,6 +83,9 @@ class BaixarFrame(ttk.Frame):
         self.url_entry = ttk.Entry(urlrow, width=60, font=("Helvetica", 12))
         self.url_entry.pack(side="left", fill="x", expand=True, padx=(10, 0))
         self._add_entry_context_menu(self.url_entry)
+        self.url_entry.bind("<KeyRelease>", self._on_url_changed)
+        self.url_entry.bind("<<Paste>>", lambda _e: self.after(10, self._update_action_state))
+        self.url_entry.bind("<<Cut>>", lambda _e: self.after(10, self._update_action_state))
 
         dest = ttk.Frame(card)
         dest.pack(fill="x", pady=(10, 0))
@@ -116,7 +121,7 @@ class BaixarFrame(ttk.Frame):
 
         ctl = ttk.Frame(card)
         ctl.pack(fill="x", pady=(14, 8))
-        self.download_btn = ttk.Button(ctl, text="Baixar agora", command=self.start_download, bootstyle=PRIMARY)
+        self.download_btn = ttk.Button(ctl, text="Baixar agora", command=self.start_download, bootstyle=PRIMARY, state=DISABLED)
         self.download_btn.pack(side="left")
         self.cancel_btn = ttk.Button(ctl, text="Cancelar", command=self.cancel_download, bootstyle=SECONDARY, state=DISABLED)
         self.cancel_btn.pack(side="left", padx=(10, 0))
@@ -132,12 +137,63 @@ class BaixarFrame(ttk.Frame):
             card, text="Abrir pasta do arquivo", command=self.open_file_location, bootstyle=INFO, state=DISABLED
         )
         self.open_folder_button.pack(pady=8)
+        self._update_action_state()
 
     def _normalize_path(self, path_value):
         try:
             return os.path.abspath(os.path.expanduser(str(path_value))) if path_value else ""
         except Exception:
             return str(path_value)
+
+    def _sanitize_filename(self, value):
+        text = str(value or "").strip()
+        text = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", text)
+        text = re.sub(r"\s+", " ", text).strip(" .")
+        return text or "download"
+
+    def _next_available_path(self, folder, stem, extension):
+        extension = str(extension or "").lstrip(".")
+        base_name = self._sanitize_filename(stem)
+        candidate = os.path.join(folder, f"{base_name}.{extension}")
+        if not os.path.exists(candidate):
+            return candidate
+
+        index = 2
+        while True:
+            candidate = os.path.join(folder, f"{base_name} ({index}).{extension}")
+            if not os.path.exists(candidate):
+                return candidate
+            index += 1
+
+    def _build_outtmpl(self, title, fmt_mode, quality_choice):
+        stem = self._sanitize_filename(title)
+        is_video = "deo" in str(fmt_mode or "").lower()
+        final_ext = "mp4" if is_video else "mp3"
+
+        if is_video and quality_choice and quality_choice != "best":
+            stem = f"{stem} [{quality_choice}]"
+
+        reserved_path = self._next_available_path(self.destination_folder, stem, final_ext)
+        return f"{os.path.splitext(reserved_path)[0]}.%(ext)s", reserved_path
+
+    def _resolve_download_target(self, url, fmt_mode, quality_choice):
+        y = self._yt_dlp
+        probe_opts = {
+            "quiet": True,
+            "skip_download": True,
+            "noplaylist": True,
+            "extract_flat": False,
+        }
+        with y.YoutubeDL(probe_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+
+        title = (
+            (info or {}).get("title")
+            or (info or {}).get("fulltitle")
+            or (info or {}).get("id")
+            or "download"
+        )
+        return self._build_outtmpl(title, fmt_mode, quality_choice)
 
     def load_config(self):
         if CONFIG_FILE.exists():
@@ -165,9 +221,13 @@ class BaixarFrame(ttk.Frame):
             self.destination_folder = folder
             self.dest_label.config(text=folder)
             self.save_config()
+            self._update_action_state()
 
     def _on_format_change(self, _evt=None):
         self._apply_quality_visibility()
+
+    def _on_url_changed(self, _evt=None):
+        self._update_action_state()
 
     def _is_video(self):
         return self.selected_format.get() == "Vídeo"
@@ -177,7 +237,13 @@ class BaixarFrame(ttk.Frame):
             for w in self._quality_widgets:
                 try:
                     if not w.winfo_ismapped():
-                        w.pack(**self._quality_pack_options.get(w, {}))
+                        pack_options = self._quality_pack_options.get(w)
+                        if pack_options:
+                            w.pack(**pack_options)
+                        elif w is self.quality_label:
+                            w.pack(side="left")
+                        else:
+                            w.pack(side="left", padx=(8, 0))
                 except Exception:
                     pass
         else:
@@ -200,6 +266,18 @@ class BaixarFrame(ttk.Frame):
         except Exception:
             pass
         self._apply_quality_visibility()
+        self._update_action_state()
+
+    def _update_action_state(self):
+        if self.is_running:
+            self.download_btn.config(state=DISABLED)
+            self.cancel_btn.config(state=NORMAL if not self.cancel_requested else DISABLED)
+            return
+
+        has_url = bool(self.url_entry.get().strip())
+        has_destination = bool(self.destination_folder)
+        self.download_btn.config(state=NORMAL if has_url and has_destination else DISABLED)
+        self.cancel_btn.config(state=DISABLED)
 
     def _add_entry_context_menu(self, entry):
         menu = tk.Menu(self, tearoff=0)
@@ -342,8 +420,8 @@ class BaixarFrame(ttk.Frame):
         self.cancel_requested = False
         self._last_tmp_file = None
 
-        self.download_btn.config(state=DISABLED)
-        self.cancel_btn.config(state=NORMAL)
+        self.is_running = True
+        self._update_action_state()
         self.on_status("Download iniciado…")
 
         fmt_mode = self.selected_format.get()
@@ -376,6 +454,8 @@ class BaixarFrame(ttk.Frame):
 
     def download_media(self, url, fmt_mode, quality_choice):
         try:
+            outtmpl, reserved_path = self._resolve_download_target(url, fmt_mode, quality_choice)
+            self._queue_event("downloaded_file", reserved_path)
             # Pós-processo para GARANTIR AAC no resultado final (sem mudar sua lógica de fluxo)
             # Se já vier AAC, o ffmpeg costuma "copiar" rápido quando possível.
             ensure_aac_pp = {
@@ -388,10 +468,11 @@ class BaixarFrame(ttk.Frame):
                 "nocolor": True,
                 "quiet": True,
                 "progress_hooks": [self.ydl_hook],
-                "outtmpl": os.path.join(self.destination_folder, "%(title)s.%(ext)s"),
+                "outtmpl": outtmpl,
                 "merge_output_format": "mp4",
                 "prefer_free_formats": False,
                 "allow_unplayable_formats": False,
+                "windowsfilenames": True,
             }
 
             if fmt_mode == "Música":
@@ -546,12 +627,14 @@ class BaixarFrame(ttk.Frame):
             pass
 
     def _finish_ok(self):
+        self.is_running = False
         self.status.config(text=self.status.cget("text") or "Download concluído!")
         self.open_folder_button.config(state=NORMAL)
         self.download_btn.config(state=NORMAL)
         self.cancel_btn.config(state=DISABLED)
 
     def _finish_canceled(self):
+        self.is_running = False
         self.status.config(text="Download cancelado.")
         self.progress["value"] = 0
         self.open_folder_button.config(state=DISABLED)
@@ -559,9 +642,30 @@ class BaixarFrame(ttk.Frame):
         self.cancel_btn.config(state=DISABLED)
         self.on_status("Download cancelado")
 
-    def _finish_error(self, msg):
+    def _legacy_finish_error(self, msg):
         self.status.config(text=msg or "Erro no download.")
         self.download_btn.config(state=NORMAL)
         self.cancel_btn.config(state=DISABLED)
         self.open_folder_button.config(state=DISABLED)
+        self.on_status(f"Erro: {msg or 'falha no download'}")
+
+    def _legacy_finish_ok(self):
+        self.is_running = False
+        self.status.config(text=self.status.cget("text") or "Download concluido!")
+        self.open_folder_button.config(state=NORMAL)
+        self._update_action_state()
+
+    def _legacy_finish_canceled(self):
+        self.is_running = False
+        self.status.config(text="Download cancelado.")
+        self.progress["value"] = 0
+        self.open_folder_button.config(state=DISABLED)
+        self._update_action_state()
+        self.on_status("Download cancelado")
+
+    def _finish_error(self, msg):
+        self.is_running = False
+        self.status.config(text=msg or "Erro no download.")
+        self.open_folder_button.config(state=DISABLED)
+        self._update_action_state()
         self.on_status(f"Erro: {msg or 'falha no download'}")

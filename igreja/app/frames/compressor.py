@@ -40,6 +40,7 @@ class CompressorFrame(ttk.Frame):
 
         self.input_files = []
         self.last_output = ""
+        self.output_name_var = tk.StringVar()
 
         self.video_preset = tk.StringVar(value="Equilibrado")
         self.image_quality = tk.StringVar(value="75")
@@ -103,9 +104,17 @@ class CompressorFrame(ttk.Frame):
         )
         self.image_menu.pack(side="left", padx=(10, 0))
 
+        self.output_row = ttk.Frame(card)
+        self.output_row.pack(fill="x", pady=(10, 0))
+        ttk.Label(self.output_row, text="Nome do arquivo:", font=("Helvetica", 13, "bold")).pack(side="left")
+        self.output_name_entry = ttk.Entry(self.output_row, textvariable=self.output_name_var, width=32)
+        self.output_name_entry.pack(side="left", padx=(10, 0))
+        ttk.Label(self.output_row, text="Editavel quando houver 1 arquivo selecionado.", style="Muted.TLabel").pack(side="left", padx=(10, 0))
+        self.output_name_entry.configure(state=DISABLED)
+
         ctl = ttk.Frame(card)
         ctl.pack(fill="x", pady=(12, 6))
-        self.btn_run = ttk.Button(ctl, text="Comprimir", command=self.start_compression, bootstyle=SUCCESS)
+        self.btn_run = ttk.Button(ctl, text="Comprimir", command=self.start_compression, bootstyle=SUCCESS, state=DISABLED)
         self.btn_run.pack(side="left")
         self.btn_cancel = ttk.Button(ctl, text="Cancelar", command=self.cancel, bootstyle=SECONDARY, state=DISABLED)
         self.btn_cancel.pack(side="left", padx=(10, 0))
@@ -119,6 +128,7 @@ class CompressorFrame(ttk.Frame):
 
         self.btn_open = ttk.Button(card, text="Abrir pasta do arquivo", command=self.open_folder, bootstyle=INFO, state=DISABLED)
         self.btn_open.pack(pady=8)
+        self._update_action_state()
 
     def select_files(self):
         filetypes = [
@@ -162,6 +172,7 @@ class CompressorFrame(ttk.Frame):
             self.label_selected.config(text="Nenhum arquivo selecionado")
             self.label_mode.config(text="")
             self._apply_mode(None)
+            self._refresh_output_name()
             return
 
         all_video = all(is_video_file(p) for p in uniq)
@@ -172,6 +183,7 @@ class CompressorFrame(ttk.Frame):
             self.label_selected.config(text="Nenhum arquivo selecionado")
             self.label_mode.config(text="")
             self._apply_mode(None)
+            self._refresh_output_name()
             return
 
         self.current_mode = "video" if all_video else "image"
@@ -181,6 +193,8 @@ class CompressorFrame(ttk.Frame):
             self.label_selected.config(text=f"{len(uniq)} arquivos (ex.: {os.path.basename(uniq[0])})")
         self.label_mode.config(text=f"Modo: {'Video' if self.current_mode == 'video' else 'Imagem'}")
         self._apply_mode(self.current_mode)
+        self._refresh_output_name()
+        self._update_action_state()
 
     def _apply_mode(self, mode):
         self.video_opts.pack_forget()
@@ -189,6 +203,30 @@ class CompressorFrame(ttk.Frame):
             self.video_opts.pack(fill="x", pady=(10, 0))
         elif mode == "image":
             self.image_opts.pack(fill="x", pady=(10, 0))
+
+    def _refresh_output_name(self):
+        if not self.input_files:
+            self.output_name_var.set("")
+            self.output_name_entry.configure(state=DISABLED)
+            return
+
+        if len(self.input_files) > 1:
+            self.output_name_var.set("")
+            self.output_name_entry.configure(state=DISABLED)
+            return
+
+        base, ext = os.path.splitext(os.path.basename(self.input_files[0]))
+        self.output_name_var.set(f"{base}_compactado{ext}")
+        self.output_name_entry.configure(state=NORMAL)
+
+    def _update_action_state(self):
+        if self.is_running:
+            self.btn_run.config(state=DISABLED)
+            self.btn_cancel.config(state=NORMAL)
+            return
+
+        self.btn_run.config(state=NORMAL if self.input_files else DISABLED)
+        self.btn_cancel.config(state=DISABLED)
 
     def clear_files(self):
         self.input_files = []
@@ -199,7 +237,10 @@ class CompressorFrame(ttk.Frame):
         self.status_var.set("")
         self.last_output = ""
         self.btn_open.config(state=DISABLED)
+        self.output_name_var.set("")
+        self.output_name_entry.configure(state=DISABLED)
         self._apply_mode(None)
+        self._update_action_state()
 
     def start_compression(self):
         if self.is_running:
@@ -218,12 +259,23 @@ class CompressorFrame(ttk.Frame):
             messagebox.showerror("Dependencias", "Compressao de imagens requer Pillow. Instale: pip install pillow")
             return
 
+        if len(self.input_files) == 1:
+            custom_name = (self.output_name_var.get() or "").strip()
+            if not custom_name:
+                messagebox.showerror("Erro", "Informe um nome para o arquivo de saida.")
+                return
+            proposed_output = self._build_output_path(self.input_files[0])
+            if os.path.abspath(proposed_output).lower() == os.path.abspath(self.input_files[0]).lower():
+                messagebox.showerror("Erro", "Escolha um nome diferente do arquivo original.")
+                return
+
         self.current_mode = "video" if all_video else "image"
         self.is_running = True
         self.cancel_requested = False
         self.btn_run.config(state=DISABLED)
         self.btn_cancel.config(state=NORMAL)
         self.btn_open.config(state=DISABLED)
+        self._update_action_state()
         self.progress_var.set(0)
         self.status_var.set("Preparando...")
         self.on_status("Compressao iniciada...")
@@ -276,6 +328,13 @@ class CompressorFrame(ttk.Frame):
             self.proc = None
 
     def _build_output_path(self, in_path):
+        if len(self.input_files) == 1:
+            custom_name = (self.output_name_var.get() or "").strip()
+            if custom_name:
+                if "." not in os.path.basename(custom_name):
+                    custom_name += os.path.splitext(in_path)[1]
+                return os.path.join(os.path.dirname(in_path), custom_name)
+
         base, ext = os.path.splitext(in_path)
         return f"{base}_compactado{ext}"
 
@@ -416,16 +475,14 @@ class CompressorFrame(ttk.Frame):
                     self.status_var.set(msg)
                     self.progress_var.set(100 if int(info.get("successes", 0) or 0) > 0 else 0)
                     self.on_status(msg)
-                    self.btn_run.config(state=NORMAL)
-                    self.btn_cancel.config(state=DISABLED)
+                    self._update_action_state()
                     self.btn_open.config(state=NORMAL if self.last_output else DISABLED)
                     messagebox.showinfo("Conclusao", msg)
                 elif kind == "canceled":
                     self.status_var.set(str(payload))
                     self.progress_var.set(0)
                     self.on_status(str(payload))
-                    self.btn_run.config(state=NORMAL)
-                    self.btn_cancel.config(state=DISABLED)
+                    self._update_action_state()
                     self.btn_open.config(state=DISABLED)
                 elif kind == "error":
                     self.on_status("Erro na compressao")
@@ -434,8 +491,7 @@ class CompressorFrame(ttk.Frame):
             pass
         finally:
             if not self.is_running and self.btn_cancel["state"] == NORMAL:
-                self.btn_run.config(state=NORMAL)
-                self.btn_cancel.config(state=DISABLED)
+                self._update_action_state()
             self.after(100, self._drain_ui_queue)
 
     def open_folder(self):

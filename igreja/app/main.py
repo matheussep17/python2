@@ -18,6 +18,7 @@ if __package__ in (None, ""):
 from app.frames.baixar_videos import BaixarFrame
 from app.frames.compressor import CompressorFrame
 from app.frames.converter import ConverterFrame
+from app.frames.editor import EditorFrame
 from app.frames.transcriber import TranscriberFrame
 from app.ui.alerts import install_messagebox_hooks, show_info
 from app.ui.theme import apply_design_system, resolve_ttk_theme
@@ -44,6 +45,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.theme_mode = tk.StringVar(value=initial_mode)
         self.nav_bootstyles = {
             "converter": "primary",
+            "editor": "danger",
             "compressor": "warning",
             "baixar": "info",
             "transcribe": "success",
@@ -91,6 +93,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
         for key, label, emoji in [
             ("converter", "Conversor", "⚙️"),
+            ("editor", "Editar video", "✂️"),
             ("compressor", "Comprimir", "🗜️"),
             ("baixar", "Baixar", "⬇️"),
             ("transcribe", "Transcricao", "📝"),
@@ -116,6 +119,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
         self.frames = {
             "converter": ConverterFrame(self.content, self._set_status),
+            "editor": EditorFrame(self.content, self._set_status),
             "compressor": CompressorFrame(self.content, self._set_status),
             "baixar": BaixarFrame(self.content, self._set_status),
             "transcribe": TranscriberFrame(self.content, self._set_status),
@@ -126,9 +130,10 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self._show("converter")
 
         self.bind("<Control-Key-1>", lambda _e: self._show("converter"))
-        self.bind("<Control-Key-2>", lambda _e: self._show("baixar"))
-        self.bind("<Control-Key-3>", lambda _e: self._show("compressor"))
-        self.bind("<Control-Key-4>", lambda _e: self._show("transcribe"))
+        self.bind("<Control-Key-2>", lambda _e: self._show("editor"))
+        self.bind("<Control-Key-3>", lambda _e: self._show("baixar"))
+        self.bind("<Control-Key-4>", lambda _e: self._show("compressor"))
+        self.bind("<Control-Key-5>", lambda _e: self._show("transcribe"))
 
     def _on_theme_changed(self, _event=None):
         mode = self.theme_mode.get()
@@ -148,6 +153,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
         mapping = {
             "converter": "• Conversor",
+            "editor": "• Editar video",
             "compressor": "• Comprimir",
             "baixar": "• Baixar",
             "transcribe": "• Transcricao",
