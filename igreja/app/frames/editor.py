@@ -525,6 +525,8 @@ class EditorFrame(ttk.Frame):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             creationflags=create_no_window_flags(),
         )
 
@@ -565,6 +567,8 @@ class EditorFrame(ttk.Frame):
             output = subprocess.check_output(
                 ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nk=1:nw=1", path],
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 creationflags=create_no_window_flags(),
                 stderr=subprocess.DEVNULL,
             )
