@@ -21,8 +21,10 @@ AUDIO_EXTS = {"wav", "mp3"}
 IMAGE_EXTS = {"jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff", "cr2"}
 ALL_EXTS = VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS
 
+
 def is_video_file(p): return _ext(p) in VIDEO_EXTS or _ext(p) in AUDIO_EXTS
 def is_image_file(p): return _ext(p) in IMAGE_EXTS
+
 
 class ConverterFrame(ttk.Frame):
     def __init__(self, master, on_status):
@@ -33,6 +35,7 @@ class ConverterFrame(ttk.Frame):
         self.ultimo_arquivo_convertido = ""
         self.formato_destino = tk.StringVar(value="mp4")
         self.output_name_var = tk.StringVar()
+        self.remove_audio = tk.BooleanVar(value=False)
 
         self.progress_var = tk.DoubleVar(value=0)
         self.status_var = tk.StringVar(value="")
@@ -42,7 +45,7 @@ class ConverterFrame(ttk.Frame):
         self._current_output_path = None
         self.ui_queue = queue.Queue()
 
-        self.video_formats = ["mp3", "mp4", "avi", "mkv", "mov"]
+        self.video_formats = ["mp3", "mp4", "avi", "mkv", "mov", "gif"]
         self.image_formats = ["jpg", "png", "webp", "tiff", "bmp"]
         self.current_mode = "video"
 
@@ -78,7 +81,11 @@ class ConverterFrame(ttk.Frame):
         self.label_formato.pack(anchor="w", pady=(2, 0))
 
         if HAS_DND:
-            ttk.Label(card, text="Arraste e solte videos/audios (mp4, mkv, mp3...) ou imagens (jpg, png, cr2...)", style="Muted.TLabel").pack(anchor="w", pady=(6, 4))
+            ttk.Label(
+                card,
+                text="Arraste e solte videos/audios (mp4, mkv, mp3...) ou imagens (jpg, png, cr2...)",
+                style="Muted.TLabel"
+            ).pack(anchor="w", pady=(6, 4))
 
         self.fmt_row = ttk.Frame(card)
         self.fmt_row_visible = False
@@ -86,6 +93,22 @@ class ConverterFrame(ttk.Frame):
         self.format_menu = ttk.Combobox(self.fmt_row, textvariable=self.formato_destino, values=[], state="readonly", width=14)
         self.format_menu.pack(side="left", padx=(10, 0))
         self.format_menu.bind("<<ComboboxSelected>>", lambda _e: self._refresh_output_name())
+
+        self.audio_row = ttk.Frame(card)
+        self.audio_row_visible = False
+        self.remove_audio_check = ttk.Checkbutton(
+            self.audio_row,
+            text="Converter sem audio",
+            variable=self.remove_audio,
+            command=self._on_toggle_remove_audio,
+            bootstyle="round-toggle"
+        )
+        self.remove_audio_check.pack(side="left")
+        ttk.Label(
+            self.audio_row,
+            text="Mantem o video e remove a trilha sonora no arquivo final.",
+            style="Muted.TLabel"
+        ).pack(side="left", padx=(10, 0))
 
         self.output_row = ttk.Frame(card)
         ttk.Label(self.output_row, text="Nome do arquivo:", font=("Helvetica", 13, "bold")).pack(side="left")
@@ -123,6 +146,41 @@ class ConverterFrame(ttk.Frame):
             self.fmt_row.pack_forget()
             self.fmt_row_visible = False
 
+    def _show_audio_row(self):
+        if not self.audio_row_visible:
+            self.audio_row.pack(fill="x", pady=(0, 5))
+            self.audio_row_visible = True
+
+    def _hide_audio_row(self):
+        if self.audio_row_visible:
+            self.audio_row.pack_forget()
+            self.audio_row_visible = False
+
+    def _input_original_ext(self):
+        if len(self.input_files) == 1:
+            return _ext(self.input_files[0])
+        return ""
+
+    def _can_keep_same_video_format(self):
+        original_ext = self._input_original_ext()
+        return (
+            self.current_mode == "video"
+            and self.remove_audio.get()
+            and original_ext in self.video_formats
+            and original_ext != "mp3"
+        )
+
+    def _target_has_no_audio(self, in_path=None, out_ext=None):
+        src = _ext(in_path) if in_path else self._input_original_ext()
+        dst = (out_ext or self.formato_destino.get() or "").strip().lower()
+        if dst == "gif":
+            return True
+        return self.current_mode == "video" and self.remove_audio.get() and dst != "mp3" and src in VIDEO_EXTS
+
+    def _on_toggle_remove_audio(self):
+        self._update_format_menu()
+        self._refresh_output_name()
+
     def _refresh_output_name(self):
         if not self.input_files:
             self.output_name_var.set("")
@@ -134,12 +192,22 @@ class ConverterFrame(ttk.Frame):
             self.output_name_entry.configure(state=DISABLED)
             return
 
-        filename = os.path.splitext(os.path.basename(self.input_files[0]))[0]
+        in_path = self.input_files[0]
+        filename = os.path.splitext(os.path.basename(in_path))[0]
         target_ext = self.formato_destino.get().strip()
-        self.output_name_var.set(f"{filename}.{target_ext}" if target_ext else filename)
+        if target_ext:
+            original_ext = _ext(in_path)
+            if target_ext == original_ext and self._target_has_no_audio(in_path, target_ext):
+                filename = f"{filename}_sem_audio"
+            self.output_name_var.set(f"{filename}.{target_ext}")
+        else:
+            self.output_name_var.set(filename)
         self.output_name_entry.configure(state=NORMAL)
 
     def _build_output_path(self, in_path, out_ext):
+        original_ext = _ext(in_path)
+        filename = os.path.splitext(os.path.basename(in_path))[0]
+
         if len(self.input_files) == 1:
             custom_name = (self.output_name_var.get() or "").strip()
             if custom_name:
@@ -147,10 +215,11 @@ class ConverterFrame(ttk.Frame):
                     custom_name = f"{custom_name}.{out_ext}"
                 return os.path.join(os.path.dirname(in_path), custom_name)
 
-        return os.path.join(
-            os.path.dirname(in_path),
-            os.path.splitext(os.path.basename(in_path))[0] + f".{out_ext}"
-        )
+        if out_ext == original_ext:
+            suffix = "_sem_audio" if self._target_has_no_audio(in_path, out_ext) else "_convertido"
+            filename = f"{filename}{suffix}"
+
+        return os.path.join(os.path.dirname(in_path), filename + f".{out_ext}")
 
     def _update_action_state(self):
         if self.is_converting:
@@ -166,6 +235,7 @@ class ConverterFrame(ttk.Frame):
     def _update_format_menu(self):
         if not self.input_files:
             self._hide_format_row()
+            self._hide_audio_row()
             self.format_menu.config(values=[])
             self._refresh_output_name()
             return
@@ -173,18 +243,25 @@ class ConverterFrame(ttk.Frame):
         all_video = all(is_video_file(p) for p in self.input_files)
         all_image = all(is_image_file(p) for p in self.input_files)
         if not (all_video or all_image):
-            messagebox.showerror("Seleção inválida", "Selecione apenas VÍDEO/ÁUDIO ou apenas IMAGEM.")
+            messagebox.showerror("Selecao invalida", "Selecione apenas VIDEO/AUDIO ou apenas IMAGEM.")
             self._hide_format_row()
+            self._hide_audio_row()
             self.format_menu.config(values=[])
             self._refresh_output_name()
             return
 
         self.current_mode = "image" if all_image else "video"
+        if self.current_mode == "video":
+            self._show_audio_row()
+        else:
+            self.remove_audio.set(False)
+            self._hide_audio_row()
+
         values = self.image_formats if self.current_mode == "image" else self.video_formats
 
         if len(self.input_files) == 1:
             original_ext = _ext(self.input_files[0])
-            if original_ext in values:
+            if original_ext in values and not self._can_keep_same_video_format():
                 values = [v for v in values if v != original_ext]
 
         self.format_menu.config(values=values)
@@ -197,9 +274,9 @@ class ConverterFrame(ttk.Frame):
 
     def selecionar_arquivos(self):
         tipos = [
-            ("Vídeo/Áudio/Imagem", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v *.wav *.mp3 *.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff *.cr2"),
-            ("Vídeos", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v"),
-            ("Áudio", "*.wav *.mp3"),
+            ("Video/Audio/Imagem", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v *.wav *.mp3 *.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff *.cr2"),
+            ("Videos", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v"),
+            ("Audio", "*.wav *.mp3"),
             ("Imagens", "*.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff *.cr2"),
             ("Todos", "*.*")
         ]
@@ -267,9 +344,11 @@ class ConverterFrame(ttk.Frame):
         self.open_btn.config(state=DISABLED)
         self.current_mode = "video"
         self.formato_destino.set("mp4")
+        self.remove_audio.set(False)
         self.output_name_var.set("")
         self.output_name_entry.configure(state=DISABLED)
         self._hide_format_row()
+        self._hide_audio_row()
         self.format_menu.config(values=[])
         self._update_action_state()
 
@@ -283,12 +362,12 @@ class ConverterFrame(ttk.Frame):
         all_video = all(is_video_file(p) for p in self.input_files)
         all_image = all(is_image_file(p) for p in self.input_files)
         if not (all_video or all_image):
-            messagebox.showerror("Seleção inválida", "Selecione apenas VÍDEO/ÁUDIO ou apenas IMAGEM.")
+            messagebox.showerror("Selecao invalida", "Selecione apenas VIDEO/AUDIO ou apenas IMAGEM.")
             return
 
         formato_destino = self.formato_destino.get()
         if not formato_destino:
-            messagebox.showerror("Erro", "Selecione um formato de saída.")
+            messagebox.showerror("Erro", "Selecione um formato de saida.")
             return
 
         if len(self.input_files) == 1:
@@ -312,9 +391,13 @@ class ConverterFrame(ttk.Frame):
 
         self.progress_var.set(0)
         self.status_var.set("Preparando...")
-        self.on_status("Conversão iniciada…")
+        self.on_status("Conversao iniciada...")
 
-        threading.Thread(target=self._batch_convert_worker, args=(self.input_files[:], formato_destino), daemon=True).start()
+        threading.Thread(
+            target=self._batch_convert_worker,
+            args=(self.input_files[:], formato_destino),
+            daemon=True
+        ).start()
 
     def cancel_conversion(self):
         if self.is_converting:
@@ -341,7 +424,11 @@ class ConverterFrame(ttk.Frame):
                 self._current_output_path = out_path
 
                 self.ui_queue.put(("status", f"[{idx}/{total}] Preparando..."))
-                ok = self._convert_single_image(in_path, out_path, idx, total) if mode == "image" else self._convert_single_video(in_path, out_path, idx, total)
+                ok = (
+                    self._convert_single_image(in_path, out_path, idx, total)
+                    if mode == "image"
+                    else self._convert_single_video(in_path, out_path, idx, total)
+                )
                 if not ok:
                     failures += 1
                     if self.cancel_requested:
@@ -352,17 +439,26 @@ class ConverterFrame(ttk.Frame):
                 last_out = out_path
 
             if self.cancel_requested:
-                self.ui_queue.put(("canceled", "Conversão cancelada."))
+                self.ui_queue.put(("canceled", "Conversao cancelada."))
             else:
                 if failures:
-                    msg = f"Conversão concluída: {successes} de {total} arquivo(s) convertidos. {failures} falharam."
+                    msg = f"Conversao concluida: {successes} de {total} arquivo(s) convertidos. {failures} falharam."
                 else:
-                    msg = f"Conversão concluída: {successes} arquivo(s) convertidos."
-                self.ui_queue.put(("done", {"message": msg, "last_output": last_out, "successes": successes, "failures": failures, "total": total}))
+                    msg = f"Conversao concluida: {successes} arquivo(s) convertidos."
+                self.ui_queue.put((
+                    "done",
+                    {
+                        "message": msg,
+                        "last_output": last_out,
+                        "successes": successes,
+                        "failures": failures,
+                        "total": total,
+                    }
+                ))
 
         except Exception as e:
             if self.cancel_requested:
-                self.ui_queue.put(("canceled", "Conversão cancelada."))
+                self.ui_queue.put(("canceled", "Conversao cancelada."))
             else:
                 self.ui_queue.put(("error", f"Erro no processamento: {e}"))
         finally:
@@ -373,9 +469,15 @@ class ConverterFrame(ttk.Frame):
         try:
             duration = self._probe_duration(in_path)
             total_seconds = float(duration) if duration else None
+            out_ext = _ext(out_path)
+            remove_audio = self._target_has_no_audio(in_path, out_ext)
 
-            if out_path.lower().endswith(".mp3"):
+            if out_ext == "mp3":
                 cmd = ["ffmpeg", "-y", "-i", in_path, "-vn", "-acodec", "libmp3lame", "-q:a", "2", out_path]
+            elif out_ext == "gif":
+                cmd = ["ffmpeg", "-y", "-i", in_path, "-vf", "fps=12,scale=iw:-1:flags=lanczos", "-loop", "0", out_path]
+            elif remove_audio:
+                cmd = ["ffmpeg", "-y", "-i", in_path, "-an", out_path]
             else:
                 cmd = ["ffmpeg", "-y", "-i", in_path, out_path]
 
@@ -398,7 +500,10 @@ class ConverterFrame(ttk.Frame):
                         if total_seconds and total_seconds > 0:
                             pct = max(0.0, min(100.0, (sec / total_seconds) * 100.0))
                             self.ui_queue.put(("progress", pct))
-                            self.ui_queue.put(("status", f"[{idx}/{total}] Convertendo... {pct:.1f}% ({seconds_to_hms(sec)} de {seconds_to_hms(total_seconds)})"))
+                            self.ui_queue.put((
+                                "status",
+                                f"[{idx}/{total}] Convertendo... {pct:.1f}% ({seconds_to_hms(sec)} de {seconds_to_hms(total_seconds)})"
+                            ))
                         else:
                             self.ui_queue.put(("status", f"[{idx}/{total}] Convertendo... {seconds_to_hms(sec)}"))
                     except Exception:
@@ -418,11 +523,11 @@ class ConverterFrame(ttk.Frame):
                 self.ui_queue.put(("status", f"[{idx}/{total}] Arquivo convertido: {os.path.basename(out_path)}"))
                 return True
 
-            self.ui_queue.put(("error", f"Falha na conversão do arquivo: {os.path.basename(in_path)}"))
+            self.ui_queue.put(("error", f"Falha na conversao do arquivo: {os.path.basename(in_path)}"))
             return False
 
         except FileNotFoundError:
-            self.ui_queue.put(("error", "Não encontrei o ffmpeg/ffprobe. Instale-os e adicione ao PATH."))
+            self.ui_queue.put(("error", "Nao encontrei o ffmpeg/ffprobe. Instale-os e adicione ao PATH."))
             return False
         except Exception as e:
             if self.cancel_requested:
@@ -440,7 +545,7 @@ class ConverterFrame(ttk.Frame):
     def _convert_single_image(self, in_path, out_path, idx, total):
         try:
             if not HAS_PIL or Image is None:
-                self.ui_queue.put(("error", "Conversão de imagens requer Pillow. Instale: pip install pillow"))
+                self.ui_queue.put(("error", "Conversao de imagens requer Pillow. Instale: pip install pillow"))
                 return False
 
             self.ui_queue.put(("status", f"[{idx}/{total}] Convertendo imagem..."))
@@ -476,7 +581,7 @@ class ConverterFrame(ttk.Frame):
                     self.ui_queue.put(("error", "Para converter CR2 instale rawpy: pip install rawpy"))
                     return False
                 try:
-                    import rawpy # pyright: ignore[reportMissingImports]
+                    import rawpy  # pyright: ignore[reportMissingImports]
                 except Exception:
                     self.ui_queue.put(("error", "Falha ao carregar rawpy. Instale com: pip install rawpy"))
                     return False
@@ -513,7 +618,7 @@ class ConverterFrame(ttk.Frame):
                 except Exception:
                     pass
                 return False
-            self.ui_queue.put(("error", f"Erro na conversão de imagem ({os.path.basename(in_path)}): {e}"))
+            self.ui_queue.put(("error", f"Erro na conversao de imagem ({os.path.basename(in_path)}): {e}"))
             return False
 
     def _probe_duration(self, path):
@@ -542,7 +647,7 @@ class ConverterFrame(ttk.Frame):
 
                 elif kind == "done":
                     info = payload if isinstance(payload, dict) else {"message": str(payload)}
-                    message = info.get("message") or "Conversão concluída."
+                    message = info.get("message") or "Conversao concluida."
                     successes = info.get("successes", 0) or 0
                     failures = info.get("failures", 0) or 0
                     total = info.get("total")
@@ -597,6 +702,6 @@ class ConverterFrame(ttk.Frame):
                 else:
                     subprocess.Popen(["xdg-open", pasta])
             except Exception as e:
-                messagebox.showerror("Erro", f"Não foi possível abrir a pasta: {e}")
+                messagebox.showerror("Erro", f"Nao foi possivel abrir a pasta: {e}")
         else:
             messagebox.showerror("Erro", "Nenhum arquivo convertido encontrado.")
