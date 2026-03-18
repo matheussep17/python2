@@ -72,18 +72,35 @@ class CompressorFrame(ttk.Frame):
         ttk.Label(header, text="Compressor de Video / Foto", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
 
-        row = ttk.Frame(card)
-        row.pack(fill="x")
-        ttk.Button(row, text="Selecionar Arquivo(s)", command=self.select_files, bootstyle=WARNING).pack(side="left")
-        ttk.Button(row, text="Remover", command=self.clear_files, bootstyle=DANGER).pack(side="left", padx=(10, 0))
+        # --- Arquivos ---
+        files_frame = ttk.LabelFrame(card, text="Arquivos")
+        files_frame.pack(fill="x")
+        files_inner = ttk.Frame(files_frame, padding=12)
+        files_inner.pack(fill="x")
+        files_inner.columnconfigure(1, weight=1)
 
-        self.label_selected = ttk.Label(card, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
-        self.label_selected.pack(anchor="w", pady=(10, 0))
-        self.label_mode = ttk.Label(card, text="", font=("Helvetica", 12))
-        self.label_mode.pack(anchor="w", pady=(2, 0))
+        ttk.Button(files_inner, text="Selecionar Arquivo(s)", command=self.select_files, bootstyle=WARNING).grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Button(files_inner, text="Remover", command=self.clear_files, bootstyle=DANGER).grid(
+            row=0, column=1, sticky="w", padx=(10, 0)
+        )
 
-        self.video_opts = ttk.Frame(card)
-        ttk.Label(self.video_opts, text="Compressao de video:", font=("Helvetica", 13, "bold")).pack(side="left")
+        self.label_selected = ttk.Label(files_inner, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
+        self.label_selected.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        self.label_mode = ttk.Label(files_inner, text="", font=("Helvetica", 12))
+        self.label_mode.grid(row=2, column=0, columnspan=2, sticky="w", pady=(2, 0))
+
+        # --- Opções ---
+        self.opts_frame = ttk.LabelFrame(card, text="Opções")
+        self.opts_frame.pack(fill="x", pady=(10, 0))
+        opts_inner = ttk.Frame(self.opts_frame, padding=12)
+        opts_inner.pack(fill="x")
+        opts_inner.columnconfigure(1, weight=1)
+
+        self.video_opts = ttk.Frame(opts_inner)
+        self.video_opts.columnconfigure(1, weight=1)
+        ttk.Label(self.video_opts, text="Compressao de video:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
         self.video_menu = ttk.Combobox(
             self.video_opts,
             textvariable=self.video_preset,
@@ -91,10 +108,11 @@ class CompressorFrame(ttk.Frame):
             state="readonly",
             width=16,
         )
-        self.video_menu.pack(side="left", padx=(10, 0))
+        self.video_menu.grid(row=0, column=1, sticky="w", padx=(10, 0))
 
-        self.image_opts = ttk.Frame(card)
-        ttk.Label(self.image_opts, text="Qualidade da foto:", font=("Helvetica", 13, "bold")).pack(side="left")
+        self.image_opts = ttk.Frame(opts_inner)
+        self.image_opts.columnconfigure(1, weight=1)
+        ttk.Label(self.image_opts, text="Qualidade da foto:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
         self.image_menu = ttk.Combobox(
             self.image_opts,
             textvariable=self.image_quality,
@@ -102,33 +120,42 @@ class CompressorFrame(ttk.Frame):
             state="readonly",
             width=8,
         )
-        self.image_menu.pack(side="left", padx=(10, 0))
+        self.image_menu.grid(row=0, column=1, sticky="w", padx=(10, 0))
 
-        self.output_row = ttk.Frame(card)
+        self.output_row = ttk.Frame(self.opts_frame)
+        self.output_row.columnconfigure(1, weight=1)
         self.output_row.pack(fill="x", pady=(10, 0))
-        ttk.Label(self.output_row, text="Nome do arquivo:", font=("Helvetica", 13, "bold")).pack(side="left")
+        ttk.Label(self.output_row, text="Nome do arquivo:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
         self.output_name_entry = ttk.Entry(self.output_row, textvariable=self.output_name_var, width=32)
-        self.output_name_entry.pack(side="left", padx=(10, 0))
-        ttk.Label(self.output_row, text="Editavel quando houver 1 arquivo selecionado.", style="Muted.TLabel").pack(side="left", padx=(10, 0))
+        self.output_name_entry.grid(row=0, column=1, sticky="ew", padx=(10, 0))
+        ttk.Label(self.output_row, text="Editavel quando houver 1 arquivo selecionado.", style="Muted.TLabel").grid(
+            row=0, column=2, sticky="w", padx=(10, 0)
+        )
         self.output_name_entry.configure(state=DISABLED)
 
-        ctl = ttk.Frame(card)
-        ctl.pack(fill="x", pady=(12, 6))
-        self.btn_run = ttk.Button(ctl, text="Comprimir", command=self.start_compression, bootstyle=SUCCESS, state=DISABLED)
+        # --- Acoes ---
+        self.controls_frame = ttk.Frame(card)
+        self.controls_frame.pack(fill="x", pady=(12, 6))
+        self.btn_run = ttk.Button(self.controls_frame, text="Comprimir", command=self.start_compression, bootstyle=SUCCESS, state=DISABLED)
         self.btn_run.pack(side="left")
-        self.btn_cancel = ttk.Button(ctl, text="Cancelar", command=self.cancel, bootstyle=SECONDARY, state=DISABLED)
+        self.btn_cancel = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel, bootstyle=SECONDARY, state=DISABLED)
         self.btn_cancel.pack(side="left", padx=(10, 0))
+        self.controls_frame.pack_forget()
 
-        prog = ttk.Frame(card, padding=10)
-        prog.pack(fill="x", pady=(8, 4))
-        self.progress = ttk.Progressbar(prog, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
+        self.progress_frame = ttk.Frame(card, padding=10)
+        self.progress = ttk.Progressbar(self.progress_frame, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
         self.progress.pack(fill="x")
-        self.status_lbl = ttk.Label(prog, textvariable=self.status_var, font=("Helvetica", 11))
+        self.status_lbl = ttk.Label(self.progress_frame, textvariable=self.status_var, font=("Helvetica", 11))
         self.status_lbl.pack(anchor="w", pady=(6, 0))
+
+        # Hide progress UI until compression starts
+        self._hide_progress()
 
         self.btn_open = ttk.Button(card, text="Abrir pasta do arquivo", command=self.open_folder, bootstyle=INFO, state=DISABLED)
         self.btn_open.pack(pady=8)
+        self.btn_open.pack_forget()
         self._update_action_state()
+        self._update_visibility()
 
     def select_files(self):
         filetypes = [
@@ -195,6 +222,7 @@ class CompressorFrame(ttk.Frame):
         self._apply_mode(self.current_mode)
         self._refresh_output_name()
         self._update_action_state()
+        self._update_visibility()
 
     def _apply_mode(self, mode):
         self.video_opts.pack_forget()
@@ -228,6 +256,34 @@ class CompressorFrame(ttk.Frame):
         self.btn_run.config(state=NORMAL if self.input_files else DISABLED)
         self.btn_cancel.config(state=DISABLED)
 
+    def _update_visibility(self):
+        """Show/hide options and controls depending on file selection."""
+        if self.input_files:
+            if not self.opts_frame.winfo_ismapped():
+                self.opts_frame.pack(fill="x", pady=(10, 0))
+            if not self.controls_frame.winfo_ismapped():
+                self.controls_frame.pack(fill="x", pady=(12, 6))
+            if not self.btn_open.winfo_ismapped():
+                self.btn_open.pack(pady=8)
+        else:
+            self.opts_frame.pack_forget()
+            self.controls_frame.pack_forget()
+            self.btn_open.pack_forget()
+
+        # Only show progress while compression is running.
+        if self.is_running:
+            self._show_progress()
+        else:
+            self._hide_progress()
+
+    def _show_progress(self):
+        if getattr(self, "progress_frame", None) and not self.progress_frame.winfo_ismapped():
+            self.progress_frame.pack(fill="x", pady=(8, 4))
+
+    def _hide_progress(self):
+        if getattr(self, "progress_frame", None) and self.progress_frame.winfo_ismapped():
+            self.progress_frame.pack_forget()
+
     def clear_files(self):
         self.input_files = []
         self.current_mode = None
@@ -235,12 +291,14 @@ class CompressorFrame(ttk.Frame):
         self.label_mode.config(text="")
         self.progress_var.set(0)
         self.status_var.set("")
+        self._hide_progress()
         self.last_output = ""
         self.btn_open.config(state=DISABLED)
         self.output_name_var.set("")
         self.output_name_entry.configure(state=DISABLED)
         self._apply_mode(None)
         self._update_action_state()
+        self._update_visibility()
 
     def start_compression(self):
         if self.is_running:
@@ -275,6 +333,7 @@ class CompressorFrame(ttk.Frame):
         self.btn_run.config(state=DISABLED)
         self.btn_cancel.config(state=NORMAL)
         self.btn_open.config(state=DISABLED)
+        self._show_progress()
         self._update_action_state()
         self.progress_var.set(0)
         self.status_var.set("Preparando...")
@@ -472,6 +531,7 @@ class CompressorFrame(ttk.Frame):
                     info = payload if isinstance(payload, dict) else {"message": str(payload)}
                     msg = info.get("message", "Compressao concluida.")
                     self.last_output = info.get("last_output") or ""
+                    self._hide_progress()
                     self.status_var.set(msg)
                     self.progress_var.set(100 if int(info.get("successes", 0) or 0) > 0 else 0)
                     self.on_status(msg)
@@ -479,6 +539,7 @@ class CompressorFrame(ttk.Frame):
                     self.btn_open.config(state=NORMAL if self.last_output else DISABLED)
                     messagebox.showinfo("Conclusao", msg)
                 elif kind == "canceled":
+                    self._hide_progress()
                     self.status_var.set(str(payload))
                     self.progress_var.set(0)
                     self.on_status(str(payload))

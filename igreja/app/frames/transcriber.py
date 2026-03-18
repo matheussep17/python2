@@ -67,39 +67,56 @@ class TranscriberFrame(ttk.Frame):
         ttk.Label(header, text="Transcritor de Audio (Word)", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
 
-        row = ttk.Frame(card)
-        row.pack(fill="x")
-        ttk.Button(row, text="Selecionar Arquivo(s)", command=self.selecionar_arquivos, bootstyle=WARNING).pack(side="left")
-        ttk.Button(row, text="Remover", command=self.remover_arquivos, bootstyle=DANGER).pack(side="left", padx=(10, 0))
+        files_frame = ttk.LabelFrame(card, text="Arquivos")
+        files_frame.pack(fill="x")
+        files_inner = ttk.Frame(files_frame, padding=12)
+        files_inner.pack(fill="x")
+        files_inner.columnconfigure(1, weight=1)
 
-        self.label_sel = ttk.Label(card, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
-        self.label_sel.pack(anchor="w", pady=(10, 0))
+        ttk.Button(files_inner, text="Selecionar Arquivo(s)", command=self.selecionar_arquivos, bootstyle=WARNING).grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Button(files_inner, text="Remover", command=self.remover_arquivos, bootstyle=DANGER).grid(
+            row=0, column=1, sticky="w", padx=(10, 0)
+        )
 
-        output_row = ttk.Frame(card)
-        output_row.pack(fill="x", pady=(10, 0))
-        ttk.Label(output_row, text="Nome do arquivo:", font=("Helvetica", 13, "bold")).pack(side="left")
-        self.output_name_entry = ttk.Entry(output_row, textvariable=self.output_name_var, width=32)
-        self.output_name_entry.pack(side="left", padx=(10, 0))
-        ttk.Label(output_row, text="Editavel quando houver 1 arquivo selecionado.", style="Muted.TLabel").pack(side="left", padx=(10, 0))
+        self.label_sel = ttk.Label(files_inner, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
+        self.label_sel.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
+
+        self.opts_frame = ttk.LabelFrame(card, text="Saída")
+        self.opts_frame.pack_forget()
+        output_inner = ttk.Frame(self.opts_frame, padding=12)
+        output_inner.pack(fill="x")
+        output_inner.columnconfigure(1, weight=1)
+
+        ttk.Label(output_inner, text="Nome do arquivo:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
+        self.output_name_entry = ttk.Entry(output_inner, textvariable=self.output_name_var, width=32)
+        self.output_name_entry.grid(row=0, column=1, sticky="ew", padx=(10, 0))
+        ttk.Label(output_inner, text="Editavel quando houver 1 arquivo selecionado.", style="Muted.TLabel").grid(
+            row=0, column=2, sticky="w", padx=(10, 0)
+        )
         self.output_name_entry.configure(state=DISABLED)
 
-        ctl = ttk.Frame(card)
-        ctl.pack(fill="x", pady=(10, 6))
-        self.btn_run = ttk.Button(ctl, text="Transcrever (mais completo)", command=self.start_transcription, bootstyle=SUCCESS, state=DISABLED)
+        self.controls_frame = ttk.Frame(card)
+        self.controls_frame.pack_forget()
+        self.btn_run = ttk.Button(self.controls_frame, text="Transcrever (mais completo)", command=self.start_transcription, bootstyle=SUCCESS, state=DISABLED)
         self.btn_run.pack(side="left")
-        self.btn_cancel = ttk.Button(ctl, text="Cancelar", command=self.cancel_transcription, bootstyle=SECONDARY, state=DISABLED)
+        self.btn_cancel = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_transcription, bootstyle=SECONDARY, state=DISABLED)
         self.btn_cancel.pack(side="left", padx=(10, 0))
 
-        prog = ttk.Frame(card, padding=10)
-        prog.pack(fill="x", pady=(8, 4))
-        self.progress = ttk.Progressbar(prog, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
+        self.progress_frame = ttk.Frame(card, padding=10)
+        self.progress = ttk.Progressbar(self.progress_frame, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
         self.progress.pack(fill="x")
-        self.status_lbl = ttk.Label(prog, textvariable=self.status_var, font=("Helvetica", 11))
+        self.status_lbl = ttk.Label(self.progress_frame, textvariable=self.status_var, font=("Helvetica", 11))
         self.status_lbl.pack(anchor="w", pady=(6, 0))
 
+        # Hide progress UI until transcription starts
+        self._hide_progress()
+
         self.btn_open = ttk.Button(card, text="Abrir pasta do ultimo .docx", command=self.abrir_pasta, bootstyle=INFO, state=DISABLED)
-        self.btn_open.pack(pady=8)
+        self.btn_open.pack_forget()
         self._update_action_state()
+        self._update_visibility()
 
     def selecionar_arquivos(self):
         tipos = [
@@ -187,16 +204,47 @@ class TranscriberFrame(ttk.Frame):
         if self.is_running:
             self.btn_run.config(state=DISABLED)
             self.btn_cancel.config(state=NORMAL)
+            self._update_visibility()
             return
 
         self.btn_run.config(state=NORMAL if self.input_files else DISABLED)
         self.btn_cancel.config(state=DISABLED)
+        self._update_visibility()
+
+    def _update_visibility(self):
+        """Show/hide output and control panels when there are selected files."""
+        if self.input_files:
+            if not self.opts_frame.winfo_ismapped():
+                self.opts_frame.pack(fill="x", pady=(10, 0))
+            if not self.controls_frame.winfo_ismapped():
+                self.controls_frame.pack(fill="x", pady=(10, 6))
+            if not self.btn_open.winfo_ismapped():
+                self.btn_open.pack(pady=8)
+        else:
+            self.opts_frame.pack_forget()
+            self.controls_frame.pack_forget()
+            self.btn_open.pack_forget()
+
+        # Only show progress when transcription is running.
+        if self.is_running:
+            self._show_progress()
+        else:
+            self._hide_progress()
+
+    def _show_progress(self):
+        if getattr(self, "progress_frame", None) and not self.progress_frame.winfo_ismapped():
+            self.progress_frame.pack(fill="x", pady=(8, 4))
+
+    def _hide_progress(self):
+        if getattr(self, "progress_frame", None) and self.progress_frame.winfo_ismapped():
+            self.progress_frame.pack_forget()
 
     def remover_arquivos(self):
         self.input_files = []
         self.label_sel.config(text="Nenhum arquivo selecionado")
         self.progress_var.set(0)
         self.status_var.set("")
+        self._hide_progress()
         self.btn_open.config(state=DISABLED)
         self.output_name_var.set("")
         self.output_name_entry.configure(state=DISABLED)
@@ -230,6 +278,7 @@ class TranscriberFrame(ttk.Frame):
         self.btn_run.config(state=DISABLED)
         self.btn_cancel.config(state=NORMAL)
         self.btn_open.config(state=DISABLED)
+        self._show_progress()
         self._update_action_state()
 
         self.progress_var.set(0)
@@ -646,12 +695,14 @@ class TranscriberFrame(ttk.Frame):
                     if last_output:
                         self.last_output = last_output
 
+                    self._hide_progress()
                     self.progress_var.set(100 if successes > 0 else 0)
                     self.status_var.set(message)
                     self.on_status(message)
 
                     self._update_action_state()
                     self.btn_open.config(state=NORMAL if self.last_output else DISABLED)
+                    self._update_visibility()
                     self._set_progress_mode("determinate")
 
                     if failures:
@@ -662,15 +713,18 @@ class TranscriberFrame(ttk.Frame):
                         messagebox.showerror("Erro", message)
 
                 elif kind == "canceled":
+                    self._hide_progress()
                     self.status_var.set(payload)
                     self.on_status(payload)
                     self.progress_var.set(0)
 
                     self._update_action_state()
                     self.btn_open.config(state=DISABLED)
+                    self._update_visibility()
                     self._set_progress_mode("determinate")
 
                 elif kind == "error":
+                    self._hide_progress()
                     self.on_status("Erro na transcrição")
                     messagebox.showerror("Erro", str(payload))
                     self._set_progress_mode("determinate")

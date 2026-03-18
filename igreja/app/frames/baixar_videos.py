@@ -5,6 +5,9 @@ import sys
 import json
 import queue
 import threading
+import urllib.request
+import base64
+import io
 from pathlib import Path
 from tkinter import filedialog, messagebox
 import tkinter as tk
@@ -44,6 +47,10 @@ class BaixarFrame(ttk.Frame):
         self._quality_pack_options = {}
         self.is_running = False
 
+        self._url_preview_job = None
+        self._last_preview_url = None
+        self._thumb_photo = None
+
         self._build_ui()
 
         self.ui_queue = queue.Queue()
@@ -76,68 +83,100 @@ class BaixarFrame(ttk.Frame):
 
         ttk.Separator(card).pack(fill="x", pady=12)
 
-        urlrow = ttk.Frame(card)
-        urlrow.pack(fill="x")
-        self.url_label = ttk.Label(urlrow, text="YouTube URL:", font=("Helvetica", 13))
-        self.url_label.pack(side="left")
-        self.url_entry = ttk.Entry(urlrow, width=60, font=("Helvetica", 12))
-        self.url_entry.pack(side="left", fill="x", expand=True, padx=(10, 0))
+        # --- URL / Serviço ---
+        url_frame = ttk.LabelFrame(card, text="Origem")
+        url_frame.pack(fill="x")
+        url_inner = ttk.Frame(url_frame, padding=12)
+        url_inner.pack(fill="x")
+        url_inner.columnconfigure(1, weight=1)
+
+        self.url_label = ttk.Label(url_inner, text="URL:", font=("Helvetica", 13))
+        self.url_label.grid(row=0, column=0, sticky="w")
+        self.url_entry = ttk.Entry(url_inner, width=60, font=("Helvetica", 12))
+        self.url_entry.grid(row=0, column=1, sticky="ew", padx=(10, 0))
         self._add_entry_context_menu(self.url_entry)
         self.url_entry.bind("<KeyRelease>", self._on_url_changed)
-        self.url_entry.bind("<<Paste>>", lambda _e: self.after(10, self._update_action_state))
-        self.url_entry.bind("<<Cut>>", lambda _e: self.after(10, self._update_action_state))
+        self.url_entry.bind("<<Paste>>", lambda _e: self.after(10, self._on_url_changed))
+        self.url_entry.bind("<<Cut>>", lambda _e: self.after(10, self._on_url_changed))
 
-        dest = ttk.Frame(card)
-        dest.pack(fill="x", pady=(10, 0))
-        ttk.Button(dest, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS).pack(
-            side="left"
+        self.url_status_label = ttk.Label(url_inner, text="Cole um link para começar.", style="Muted.TLabel")
+        self.url_status_label.grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+        self.url_title_var = tk.StringVar(value="")
+        self.url_title_label = ttk.Label(url_inner, textvariable=self.url_title_var, style="Muted.TLabel")
+        self.url_title_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(2, 0))
+
+        # Thumbnail preview (carrega ao colar URL válida)
+        self.thumbnail_label = ttk.Label(url_inner)
+        self.thumbnail_label.grid(row=0, column=2, rowspan=3, sticky="ne", padx=(12, 0))
+        url_inner.columnconfigure(2, weight=0)
+
+        # --- Destino ---
+        dest_frame = ttk.LabelFrame(card, text="Destino")
+        dest_frame.pack(fill="x", pady=(10, 0))
+        dest_inner = ttk.Frame(dest_frame, padding=12)
+        dest_inner.pack(fill="x")
+        dest_inner.columnconfigure(1, weight=1)
+
+        ttk.Button(dest_inner, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS).grid(
+            row=0, column=0, sticky="w"
         )
         self.dest_label = ttk.Label(
-            dest, text=self.destination_folder or "Nenhuma pasta selecionada", anchor="w", font=("Helvetica", 12)
+            dest_inner, text=self.destination_folder or "Nenhuma pasta selecionada", anchor="w", font=("Helvetica", 12)
         )
-        self.dest_label.pack(side="left", fill="x", expand=True, padx=(10, 0))
+        self.dest_label.grid(row=0, column=1, sticky="ew", padx=(10, 0))
 
-        opts = ttk.Frame(card)
-        opts.pack(fill="x", pady=(10, 0))
-        ttk.Label(opts, text="Formato:", font=("Helvetica", 13)).pack(side="left")
+        # --- Opções ---
+        self.opts_frame = ttk.LabelFrame(card, text="Opções")
+        self.opts_frame.pack_forget()
+        opts_inner = ttk.Frame(self.opts_frame, padding=12)
+        opts_inner.pack(fill="x")
+        opts_inner.columnconfigure(1, weight=1)
+        opts_inner.columnconfigure(3, weight=1)
+
+        ttk.Label(opts_inner, text="Formato:", font=("Helvetica", 13)).grid(row=0, column=0, sticky="w")
         self.format_menu = ttk.Combobox(
-            opts, textvariable=self.selected_format, values=["Música", "Vídeo"], state="readonly", width=12
+            opts_inner, textvariable=self.selected_format, values=["Música", "Vídeo"], state="readonly", width=12
         )
-        self.format_menu.pack(side="left", padx=(8, 20))
+        self.format_menu.grid(row=0, column=1, sticky="w", padx=(8, 20))
         self.format_menu.bind("<<ComboboxSelected>>", self._on_format_change)
 
-        self.quality_label = ttk.Label(opts, text="Qualidade do video:", font=("Helvetica", 13))
-        self.quality_label.pack(side="left")
+        self.quality_label = ttk.Label(opts_inner, text="Qualidade do video:", font=("Helvetica", 13))
+        self.quality_label.grid(row=0, column=2, sticky="w")
         self.quality_menu = ttk.Combobox(
-            opts,
+            opts_inner,
             textvariable=self.selected_quality,
             values=["best", "144p", "240p", "360p", "480p", "720p", "1080p", "1440p", "2160p"],
             state="readonly",
             width=12,
         )
-        self.quality_menu.pack(side="left", padx=(8, 0))
+        self.quality_menu.grid(row=0, column=3, sticky="w", padx=(8, 0))
         self._quality_widgets = [self.quality_label, self.quality_menu]
-        self._quality_pack_options = {w: w.pack_info() for w in self._quality_widgets}
+        self._quality_pack_options = {w: w.grid_info() for w in self._quality_widgets}
 
-        ctl = ttk.Frame(card)
-        ctl.pack(fill="x", pady=(14, 8))
-        self.download_btn = ttk.Button(ctl, text="Baixar agora", command=self.start_download, bootstyle=PRIMARY, state=DISABLED)
+        # --- Ações ---
+        self.controls_frame = ttk.Frame(card)
+        self.controls_frame.pack_forget()
+        self.download_btn = ttk.Button(self.controls_frame, text="Baixar agora", command=self.start_download, bootstyle=PRIMARY, state=DISABLED)
         self.download_btn.pack(side="left")
-        self.cancel_btn = ttk.Button(ctl, text="Cancelar", command=self.cancel_download, bootstyle=SECONDARY, state=DISABLED)
+        self.cancel_btn = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_download, bootstyle=SECONDARY, state=DISABLED)
         self.cancel_btn.pack(side="left", padx=(10, 0))
 
-        prog = ttk.Frame(card, padding=10)
-        prog.pack(fill="x", pady=(8, 4))
-        self.progress = ttk.Progressbar(prog, orient="horizontal", mode="determinate")
+        self.progress_frame = ttk.Frame(card, padding=10)
+        self.progress = ttk.Progressbar(self.progress_frame, orient="horizontal", mode="determinate")
         self.progress.pack(fill="x")
-        self.status = ttk.Label(prog, text="", font=("Helvetica", 11))
+        self.status = ttk.Label(self.progress_frame, text="", font=("Helvetica", 11))
         self.status.pack(anchor="w", pady=(6, 0))
+
+        # Progress is only shown while an operation is running.
+        self._hide_progress()
 
         self.open_folder_button = ttk.Button(
             card, text="Abrir pasta do arquivo", command=self.open_file_location, bootstyle=INFO, state=DISABLED
         )
-        self.open_folder_button.pack(pady=8)
+        self.open_folder_button.pack_forget()
         self._update_action_state()
+        self._update_visibility()
 
     def _normalize_path(self, path_value):
         try:
@@ -226,8 +265,96 @@ class BaixarFrame(ttk.Frame):
     def _on_format_change(self, _evt=None):
         self._apply_quality_visibility()
 
+    def _is_valid_url(self, url: str) -> bool:
+        return bool(re.match(r"^https?://", (url or "").strip(), re.IGNORECASE))
+
     def _on_url_changed(self, _evt=None):
+        url = (self.url_entry.get() or "").strip()
+        if not url:
+            self.url_status_label.config(text="Cole um link para começar.", foreground=None)
+            self.url_title_var.set("")
+            self.thumbnail_label.config(image="")
+            self._thumb_photo = None
+        elif self._is_valid_url(url):
+            self.url_status_label.config(text="URL válida", foreground="#10B981")
+            self._schedule_url_preview(url)
+        else:
+            self.url_status_label.config(text="URL inválida", foreground="#F87171")
+            self.url_title_var.set("")
+            self.thumbnail_label.config(image="")
+            self._thumb_photo = None
+
         self._update_action_state()
+
+    def _schedule_url_preview(self, url: str):
+        if self._url_preview_job is not None:
+            try:
+                self.after_cancel(self._url_preview_job)
+            except Exception:
+                pass
+        self._url_preview_job = self.after(500, lambda: self._trigger_url_preview(url))
+
+    def _trigger_url_preview(self, url: str):
+        self._url_preview_job = None
+        if not url or url == self._last_preview_url:
+            return
+        self._last_preview_url = url
+        self.url_title_var.set("(buscando título...)")
+        threading.Thread(target=self._fetch_url_title, args=(url,), daemon=True).start()
+
+    def _fetch_url_title(self, url: str):
+        try:
+            import yt_dlp
+
+            ydl_opts = {"quiet": True, "skip_download": True, "noplaylist": True}
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+
+            title = (info or {}).get("title") or "(sem título)"
+            self._queue_event("preview_title", title)
+
+            # também tenta obter thumbnail
+            thumb = (info or {}).get("thumbnail")
+            if not thumb:
+                thumbs = (info or {}).get("thumbnails") or []
+                if thumbs:
+                    thumbs_sorted = sorted(
+                        [t for t in thumbs if isinstance(t, dict) and t.get("url")],
+                        key=lambda t: t.get("width") or 0,
+                        reverse=True,
+                    )
+                    thumb = thumbs_sorted[0].get("url") if thumbs_sorted else None
+
+            if thumb:
+                self._fetch_thumbnail(thumb)
+        except Exception:
+            self._queue_event("preview_title", "(não foi possível obter o título)")
+    
+    def _fetch_thumbnail(self, url: str):
+        try:
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                data = resp.read()
+
+            # tenta carregar com PIL para redimensionar adequadamente
+            try:
+                from PIL import Image
+            except Exception:
+                Image = None
+
+            if Image:
+                try:
+                    img = Image.open(io.BytesIO(data))
+                    img.thumbnail((240, 135), Image.LANCZOS)
+                    buf = io.BytesIO()
+                    img.save(buf, format="PNG")
+                    data = buf.getvalue()
+                except Exception:
+                    pass
+
+            self._queue_event("preview_thumb", data)
+        except Exception:
+            # falha silenciosa (não trava a UI)
+            pass
 
     def _is_video(self):
         return self.selected_format.get() == "Vídeo"
@@ -237,19 +364,14 @@ class BaixarFrame(ttk.Frame):
             for w in self._quality_widgets:
                 try:
                     if not w.winfo_ismapped():
-                        pack_options = self._quality_pack_options.get(w)
-                        if pack_options:
-                            w.pack(**pack_options)
-                        elif w is self.quality_label:
-                            w.pack(side="left")
-                        else:
-                            w.pack(side="left", padx=(8, 0))
+                        grid_options = self._quality_pack_options.get(w) or {}
+                        w.grid(**grid_options)
                 except Exception:
                     pass
         else:
             for w in self._quality_widgets:
                 try:
-                    w.pack_forget()
+                    w.grid_forget()
                 except Exception:
                     pass
 
@@ -272,12 +394,48 @@ class BaixarFrame(ttk.Frame):
         if self.is_running:
             self.download_btn.config(state=DISABLED)
             self.cancel_btn.config(state=NORMAL if not self.cancel_requested else DISABLED)
+            self._update_visibility()
             return
 
         has_url = bool(self.url_entry.get().strip())
         has_destination = bool(self.destination_folder)
         self.download_btn.config(state=NORMAL if has_url and has_destination else DISABLED)
         self.cancel_btn.config(state=DISABLED)
+        self._update_visibility()
+
+    def _update_visibility(self):
+        """Show/hide options and controls depending on URL + destination state."""
+        has_url = self._is_valid_url(self.url_entry.get().strip())
+        has_destination = bool(self.destination_folder)
+
+        if has_url and has_destination:
+            if not self.opts_frame.winfo_ismapped():
+                self.opts_frame.pack(fill="x", pady=(10, 0))
+            if not self.controls_frame.winfo_ismapped():
+                self.controls_frame.pack(fill="x", pady=(14, 8))
+        else:
+            self.opts_frame.pack_forget()
+            self.controls_frame.pack_forget()
+
+        if self.downloaded_file:
+            if not self.open_folder_button.winfo_ismapped():
+                self.open_folder_button.pack(pady=8)
+        else:
+            self.open_folder_button.pack_forget()
+
+        # Only show the progress bar while an operation is running.
+        if self.is_running:
+            self._show_progress()
+        else:
+            self._hide_progress()
+
+    def _show_progress(self):
+        if getattr(self, "progress_frame", None) and not self.progress_frame.winfo_ismapped():
+            self.progress_frame.pack(fill="x", pady=(8, 4))
+
+    def _hide_progress(self):
+        if getattr(self, "progress_frame", None) and self.progress_frame.winfo_ismapped():
+            self.progress_frame.pack_forget()
 
     def _add_entry_context_menu(self, entry):
         menu = tk.Menu(self, tearoff=0)
@@ -304,6 +462,19 @@ class BaixarFrame(ttk.Frame):
         except queue.Full:
             pass
 
+    def _set_thumbnail(self, data: bytes):
+        try:
+            if not data:
+                return
+
+            # Evita que a referência seja descartada pelo GC
+            img = tk.PhotoImage(data=base64.b64encode(data))
+            self._thumb_photo = img
+            self.thumbnail_label.config(image=img)
+        except Exception:
+            # fallback silencioso (não impede o uso)
+            pass
+
     def _drain_ui_queue(self):
         try:
             while True:
@@ -323,6 +494,13 @@ class BaixarFrame(ttk.Frame):
 
                 elif kind == "downloaded_file":
                     self.downloaded_file = payload
+                    self._update_visibility()
+
+                elif kind == "preview_title":
+                    self.url_title_var.set(str(payload or ""))
+
+                elif kind == "preview_thumb":
+                    self._set_thumbnail(payload)
 
                 elif kind == "done":
                     self._finish_ok()
@@ -421,6 +599,7 @@ class BaixarFrame(ttk.Frame):
         self._last_tmp_file = None
 
         self.is_running = True
+        self._show_progress()
         self._update_action_state()
         self.on_status("Download iniciado…")
 
@@ -628,18 +807,23 @@ class BaixarFrame(ttk.Frame):
 
     def _finish_ok(self):
         self.is_running = False
+        self._hide_progress()
         self.status.config(text=self.status.cget("text") or "Download concluído!")
         self.open_folder_button.config(state=NORMAL)
-        self.download_btn.config(state=NORMAL)
+        self.download_btn.config(state=NORMAL, text="Baixar agora")
         self.cancel_btn.config(state=DISABLED)
+        self._update_visibility()
 
     def _finish_canceled(self):
         self.is_running = False
+        self._hide_progress()
         self.status.config(text="Download cancelado.")
         self.progress["value"] = 0
+        self.downloaded_file = None
         self.open_folder_button.config(state=DISABLED)
-        self.download_btn.config(state=NORMAL)
+        self.download_btn.config(state=NORMAL, text="Baixar agora")
         self.cancel_btn.config(state=DISABLED)
+        self._update_visibility()
         self.on_status("Download cancelado")
 
     def _legacy_finish_error(self, msg):
@@ -665,7 +849,10 @@ class BaixarFrame(ttk.Frame):
 
     def _finish_error(self, msg):
         self.is_running = False
+        self._hide_progress()
         self.status.config(text=msg or "Erro no download.")
+        self.downloaded_file = None
         self.open_folder_button.config(state=DISABLED)
         self._update_action_state()
+        self._update_visibility()
         self.on_status(f"Erro: {msg or 'falha no download'}")

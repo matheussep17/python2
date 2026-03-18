@@ -83,65 +83,90 @@ class EditorFrame(ttk.Frame):
         ttk.Label(header, text="Editor de Video", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
 
-        intro = ttk.Frame(card)
-        intro.pack(fill="x")
-        ttk.Button(intro, text="Selecionar ate 2 videos", command=self.select_files, bootstyle=WARNING).pack(side="left")
-        ttk.Button(intro, text="Limpar", command=self.clear_files, bootstyle=DANGER).pack(side="left", padx=(10, 0))
+        files_frame = ttk.LabelFrame(card, text="Arquivos")
+        files_frame.pack(fill="x")
+        files_inner = ttk.Frame(files_frame, padding=12)
+        files_inner.pack(fill="x")
+        files_inner.columnconfigure(1, weight=1)
+
+        ttk.Button(files_inner, text="Selecionar ate 2 videos", command=self.select_files, bootstyle=WARNING).grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Button(files_inner, text="Limpar", command=self.clear_files, bootstyle=DANGER).grid(
+            row=0, column=1, sticky="w", padx=(10, 0)
+        )
         ttk.Label(
-            card,
+            files_inner,
             text="Monte um video novo usando um trecho de cada arquivo. Use vazio para considerar o video inteiro.",
             style="Muted.TLabel",
-        ).pack(anchor="w", pady=(8, 6))
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 6))
 
-        self.selection_label = ttk.Label(card, text="Nenhum video selecionado", font=("Helvetica", 12))
-        self.selection_label.pack(anchor="w", pady=(2, 6))
+        self.selection_label = ttk.Label(files_inner, text="Nenhum video selecionado", font=("Helvetica", 12))
+        self.selection_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(2, 6))
 
-        self.segment1_card = ttk.LabelFrame(card, text="Trecho 1")
+        self.segment1_card = ttk.LabelFrame(card, text="Trecho 1", font=("Segoe UI", 14, "bold"))
         self.segment1_card.pack(fill="x", pady=(2, 6))
         self.file1_label = ttk.Label(self.segment1_card, text="Nenhum video selecionado")
         self.file1_label.grid(row=0, column=0, columnspan=4, sticky="w", padx=10, pady=(6, 2))
         self.file1_duration = ttk.Label(self.segment1_card, text="", style="Muted.TLabel")
         self.file1_duration.grid(row=1, column=0, columnspan=4, sticky="w", padx=10, pady=(0, 6))
-        ttk.Label(self.segment1_card, text="Inicio").grid(row=2, column=0, sticky="w", padx=(10, 6), pady=(0, 8))
-        ttk.Entry(self.segment1_card, textvariable=self.segment1_start, width=18).grid(row=2, column=1, sticky="w", pady=(0, 8))
-        ttk.Label(self.segment1_card, text="Fim").grid(row=2, column=2, sticky="w", padx=(12, 6), pady=(0, 8))
-        ttk.Entry(self.segment1_card, textvariable=self.segment1_end, width=18).grid(row=2, column=3, sticky="w", pady=(0, 8))
+        self.segment1_card.pack_forget()
 
-        self.segment2_card = ttk.LabelFrame(card, text="Trecho 2")
+        # Labels above the entry fields (to avoid cut-off text)
+        ttk.Label(self.segment1_card, text="Início").grid(row=2, column=0, sticky="w", padx=(10, 6))
+        ttk.Label(self.segment1_card, text="Fim").grid(row=2, column=2, sticky="w", padx=(12, 6))
+
+        ttk.Entry(self.segment1_card, textvariable=self.segment1_start, width=18).grid(row=3, column=0, sticky="w", pady=(2, 8))
+        ttk.Entry(self.segment1_card, textvariable=self.segment1_end, width=18).grid(row=3, column=2, sticky="w", pady=(2, 8))
+
+        self.segment2_card = ttk.LabelFrame(card, text="Trecho 2", font=("Segoe UI", 14, "bold"))
         self.segment2_card.pack(fill="x", pady=(0, 6))
         self.file2_label = ttk.Label(self.segment2_card, text="Selecione um segundo video para habilitar a montagem")
         self.file2_label.grid(row=0, column=0, columnspan=4, sticky="w", padx=10, pady=(6, 2))
         self.file2_duration = ttk.Label(self.segment2_card, text="", style="Muted.TLabel")
         self.file2_duration.grid(row=1, column=0, columnspan=4, sticky="w", padx=10, pady=(0, 6))
-        ttk.Label(self.segment2_card, text="Inicio").grid(row=2, column=0, sticky="w", padx=(10, 6), pady=(0, 8))
-        self.segment2_start_entry = ttk.Entry(self.segment2_card, textvariable=self.segment2_start, width=18)
-        self.segment2_start_entry.grid(row=2, column=1, sticky="w", pady=(0, 8))
-        ttk.Label(self.segment2_card, text="Fim").grid(row=2, column=2, sticky="w", padx=(12, 6), pady=(0, 8))
-        self.segment2_end_entry = ttk.Entry(self.segment2_card, textvariable=self.segment2_end, width=18)
-        self.segment2_end_entry.grid(row=2, column=3, sticky="w", pady=(0, 8))
+        self.segment2_card.pack_forget()
 
-        options = ttk.Frame(card)
+        # Labels above the entry fields (to avoid cut-off text)
+        ttk.Label(self.segment2_card, text="Início").grid(row=2, column=0, sticky="w", padx=(10, 6))
+        ttk.Label(self.segment2_card, text="Fim").grid(row=2, column=2, sticky="w", padx=(12, 6))
+
+        self.segment2_start_entry = ttk.Entry(self.segment2_card, textvariable=self.segment2_start, width=18)
+        self.segment2_start_entry.grid(row=3, column=0, sticky="w", pady=(2, 8))
+        self.segment2_end_entry = ttk.Entry(self.segment2_card, textvariable=self.segment2_end, width=18)
+        self.segment2_end_entry.grid(row=3, column=2, sticky="w", pady=(2, 8))
+
+        options = ttk.LabelFrame(card, text="Opções", font=("Segoe UI", 14, "bold"))
         options.pack(fill="x", pady=(2, 6))
-        ttk.Label(options, text="Montagem", font=("Helvetica", 13, "bold")).pack(side="left")
+        options_inner = ttk.Frame(options, padding=12)
+        options_inner.pack(fill="x")
+        options.pack_forget()
+        self.options_frame = options
+        options_inner.columnconfigure(0, weight=1)
+        options_inner.columnconfigure(1, weight=1)
+
+        ttk.Label(options_inner, text="Montagem", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w")
+        ttk.Label(options_inner, text="Nome do arquivo", font=("Segoe UI", 12, "bold")).grid(row=0, column=1, sticky="w")
+
         self.sequence_box = ttk.Combobox(
-            options,
+            options_inner,
             textvariable=self.sequence_var,
             values=["Trecho 1"],
             state="readonly",
             width=20,
         )
-        self.sequence_box.pack(side="left", padx=(10, 20))
-        ttk.Label(options, text="Nome do arquivo", font=("Helvetica", 13, "bold")).pack(side="left")
-        ttk.Entry(options, textvariable=self.output_name_var, width=28).pack(side="left", padx=(10, 0))
+        self.sequence_box.grid(row=1, column=0, sticky="w", padx=(0, 20))
+        ttk.Entry(options_inner, textvariable=self.output_name_var, width=28).grid(row=1, column=1, sticky="ew")
 
-        ctl = ttk.Frame(card)
-        ctl.pack(fill="x", pady=(2, 6))
-        self.run_btn = ttk.Button(ctl, text="Gerar video", command=self.start_processing, bootstyle=SUCCESS, state=DISABLED)
+        self.controls_frame = ttk.Frame(card)
+        self.controls_frame.pack(fill="x", pady=(2, 6))
+        self.run_btn = ttk.Button(self.controls_frame, text="Gerar video", command=self.start_processing, bootstyle=SUCCESS, state=DISABLED)
         self.run_btn.pack(side="left")
-        self.cancel_btn = ttk.Button(ctl, text="Cancelar", command=self.cancel_processing, bootstyle=SECONDARY, state=DISABLED)
+        self.cancel_btn = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_processing, bootstyle=SECONDARY, state=DISABLED)
         self.cancel_btn.pack(side="left", padx=(10, 0))
-        self.open_btn = ttk.Button(ctl, text="Abrir pasta do video", command=self.open_folder, bootstyle=INFO, state=DISABLED)
+        self.open_btn = ttk.Button(self.controls_frame, text="Abrir pasta do video", command=self.open_folder, bootstyle=INFO, state=DISABLED)
         self.open_btn.pack(side="left", padx=(10, 0))
+        self.controls_frame.pack_forget()
 
         hint = ttk.Label(
             card,
@@ -150,11 +175,13 @@ class EditorFrame(ttk.Frame):
         )
         hint.pack(anchor="w", pady=(0, 6))
 
-        prog = ttk.Frame(card, padding=(10, 6))
-        prog.pack(fill="x", pady=(4, 2))
-        self.progress = ttk.Progressbar(prog, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
+        self.progress_frame = ttk.Frame(card, padding=(10, 6))
+        self.progress = ttk.Progressbar(self.progress_frame, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
         self.progress.pack(fill="x")
-        ttk.Label(prog, textvariable=self.status_var, font=("Helvetica", 11)).pack(anchor="w", pady=(6, 0))
+        ttk.Label(self.progress_frame, textvariable=self.status_var, font=("Helvetica", 11)).pack(anchor="w", pady=(6, 0))
+
+        # Hide progress UI until processing starts.
+        self._hide_progress()
 
         self._update_action_state()
         self._update_secondary_state()
@@ -217,6 +244,7 @@ class EditorFrame(ttk.Frame):
             self.file1_duration.config(text="")
             self.file2_label.config(text="Selecione um segundo video para habilitar a montagem")
             self.file2_duration.config(text="")
+            self._update_visibility()
             self._update_secondary_state()
             return
 
@@ -239,6 +267,7 @@ class EditorFrame(ttk.Frame):
             self.file2_label.config(text="Selecione um segundo video para habilitar a montagem")
             self.file2_duration.config(text="")
 
+        self._update_visibility()
         self._update_secondary_state()
 
     def _refresh_sequence_options(self):
@@ -267,6 +296,37 @@ class EditorFrame(ttk.Frame):
         self.segment2_start_entry.configure(state=state)
         self.segment2_end_entry.configure(state=state)
 
+    def _update_visibility(self):
+        """Show/hide the editor sections depending on whether any file is selected."""
+        if self.input_files:
+            if not self.segment1_card.winfo_ismapped():
+                self.segment1_card.pack(fill="x", pady=(2, 6))
+            if not self.segment2_card.winfo_ismapped():
+                self.segment2_card.pack(fill="x", pady=(0, 6))
+            if not self.options_frame.winfo_ismapped():
+                self.options_frame.pack(fill="x", pady=(2, 6))
+            if not self.controls_frame.winfo_ismapped():
+                self.controls_frame.pack(fill="x", pady=(2, 6))
+        else:
+            self.segment1_card.pack_forget()
+            self.segment2_card.pack_forget()
+            self.options_frame.pack_forget()
+            self.controls_frame.pack_forget()
+
+        # Only show progress while processing is running.
+        if self.is_running:
+            self._show_progress()
+        else:
+            self._hide_progress()
+
+    def _show_progress(self):
+        if getattr(self, "progress_frame", None) and not self.progress_frame.winfo_ismapped():
+            self.progress_frame.pack(fill="x", pady=(4, 2))
+
+    def _hide_progress(self):
+        if getattr(self, "progress_frame", None) and self.progress_frame.winfo_ismapped():
+            self.progress_frame.pack_forget()
+
     def _update_action_state(self):
         if self.is_running:
             self.run_btn.config(state=DISABLED)
@@ -286,6 +346,7 @@ class EditorFrame(ttk.Frame):
         self.output_name_var.set("")
         self.progress_var.set(0)
         self.status_var.set("")
+        self._hide_progress()
         self.last_output = ""
         self.open_btn.config(state=DISABLED)
         self._refresh_file_info()
@@ -324,6 +385,7 @@ class EditorFrame(ttk.Frame):
         self.run_btn.config(state=DISABLED)
         self.cancel_btn.config(state=NORMAL)
         self.open_btn.config(state=DISABLED)
+        self._show_progress()
         self._update_action_state()
 
         threading.Thread(target=self._worker, args=(segments, output_path), daemon=True).start()
@@ -625,6 +687,7 @@ class EditorFrame(ttk.Frame):
             messagebox.showerror("Erro", f"Nao foi possivel abrir a pasta: {exc}")
 
     def _finish_ok(self, message):
+        self._hide_progress()
         self.last_output = self.last_output or ""
         self.progress_var.set(100)
         self.status_var.set(message)
@@ -634,6 +697,7 @@ class EditorFrame(ttk.Frame):
         messagebox.showinfo("Concluido", message)
 
     def _finish_canceled(self, payload):
+        self._hide_progress()
         self.progress_var.set(0)
         self.status_var.set(str(payload))
         self.on_status(str(payload))
@@ -641,6 +705,7 @@ class EditorFrame(ttk.Frame):
         self.open_btn.config(state=DISABLED)
 
     def _finish_error(self, payload):
+        self._hide_progress()
         self.on_status("Erro na edicao")
         self._update_action_state()
         self.open_btn.config(state=DISABLED)

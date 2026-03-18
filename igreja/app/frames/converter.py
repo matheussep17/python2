@@ -68,73 +68,97 @@ class ConverterFrame(ttk.Frame):
         ttk.Label(header, text="Conversor de Video / Imagem", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
 
-        row = ttk.Frame(card)
-        row.pack(fill="x")
-        ttk.Button(row, text="Selecionar Arquivo(s)", command=self.selecionar_arquivos, bootstyle=WARNING).pack(side="left")
-        ttk.Button(row, text="Remover", command=self.remover_arquivos, bootstyle=DANGER).pack(side="left", padx=(10, 0))
+        # --- Arquivos ---
+        files_frame = ttk.LabelFrame(card, text="Arquivos")
+        files_frame.pack(fill="x")
+        files_inner = ttk.Frame(files_frame, padding=12)
+        files_inner.pack(fill="x")
+        files_inner.columnconfigure(1, weight=1)
 
-        info = ttk.Frame(card)
-        info.pack(fill="x", pady=(10, 0))
-        self.label_video = ttk.Label(info, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
-        self.label_video.pack(anchor="w")
-        self.label_formato = ttk.Label(info, text="", font=("Helvetica", 12))
-        self.label_formato.pack(anchor="w", pady=(2, 0))
+        ttk.Button(files_inner, text="Selecionar Arquivo(s)", command=self.selecionar_arquivos, bootstyle=WARNING).grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Button(files_inner, text="Remover", command=self.remover_arquivos, bootstyle=DANGER).grid(
+            row=0, column=1, sticky="w", padx=(10, 0)
+        )
+
+        self.label_video = ttk.Label(files_inner, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
+        self.label_video.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        self.label_formato = ttk.Label(files_inner, text="", font=("Helvetica", 12))
+        self.label_formato.grid(row=2, column=0, columnspan=2, sticky="w", pady=(2, 0))
 
         if HAS_DND:
             ttk.Label(
-                card,
+                files_inner,
                 text="Arraste e solte videos/audios (mp4, mkv, mp3...) ou imagens (jpg, png, cr2...)",
-                style="Muted.TLabel"
-            ).pack(anchor="w", pady=(6, 4))
+                style="Muted.TLabel",
+            ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(6, 4))
 
-        self.fmt_row = ttk.Frame(card)
+        # --- Configuracao de saida ---
+        self.opts_frame = ttk.LabelFrame(card, text="Opções")
+        self.opts_frame.pack(fill="x", pady=(10, 0))
+        opts_inner = ttk.Frame(self.opts_frame, padding=12)
+        opts_inner.pack(fill="x")
+        opts_inner.columnconfigure(1, weight=1)
+
+        self.fmt_row = ttk.Frame(opts_inner)
         self.fmt_row_visible = False
-        ttk.Label(self.fmt_row, text="Converter para:", font=("Helvetica", 13, "bold")).pack(side="left")
+        self.fmt_row.columnconfigure(1, weight=1)
+        ttk.Label(self.fmt_row, text="Converter para:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
         self.format_menu = ttk.Combobox(self.fmt_row, textvariable=self.formato_destino, values=[], state="readonly", width=14)
-        self.format_menu.pack(side="left", padx=(10, 0))
+        self.format_menu.grid(row=0, column=1, sticky="w", padx=(10, 0))
         self.format_menu.bind("<<ComboboxSelected>>", lambda _e: self._refresh_output_name())
 
-        self.audio_row = ttk.Frame(card)
+        self.audio_row = ttk.Frame(self.opts_frame)
         self.audio_row_visible = False
+        self.audio_row.columnconfigure(1, weight=1)
         self.remove_audio_check = ttk.Checkbutton(
             self.audio_row,
             text="Converter sem audio",
             variable=self.remove_audio,
             command=self._on_toggle_remove_audio,
-            bootstyle="round-toggle"
+            bootstyle="round-toggle",
         )
-        self.remove_audio_check.pack(side="left")
+        self.remove_audio_check.grid(row=0, column=0, sticky="w")
         ttk.Label(
             self.audio_row,
             text="Mantem o video e remove a trilha sonora no arquivo final.",
-            style="Muted.TLabel"
-        ).pack(side="left", padx=(10, 0))
+            style="Muted.TLabel",
+        ).grid(row=0, column=1, sticky="w", padx=(10, 0))
 
-        self.output_row = ttk.Frame(card)
-        ttk.Label(self.output_row, text="Nome do arquivo:", font=("Helvetica", 13, "bold")).pack(side="left")
+        self.output_row = ttk.Frame(self.opts_frame)
+        self.output_row.columnconfigure(1, weight=1)
+        ttk.Label(self.output_row, text="Nome do arquivo:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
         self.output_name_entry = ttk.Entry(self.output_row, textvariable=self.output_name_var, width=32)
-        self.output_name_entry.pack(side="left", padx=(10, 0))
-        ttk.Label(self.output_row, text="Editavel quando houver 1 arquivo selecionado.", style="Muted.TLabel").pack(side="left", padx=(10, 0))
-        self.output_row.pack(fill="x", pady=(8, 0))
+        self.output_name_entry.grid(row=0, column=1, sticky="ew", padx=(10, 0))
+        ttk.Label(self.output_row, text="Editavel quando houver 1 arquivo selecionado.", style="Muted.TLabel").grid(
+            row=0, column=2, sticky="w", padx=(10, 0)
+        )
         self.output_name_entry.configure(state=DISABLED)
 
-        ctl = ttk.Frame(card)
-        ctl.pack(fill="x", pady=(10, 6))
-        self.convert_btn = ttk.Button(ctl, text="Converter", command=self.start_conversion, bootstyle=SUCCESS, state=DISABLED)
+        # --- Acoes ---
+        self.controls_frame = ttk.Frame(card)
+        self.controls_frame.pack(fill="x", pady=(10, 6))
+        self.convert_btn = ttk.Button(self.controls_frame, text="Converter", command=self.start_conversion, bootstyle=SUCCESS, state=DISABLED)
         self.convert_btn.pack(side="left")
-        self.cancel_btn = ttk.Button(ctl, text="Cancelar", command=self.cancel_conversion, bootstyle=SECONDARY, state=DISABLED)
+        self.cancel_btn = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_conversion, bootstyle=SECONDARY, state=DISABLED)
         self.cancel_btn.pack(side="left", padx=(10, 0))
+        self.controls_frame.pack_forget()
 
-        prog = ttk.Frame(card, padding=10)
-        prog.pack(fill="x", pady=(8, 4))
-        self.progress = ttk.Progressbar(prog, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
+        self.progress_frame = ttk.Frame(card, padding=10)
+        self.progress = ttk.Progressbar(self.progress_frame, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
         self.progress.pack(fill="x")
-        self.status_label = ttk.Label(prog, textvariable=self.status_var, font=("Helvetica", 11))
+        self.status_label = ttk.Label(self.progress_frame, textvariable=self.status_var, font=("Helvetica", 11))
         self.status_label.pack(anchor="w", pady=(6, 0))
+
+        # Hide the progress UI until a conversion is started.
+        self._hide_progress()
 
         self.open_btn = ttk.Button(card, text="Abrir pasta do arquivo convertido", command=self.abrir_pasta, bootstyle=INFO, state=DISABLED)
         self.open_btn.pack(pady=8)
+        self.open_btn.pack_forget()
         self._update_action_state()
+        self._update_visibility()
 
     def _show_format_row(self):
         if not self.fmt_row_visible:
@@ -204,22 +228,39 @@ class ConverterFrame(ttk.Frame):
             self.output_name_var.set(filename)
         self.output_name_entry.configure(state=NORMAL)
 
+    def _next_available_path(self, path: str) -> str:
+        """Se o caminho já existe, adiciona sufixo (2), (3), ... até ficar único."""
+        if not path:
+            return path
+        base, ext = os.path.splitext(path)
+        if not os.path.exists(path):
+            return path
+
+        idx = 2
+        while True:
+            candidate = f"{base} ({idx}){ext}"
+            if not os.path.exists(candidate):
+                return candidate
+            idx += 1
+
     def _build_output_path(self, in_path, out_ext):
         original_ext = _ext(in_path)
         filename = os.path.splitext(os.path.basename(in_path))[0]
+
+        output_dir = os.path.dirname(in_path)
 
         if len(self.input_files) == 1:
             custom_name = (self.output_name_var.get() or "").strip()
             if custom_name:
                 if "." not in os.path.basename(custom_name):
                     custom_name = f"{custom_name}.{out_ext}"
-                return os.path.join(os.path.dirname(in_path), custom_name)
+                return self._next_available_path(os.path.join(output_dir, custom_name))
 
         if out_ext == original_ext:
             suffix = "_sem_audio" if self._target_has_no_audio(in_path, out_ext) else "_convertido"
             filename = f"{filename}{suffix}"
 
-        return os.path.join(os.path.dirname(in_path), filename + f".{out_ext}")
+        return self._next_available_path(os.path.join(output_dir, filename + f".{out_ext}"))
 
     def _update_action_state(self):
         if self.is_converting:
@@ -231,6 +272,34 @@ class ConverterFrame(ttk.Frame):
         has_format = bool(self.formato_destino.get())
         self.convert_btn.config(state=NORMAL if has_files and has_format else DISABLED)
         self.cancel_btn.config(state=DISABLED)
+
+    def _update_visibility(self):
+        """Show/hide the options + action area depending on whether files are selected."""
+        if self.input_files:
+            if not self.opts_frame.winfo_ismapped():
+                self.opts_frame.pack(fill="x", pady=(10, 0))
+            if not self.controls_frame.winfo_ismapped():
+                self.controls_frame.pack(fill="x", pady=(10, 6))
+            if not self.open_btn.winfo_ismapped():
+                self.open_btn.pack(pady=8)
+        else:
+            self.opts_frame.pack_forget()
+            self.controls_frame.pack_forget()
+            self.open_btn.pack_forget()
+
+        # Only show progress when conversion is running.
+        if self.is_converting:
+            self._show_progress()
+        else:
+            self._hide_progress()
+
+    def _show_progress(self):
+        if getattr(self, "progress_frame", None) and not self.progress_frame.winfo_ismapped():
+            self.progress_frame.pack(fill="x", pady=(8, 4))
+
+    def _hide_progress(self):
+        if getattr(self, "progress_frame", None) and self.progress_frame.winfo_ismapped():
+            self.progress_frame.pack_forget()
 
     def _update_format_menu(self):
         if not self.input_files:
@@ -322,6 +391,7 @@ class ConverterFrame(ttk.Frame):
             self.label_video.config(text="Nenhum arquivo selecionado")
             self.label_formato.config(text="")
             self._update_format_menu()
+            self._update_visibility()
             return
 
         if len(self.input_files) == 1:
@@ -334,6 +404,7 @@ class ConverterFrame(ttk.Frame):
             self.label_formato.config(text="Formatos variados")
 
         self._update_format_menu()
+        self._update_visibility()
 
     def remover_arquivos(self):
         self.input_files = []
@@ -341,6 +412,7 @@ class ConverterFrame(ttk.Frame):
         self.label_formato.config(text="")
         self.progress_var.set(0)
         self.status_var.set("")
+        self._hide_progress()
         self.open_btn.config(state=DISABLED)
         self.current_mode = "video"
         self.formato_destino.set("mp4")
@@ -351,6 +423,7 @@ class ConverterFrame(ttk.Frame):
         self._hide_audio_row()
         self.format_menu.config(values=[])
         self._update_action_state()
+        self._update_visibility()
 
     def start_conversion(self):
         if self.is_converting:
@@ -387,6 +460,7 @@ class ConverterFrame(ttk.Frame):
         self.convert_btn.config(state=DISABLED)
         self.cancel_btn.config(state=NORMAL)
         self.open_btn.config(state=DISABLED)
+        self._show_progress()
         self._update_action_state()
 
         self.progress_var.set(0)
@@ -655,6 +729,7 @@ class ConverterFrame(ttk.Frame):
                         total = successes + failures
 
                     self.is_converting = False
+                    self._hide_progress()
                     self.progress_var.set(100 if total else 0)
                     self.status_var.set(message)
                     self.on_status(message)
@@ -673,6 +748,7 @@ class ConverterFrame(ttk.Frame):
 
                 elif kind == "canceled":
                     self.is_converting = False
+                    self._hide_progress()
                     self.status_var.set(payload)
                     self.on_status(payload)
                     self.progress_var.set(0)

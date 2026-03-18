@@ -27,18 +27,25 @@ from app.utils import HAS_DND, TkinterDnD
 
 class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
     def __init__(self):
+        import traceback
+
+        def report_callback_exception(exc, val, tb):
+            traceback.print_exception(exc, val, tb)
+
+        tk.Tk.report_callback_exception = report_callback_exception
+
         initial_mode = "Escuro"
         initial_theme = resolve_ttk_theme(initial_mode)
 
         if HAS_DND:
             super().__init__()
             self.style = ttk.Style(theme=initial_theme)
-            self.geometry("1080x660")
+            self.geometry("1280x760")
         else:
             super().__init__(
                 title="Media Suite - Conversor",
                 themename=initial_theme,
-                size=(1080, 660),
+                size=(1280, 760),
             )
             self.style = ttk.Style()
 
@@ -228,7 +235,11 @@ def single_instance_or_exit(port=54321):
 def main():
     _lock = single_instance_or_exit()
     app = SuperApp()
-    app.mainloop()
+    try:
+        app.mainloop()
+    except KeyboardInterrupt:
+        print("Aplicativo interrompido pelo usuário.")
+        sys.exit(0)
 
 
 if __name__ == "__main__":
