@@ -83,6 +83,13 @@ class TranscriberFrame(ttk.Frame):
         self.label_sel = ttk.Label(files_inner, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
         self.label_sel.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
 
+        if HAS_DND:
+            ttk.Label(
+                files_inner,
+                text="Arraste e solte audio/video aqui para selecionar.",
+                style="Muted.TLabel",
+            ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(6, 4))
+
         self.opts_frame = ttk.LabelFrame(card, text="Saída")
         self.opts_frame.pack_forget()
         output_inner = ttk.Frame(self.opts_frame, padding=12)

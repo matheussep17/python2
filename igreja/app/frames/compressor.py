@@ -91,6 +91,13 @@ class CompressorFrame(ttk.Frame):
         self.label_mode = ttk.Label(files_inner, text="", font=("Helvetica", 12))
         self.label_mode.grid(row=2, column=0, columnspan=2, sticky="w", pady=(2, 0))
 
+        if HAS_DND:
+            ttk.Label(
+                files_inner,
+                text="Arraste e solte videos/imagens aqui para selecionar.",
+                style="Muted.TLabel",
+            ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(6, 4))
+
         # --- Opções ---
         self.opts_frame = ttk.LabelFrame(card, text="Opções")
         self.opts_frame.pack(fill="x", pady=(10, 0))

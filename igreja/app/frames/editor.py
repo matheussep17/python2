@@ -50,11 +50,8 @@ class EditorFrame(ttk.Frame):
         self.file_durations = {}
         self.last_output = ""
 
-        self.segment1_start = tk.StringVar()
-        self.segment1_end = tk.StringVar()
-        self.segment2_start = tk.StringVar()
-        self.segment2_end = tk.StringVar()
-        self.sequence_var = tk.StringVar(value="Trecho 1")
+        # Dynamically generated UI rows for each selected video (Trecho 1, 2, 3...)
+        self.video_rows = []
         self.output_name_var = tk.StringVar()
 
         self.progress_var = tk.DoubleVar(value=0)
@@ -75,7 +72,33 @@ class EditorFrame(ttk.Frame):
                 pass
 
     def _build_ui(self):
-        card = ttk.Frame(self, padding=18)
+        # Use a scrollable canvas so the UI fits in smaller windows and the user can reach
+        # the bottom controls when the content grows.
+        self.canvas = tk.Canvas(self, borderwidth=0, highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        self.canvas.pack(side="left", fill="both", expand=True)
+        # Scrollbar is shown only when needed (e.g. after a file is selected).
+
+        self.scrollable_frame = ttk.Frame(self.canvas)
+        self.scroll_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        self.scrollable_frame.bind("<Configure>", self._on_scrollable_configure)
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
+
+        # Start with scrollbar hidden; it appears only when needed.
+        self._update_scrollbar_visibility()
+
+        # Enable mouse wheel scrolling when pointer is over the content area.
+        self.canvas.bind(
+            "<Enter>", lambda e: self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        )
+        self.canvas.bind(
+            "<Leave>", lambda e: self.canvas.unbind_all("<MouseWheel>")
+        )
+
+        card = ttk.Frame(self.scrollable_frame, padding=18)
         card.pack(fill="both", expand=True)
 
         header = ttk.Frame(card)
@@ -89,7 +112,7 @@ class EditorFrame(ttk.Frame):
         files_inner.pack(fill="x")
         files_inner.columnconfigure(1, weight=1)
 
-        ttk.Button(files_inner, text="Selecionar ate 2 videos", command=self.select_files, bootstyle=WARNING).grid(
+        ttk.Button(files_inner, text="Selecionar videos", command=self.select_files, bootstyle=WARNING).grid(
             row=0, column=0, sticky="w"
         )
         ttk.Button(files_inner, text="Limpar", command=self.clear_files, bootstyle=DANGER).grid(
@@ -104,37 +127,19 @@ class EditorFrame(ttk.Frame):
         self.selection_label = ttk.Label(files_inner, text="Nenhum video selecionado", font=("Helvetica", 12))
         self.selection_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(2, 6))
 
-        self.segment1_card = ttk.LabelFrame(card, text="Trecho 1", font=("Segoe UI", 14, "bold"))
-        self.segment1_card.pack(fill="x", pady=(2, 6))
-        self.file1_label = ttk.Label(self.segment1_card, text="Nenhum video selecionado")
-        self.file1_label.grid(row=0, column=0, columnspan=4, sticky="w", padx=10, pady=(6, 2))
-        self.file1_duration = ttk.Label(self.segment1_card, text="", style="Muted.TLabel")
-        self.file1_duration.grid(row=1, column=0, columnspan=4, sticky="w", padx=10, pady=(0, 6))
-        self.segment1_card.pack_forget()
+        if HAS_DND:
+            ttk.Label(
+                files_inner,
+                text="Arraste e solte videos aqui para selecionar.",
+                style="Muted.TLabel",
+            ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(0, 6))
 
-        # Labels above the entry fields (to avoid cut-off text)
-        ttk.Label(self.segment1_card, text="Início").grid(row=2, column=0, sticky="w", padx=(10, 6))
-        ttk.Label(self.segment1_card, text="Fim").grid(row=2, column=2, sticky="w", padx=(12, 6))
+        # Container for the list of selected videos (Trecho 1, Trecho 2, ...).
+        self.videos_container = ttk.Frame(card)
+        self.videos_container.pack(fill="x", pady=(2, 6))
 
-        ttk.Entry(self.segment1_card, textvariable=self.segment1_start, width=18).grid(row=3, column=0, sticky="w", pady=(2, 8))
-        ttk.Entry(self.segment1_card, textvariable=self.segment1_end, width=18).grid(row=3, column=2, sticky="w", pady=(2, 8))
-
-        self.segment2_card = ttk.LabelFrame(card, text="Trecho 2", font=("Segoe UI", 14, "bold"))
-        self.segment2_card.pack(fill="x", pady=(0, 6))
-        self.file2_label = ttk.Label(self.segment2_card, text="Selecione um segundo video para habilitar a montagem")
-        self.file2_label.grid(row=0, column=0, columnspan=4, sticky="w", padx=10, pady=(6, 2))
-        self.file2_duration = ttk.Label(self.segment2_card, text="", style="Muted.TLabel")
-        self.file2_duration.grid(row=1, column=0, columnspan=4, sticky="w", padx=10, pady=(0, 6))
-        self.segment2_card.pack_forget()
-
-        # Labels above the entry fields (to avoid cut-off text)
-        ttk.Label(self.segment2_card, text="Início").grid(row=2, column=0, sticky="w", padx=(10, 6))
-        ttk.Label(self.segment2_card, text="Fim").grid(row=2, column=2, sticky="w", padx=(12, 6))
-
-        self.segment2_start_entry = ttk.Entry(self.segment2_card, textvariable=self.segment2_start, width=18)
-        self.segment2_start_entry.grid(row=3, column=0, sticky="w", pady=(2, 8))
-        self.segment2_end_entry = ttk.Entry(self.segment2_card, textvariable=self.segment2_end, width=18)
-        self.segment2_end_entry.grid(row=3, column=2, sticky="w", pady=(2, 8))
+        # Build initial empty list (no videos selected yet).
+        self._rebuild_video_rows()
 
         options = ttk.LabelFrame(card, text="Opções", font=("Segoe UI", 14, "bold"))
         options.pack(fill="x", pady=(2, 6))
@@ -145,17 +150,12 @@ class EditorFrame(ttk.Frame):
         options_inner.columnconfigure(0, weight=1)
         options_inner.columnconfigure(1, weight=1)
 
-        ttk.Label(options_inner, text="Montagem", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w")
+        ttk.Label(options_inner, text="Ordem de montagem", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w")
         ttk.Label(options_inner, text="Nome do arquivo", font=("Segoe UI", 12, "bold")).grid(row=0, column=1, sticky="w")
 
-        self.sequence_box = ttk.Combobox(
-            options_inner,
-            textvariable=self.sequence_var,
-            values=["Trecho 1"],
-            state="readonly",
-            width=20,
+        ttk.Label(options_inner, text="Seguir a ordem dos vídeos selecionados", font=("Segoe UI", 11)).grid(
+            row=1, column=0, sticky="w", padx=(0, 20)
         )
-        self.sequence_box.grid(row=1, column=0, sticky="w", padx=(0, 20))
         ttk.Entry(options_inner, textvariable=self.output_name_var, width=28).grid(row=1, column=1, sticky="ew")
 
         self.controls_frame = ttk.Frame(card)
@@ -184,14 +184,14 @@ class EditorFrame(ttk.Frame):
         self._hide_progress()
 
         self._update_action_state()
-        self._update_secondary_state()
+        self._update_visibility()
 
     def select_files(self):
         filetypes = [
             ("Videos", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v"),
             ("Todos", "*.*"),
         ]
-        paths = filedialog.askopenfilenames(title="Selecione ate 2 videos", filetypes=filetypes)
+        paths = filedialog.askopenfilenames(title="Selecione videos", filetypes=filetypes)
         if paths:
             self._set_files(list(paths))
 
@@ -217,68 +217,95 @@ class EditorFrame(ttk.Frame):
             seen.add(low)
             uniq.append(abs_path)
 
-        if len(uniq) > 2:
-            messagebox.showinfo("Limite", "A edicao aceita ate 2 videos por vez. Vou usar os 2 primeiros.")
-            uniq = uniq[:2]
+        # Add new videos to the list (do not overwrite the existing ones).
+        existing_set = {p.lower() for p in self.input_files}
+        additions = []
+        for path in uniq:
+            if path.lower() not in existing_set:
+                existing_set.add(path.lower())
+                additions.append(path)
 
-        self.input_files = uniq
-        self.file_durations = {path: self._probe_duration(path) for path in uniq}
-        self.segment1_start.set("")
-        self.segment1_end.set("")
-        self.segment2_start.set("")
-        self.segment2_end.set("")
+        if not additions:
+            return
+
+        self.input_files.extend(additions)
+        self.file_durations.update({path: self._probe_duration(path) for path in additions})
         self.progress_var.set(0)
         self.status_var.set("")
         self.last_output = ""
         self.open_btn.config(state=DISABLED)
 
         self._refresh_file_info()
-        self._refresh_sequence_options()
         self._refresh_output_name()
         self._update_action_state()
+        self._update_visibility()
+        self._update_scrollbar_visibility()
 
     def _refresh_file_info(self):
         if not self.input_files:
             self.selection_label.config(text="Nenhum video selecionado")
-            self.file1_label.config(text="Nenhum video selecionado")
-            self.file1_duration.config(text="")
-            self.file2_label.config(text="Selecione um segundo video para habilitar a montagem")
-            self.file2_duration.config(text="")
+            self._rebuild_video_rows()
             self._update_visibility()
-            self._update_secondary_state()
             return
 
-        if len(self.input_files) == 1:
-            self.selection_label.config(text=f"Video selecionado: {os.path.basename(self.input_files[0])}")
+        count = len(self.input_files)
+        if count == 1:
+            self.selection_label.config(text=f"1 video selecionado: {os.path.basename(self.input_files[0])}")
         else:
             self.selection_label.config(
-                text=f"2 videos selecionados: {os.path.basename(self.input_files[0])} + {os.path.basename(self.input_files[1])}"
+                text=f"{count} videos selecionados: {os.path.basename(self.input_files[0])} + {os.path.basename(self.input_files[1])}"
             )
 
-        first = self.input_files[0]
-        self.file1_label.config(text=os.path.basename(first))
-        self.file1_duration.config(text=self._duration_text(first))
-
-        if len(self.input_files) > 1:
-            second = self.input_files[1]
-            self.file2_label.config(text=os.path.basename(second))
-            self.file2_duration.config(text=self._duration_text(second))
-        else:
-            self.file2_label.config(text="Selecione um segundo video para habilitar a montagem")
-            self.file2_duration.config(text="")
-
+        self._rebuild_video_rows()
         self._update_visibility()
-        self._update_secondary_state()
+        # Ensure the action buttons are visible after selecting a video in smaller windows.
+        self._scroll_to_bottom()
+        self._update_scrollbar_visibility()
 
-    def _refresh_sequence_options(self):
-        if len(self.input_files) > 1:
-            values = ["Trecho 1", "Trecho 2", "Trecho 1 + Trecho 2", "Trecho 2 + Trecho 1"]
-        else:
-            values = ["Trecho 1"]
+    def _rebuild_video_rows(self):
+        """Rebuild the per-video segment editors (Trecho 1, Trecho 2, ...)."""
+        # Clear existing rows
+        for row in self.video_rows:
+            try:
+                row["frame"].destroy()
+            except Exception:
+                pass
+        self.video_rows = []
 
-        self.sequence_box.configure(values=values)
-        if self.sequence_var.get() not in values:
-            self.sequence_var.set("Trecho 1 + Trecho 2" if len(self.input_files) > 1 else values[0])
+        for idx, path in enumerate(self.input_files, start=1):
+            row_frame = ttk.LabelFrame(self.videos_container, text=f"Trecho {idx}", font=("Segoe UI", 14, "bold"))
+            row_frame.pack(fill="x", pady=(0, 6))
+
+            base_name = os.path.basename(path)
+            ttk.Label(row_frame, text=base_name).grid(row=0, column=0, columnspan=4, sticky="w", padx=10, pady=(6, 2))
+            ttk.Label(row_frame, text=self._duration_text(path), style="Muted.TLabel").grid(
+                row=1, column=0, columnspan=4, sticky="w", padx=10, pady=(0, 6)
+            )
+
+            ttk.Label(row_frame, text="Início").grid(row=2, column=0, sticky="w", padx=(10, 6))
+            ttk.Label(row_frame, text="Fim").grid(row=2, column=2, sticky="w", padx=(12, 6))
+
+            start_var = tk.StringVar()
+            end_var = tk.StringVar()
+            ttk.Entry(row_frame, textvariable=start_var, width=18).grid(row=3, column=0, sticky="w", pady=(2, 8))
+            ttk.Entry(row_frame, textvariable=end_var, width=18).grid(row=3, column=2, sticky="w", pady=(2, 8))
+
+            remove_btn = ttk.Button(
+                row_frame,
+                text="Remover",
+                bootstyle="danger",
+                command=lambda p=path: self._remove_file(p),
+            )
+            remove_btn.grid(row=3, column=3, sticky="e", padx=(10, 0))
+
+            self.video_rows.append({
+                "path": path,
+                "frame": row_frame,
+                "start_var": start_var,
+                "end_var": end_var,
+            })
+
+        self._update_scrollbar_visibility()
 
     def _refresh_output_name(self):
         if not self.input_files:
@@ -290,26 +317,17 @@ class EditorFrame(ttk.Frame):
             return
         self.output_name_var.set("video_montado.mp4")
 
-    def _update_secondary_state(self):
-        has_second = len(self.input_files) > 1
-        state = NORMAL if has_second else DISABLED
-        self.segment2_start_entry.configure(state=state)
-        self.segment2_end_entry.configure(state=state)
-
     def _update_visibility(self):
         """Show/hide the editor sections depending on whether any file is selected."""
         if self.input_files:
-            if not self.segment1_card.winfo_ismapped():
-                self.segment1_card.pack(fill="x", pady=(2, 6))
-            if not self.segment2_card.winfo_ismapped():
-                self.segment2_card.pack(fill="x", pady=(0, 6))
+            if not self.videos_container.winfo_ismapped():
+                self.videos_container.pack(fill="x", pady=(2, 6))
             if not self.options_frame.winfo_ismapped():
                 self.options_frame.pack(fill="x", pady=(2, 6))
             if not self.controls_frame.winfo_ismapped():
                 self.controls_frame.pack(fill="x", pady=(2, 6))
         else:
-            self.segment1_card.pack_forget()
-            self.segment2_card.pack_forget()
+            self.videos_container.pack_forget()
             self.options_frame.pack_forget()
             self.controls_frame.pack_forget()
 
@@ -327,6 +345,67 @@ class EditorFrame(ttk.Frame):
         if getattr(self, "progress_frame", None) and self.progress_frame.winfo_ismapped():
             self.progress_frame.pack_forget()
 
+    def _scroll_to_bottom(self):
+        """Scroll the editor view to the bottom so action buttons become visible."""
+        if not getattr(self, "canvas", None):
+            return
+        if not getattr(self, "scrollbar", None) or not self.scrollbar.winfo_ismapped():
+            return
+        self.canvas.yview_moveto(1.0)
+
+    def _on_scrollable_configure(self, event):
+        # Adjust the scroll region to encompass the full content.
+        if getattr(self, "canvas", None):
+            self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def _on_canvas_configure(self, event):
+        # Keep the inner frame the same width as the canvas.
+        try:
+            self.canvas.itemconfig(self.scroll_window, width=event.width)
+        except Exception:
+            pass
+        self._update_scrollbar_visibility()
+
+    def _on_mousewheel(self, event):
+        # Cross-platform mouse wheel scrolling support.
+        if not getattr(self, "canvas", None):
+            return
+        # Windows / macOS
+        delta = int(-1 * (event.delta / 120)) if hasattr(event, "delta") else 0
+        self.canvas.yview_scroll(delta, "units")
+
+    def _update_scrollbar_visibility(self):
+        # Ensure geometry is updated before measuring.
+        try:
+            self.update_idletasks()
+        except Exception:
+            pass
+
+        if not getattr(self, "canvas", None):
+            return
+
+        bbox = self.canvas.bbox("all")
+        if not bbox:
+            self.scrollbar.pack_forget()
+            self.canvas.configure(yscrollcommand=None)
+            return
+
+        content_height = bbox[3] - bbox[1]
+        visible_height = self.canvas.winfo_height()
+
+        # If canvas isn't fully laid out yet, do nothing.
+        if visible_height <= 1:
+            return
+
+        needs_scroll = content_height > visible_height + 10 and bool(self.input_files)
+        if needs_scroll:
+            if not self.scrollbar.winfo_ismapped():
+                self.scrollbar.pack(side="right", fill="y")
+            self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        else:
+            self.scrollbar.pack_forget()
+            self.canvas.configure(yscrollcommand=None)
+
     def _update_action_state(self):
         if self.is_running:
             self.run_btn.config(state=DISABLED)
@@ -339,10 +418,7 @@ class EditorFrame(ttk.Frame):
     def clear_files(self):
         self.input_files = []
         self.file_durations = {}
-        self.segment1_start.set("")
-        self.segment1_end.set("")
-        self.segment2_start.set("")
-        self.segment2_end.set("")
+        self.video_rows = []
         self.output_name_var.set("")
         self.progress_var.set(0)
         self.status_var.set("")
@@ -350,8 +426,14 @@ class EditorFrame(ttk.Frame):
         self.last_output = ""
         self.open_btn.config(state=DISABLED)
         self._refresh_file_info()
-        self._refresh_sequence_options()
         self._update_action_state()
+
+    def _remove_file(self, path):
+        self.input_files = [p for p in self.input_files if p.lower() != path.lower()]
+        self.file_durations.pop(path, None)
+        self._refresh_file_info()
+        self._update_action_state()
+        self._update_scrollbar_visibility()
 
     def start_processing(self):
         if self.is_running:
@@ -401,36 +483,21 @@ class EditorFrame(ttk.Frame):
                 pass
 
     def _build_segments(self):
-        segment_map = {}
-
-        first = self._build_single_segment(
-            path=self.input_files[0],
-            start_value=self.segment1_start.get(),
-            end_value=self.segment1_end.get(),
-            label="Trecho 1",
-        )
-        if first is None:
+        if not self.video_rows:
+            messagebox.showerror("Erro", "Selecione pelo menos um video.")
             return None
-        segment_map["Trecho 1"] = first
 
-        if len(self.input_files) > 1:
-            second = self._build_single_segment(
-                path=self.input_files[1],
-                start_value=self.segment2_start.get(),
-                end_value=self.segment2_end.get(),
-                label="Trecho 2",
-            )
-            if second is None:
-                return None
-            segment_map["Trecho 2"] = second
-
-        selection = self.sequence_var.get()
-        order = [part.strip() for part in selection.split("+")]
         result = []
-        for part in order:
-            segment = segment_map.get(part)
-            if segment:
-                result.append(segment)
+        for idx, row in enumerate(self.video_rows, start=1):
+            segment = self._build_single_segment(
+                path=row["path"],
+                start_value=row["start_var"].get(),
+                end_value=row["end_var"].get(),
+                label=f"Trecho {idx}",
+            )
+            if segment is None:
+                return None
+            result.append(segment)
 
         if not result:
             messagebox.showerror("Erro", "Nao foi possivel montar os trechos selecionados.")

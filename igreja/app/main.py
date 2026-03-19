@@ -64,7 +64,9 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         apply_design_system(self, self.style, self.theme_mode.get())
 
         self.title("Media Suite - Conversor")
-        self.minsize(980, 580)
+        # Some frames (like the video editor) can grow tall/wide when generating output,
+        # so keep the window from being resized too small.
+        self.minsize(1280, 760)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
@@ -98,16 +100,18 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         side.grid(row=1, column=0, sticky="ns")
         ttk.Label(side, text="Navegacao", style="SidebarHint.TLabel").pack(anchor="w", pady=(0, 8))
 
+        # Side navigation tabs are ordered alphabetically (by label) for consistency.
         for key, label, emoji in [
+            ("baixar", "Baixar", "⬇️"),
+            ("compressor", "Comprimir", "🗜️"),
             ("converter", "Conversor", "⚙️"),
             ("editor", "Editar video", "✂️"),
-            ("compressor", "Comprimir", "🗜️"),
-            ("baixar", "Baixar", "⬇️"),
             ("transcribe", "Transcricao", "📝"),
         ]:
             btn = ttk.Button(
                 side,
-                text=f"{emoji}  {label}",
+                # Standardize spacing between icon and label.
+                text=f"{emoji} {label}",
                 style="Nav.TButton",
                 command=lambda k=key: self._show(k),
             )

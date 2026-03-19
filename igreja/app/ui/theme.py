@@ -84,7 +84,8 @@ def apply_design_system(window, style, mode: str | None) -> None:
     )
 
     style.configure("TButton", font=("Segoe UI", 10, "bold"), padding=(12, 7))
-    style.configure("Nav.TButton", font=("Segoe UI", 10, "bold"), padding=(14, 8), anchor="w")
+    # Keep navigation buttons compact and consistently spaced.
+    style.configure("Nav.TButton", font=("Segoe UI", 10, "bold"), padding=(10, 8), anchor="w")
     style.configure("TEntry", padding=6)
     style.configure("TCombobox", padding=4)
     style.configure("Horizontal.TProgressbar", thickness=10)
