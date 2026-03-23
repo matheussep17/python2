@@ -3,3 +3,9 @@ build/
 dist/
 app/__pycache__/
 app/frames/__pycache__/
+app/ui/__pycache__/
+
+# Virtual environments
+venv/
+.venv/
+.buildvenv/
