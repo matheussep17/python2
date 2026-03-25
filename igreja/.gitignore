@@ -9,3 +9,4 @@ app/ui/__pycache__/
 venv/
 .venv/
 .buildvenv/
+build.ps1
