@@ -45,7 +45,8 @@ def apply_design_system(window, style, mode: str | None) -> None:
     profile = THEME_PROFILES[normalized]
 
     window.app_theme_mode = normalized.lower()
-    window.option_add("*Font", "{Segoe UI} 10")
+    # Fonte base do aplicativo mais legível e com aparência profissional
+    window.option_add("*Font", "{Segoe UI} 11")
 
     style.configure("TopBar.TFrame", background=profile["top_bg"])
     style.configure("SideBar.TFrame", background=profile["side_bg"])
@@ -54,19 +55,19 @@ def apply_design_system(window, style, mode: str | None) -> None:
 
     style.configure(
         "AppHeader.TLabel",
-        font=("Segoe UI", 22, "bold"),
+        font=("Segoe UI", 24, "bold"),
         foreground=profile["title_fg"],
         background=profile["top_bg"],
     )
     style.configure(
         "AppSubHeader.TLabel",
-        font=("Segoe UI", 14),
+        font=("Segoe UI", 16),
         foreground=profile["subtitle_fg"],
         background=profile["top_bg"],
     )
     style.configure(
         "SectionTitle.TLabel",
-        font=("Segoe UI", 17, "bold"),
+        font=("Segoe UI", 18, "bold"),
     )
     style.configure(
         "Muted.TLabel",
@@ -83,11 +84,11 @@ def apply_design_system(window, style, mode: str | None) -> None:
         background=profile["status_bg"],
     )
 
-    style.configure("TButton", font=("Segoe UI", 10, "bold"), padding=(12, 7))
+    style.configure("TButton", font=("Segoe UI", 11, "bold"), padding=(12, 8))
     # Keep navigation buttons compact and consistently spaced.
-    style.configure("Nav.TButton", font=("Segoe UI", 10, "bold"), padding=(10, 8), anchor="w")
-    style.configure("TEntry", padding=6)
-    style.configure("TCombobox", padding=4)
+    style.configure("Nav.TButton", font=("Segoe UI", 11, "bold"), padding=(10, 8), anchor="w")
+    style.configure("TEntry", font=("Segoe UI", 11), padding=8)
+    style.configure("TCombobox", font=("Segoe UI", 11), padding=6)
     style.configure("Horizontal.TProgressbar", thickness=10)
 
     try:
