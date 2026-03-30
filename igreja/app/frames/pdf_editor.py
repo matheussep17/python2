@@ -86,6 +86,7 @@ class PdfEditorFrame(ttk.Frame):
         self.ui_queue = queue.Queue()
 
         self.color_map = {name: value for name, value in COLOR_CHOICES}
+        self.tool_var.trace_add("write", self._on_tool_changed)
 
         self._build_ui()
         self.after(100, self._drain_ui_queue)
@@ -188,10 +189,6 @@ class PdfEditorFrame(ttk.Frame):
             text="No modo texto, clique na pagina para criar a caixa e digitar direto no documento.",
             style="Muted.TLabel",
         ).pack(side="left", fill="x", expand=True)
-        self.edit_btn = ttk.Button(
-            self.text_row, text="Editar texto", command=self.edit_selected_text, bootstyle="secondary-outline"
-        )
-        self.edit_btn.pack(side="left", padx=(10, 10))
         self.delete_btn = ttk.Button(
             self.text_row, text="Apagar selecionado", command=self.delete_selected_annotation, bootstyle="danger-outline"
         )
@@ -200,19 +197,19 @@ class PdfEditorFrame(ttk.Frame):
         self.adjust_row = ttk.Frame(card)
         self.adjust_row.pack(fill="x", pady=(0, 6))
         self.font_minus_btn = ttk.Button(
-            self.adjust_row, text="Fonte -", command=lambda: self._adjust_selected_text_font(-2), bootstyle="secondary-outline"
+            self.adjust_row, text="Fonte -", command=lambda: self._adjust_selected_text_font(-2), bootstyle="info-outline"
         )
         self.font_minus_btn.pack(side="left")
         self.font_plus_btn = ttk.Button(
-            self.adjust_row, text="Fonte +", command=lambda: self._adjust_selected_text_font(2), bootstyle="secondary-outline"
+            self.adjust_row, text="Fonte +", command=lambda: self._adjust_selected_text_font(2), bootstyle="info-outline"
         )
         self.font_plus_btn.pack(side="left", padx=(8, 0))
         self.width_minus_btn = ttk.Button(
-            self.adjust_row, text="Mais estreito", command=lambda: self._adjust_selected_text_width(-20), bootstyle="secondary-outline"
+            self.adjust_row, text="Mais estreito", command=lambda: self._adjust_selected_text_width(-20), bootstyle="info-outline"
         )
         self.width_minus_btn.pack(side="left", padx=(18, 0))
         self.width_plus_btn = ttk.Button(
-            self.adjust_row, text="Mais largo", command=lambda: self._adjust_selected_text_width(20), bootstyle="secondary-outline"
+            self.adjust_row, text="Mais largo", command=lambda: self._adjust_selected_text_width(20), bootstyle="info-outline"
         )
         self.width_plus_btn.pack(side="left", padx=(8, 0))
         ttk.Label(
@@ -318,6 +315,9 @@ class PdfEditorFrame(ttk.Frame):
 
     def _selected_color(self):
         return self.color_map.get(self.color_name_var.get(), COLOR_CHOICES[0][1])
+
+    def _on_tool_changed(self, *_args):
+        self._update_action_state()
 
     def _update_editor_visibility(self):
         has_document = bool(self.pdf_doc and self.page_count > 0)
@@ -884,12 +884,6 @@ class PdfEditorFrame(ttk.Frame):
         self._close_inline_text_editor(save=False)
         self.tool_var.set("select")
 
-    def edit_selected_text(self):
-        annotation = self._find_annotation(self.selected_annotation_id)
-        if not annotation or annotation["type"] != "text":
-            return
-        self._open_inline_text_editor(annotation["id"])
-
     def _create_text_annotation(self, start_canvas, end_canvas):
         start_pdf = self._canvas_to_pdf(*start_canvas)
         if end_canvas is None:
@@ -1108,6 +1102,7 @@ class PdfEditorFrame(ttk.Frame):
         nav_state = NORMAL if has_document and not self.is_running else DISABLED
         selected = self._find_annotation(self.selected_annotation_id)
         selected_text = bool(selected and selected["type"] == "text")
+        text_mode = self.tool_var.get() == "text"
 
         self.save_btn.config(state=normal_state)
         self.prev_btn.config(state=nav_state)
@@ -1116,15 +1111,21 @@ class PdfEditorFrame(ttk.Frame):
         self.brush_spin.config(state=NORMAL if normal_state == NORMAL else DISABLED)
         self.font_spin.config(state=NORMAL if normal_state == NORMAL else DISABLED)
         self.output_entry.config(state=NORMAL if normal_state == NORMAL else DISABLED)
-        self.edit_btn.config(state=NORMAL if selected_text and not self.is_running else DISABLED)
         self.delete_btn.config(state=NORMAL if selected and not self.is_running else DISABLED)
-        self.font_minus_btn.config(state=NORMAL if selected_text and not self.is_running else DISABLED)
-        self.font_plus_btn.config(state=NORMAL if selected_text and not self.is_running else DISABLED)
-        self.width_minus_btn.config(state=NORMAL if selected_text and not self.is_running else DISABLED)
-        self.width_plus_btn.config(state=NORMAL if selected_text and not self.is_running else DISABLED)
+        active_text_controls = NORMAL if text_mode and has_document and not self.is_running else DISABLED
+        self.font_minus_btn.config(state=active_text_controls)
+        self.font_plus_btn.config(state=active_text_controls)
+        self.width_minus_btn.config(state=active_text_controls)
+        self.width_plus_btn.config(state=active_text_controls)
 
         for btn in self.thumbnail_buttons:
             btn.configure(state=nav_state)
+
+        if has_document and text_mode:
+            if not self.adjust_row.winfo_ismapped():
+                self.adjust_row.pack(fill="x", pady=(0, 6), before=self.nav_frame)
+        else:
+            self.adjust_row.pack_forget()
 
     def start_export(self):
         if self.is_running:
