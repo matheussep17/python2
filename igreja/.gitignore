@@ -5,6 +5,9 @@ app/__pycache__/
 app/frames/__pycache__/
 app/ui/__pycache__/
 
+# PyInstaller files
+*.spec
+
 # Virtual environments
 venv/
 .venv/
