@@ -560,6 +560,7 @@ class ConverterFrame(ttk.Frame):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
                 creationflags=create_no_window_flags()
             )
 
