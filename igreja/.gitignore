@@ -1,6 +1,7 @@
 # Ignore build and dist folders
 build/
 dist/
+.tmp/
 app/__pycache__/
 app/frames/__pycache__/
 app/ui/__pycache__/
