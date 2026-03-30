@@ -27,6 +27,21 @@ except Exception:
     Image = None
     HAS_PIL = False
 
+try:
+    from pypdf import PdfReader, PdfWriter
+    HAS_PYPDF = True
+except Exception:
+    PdfReader = None
+    PdfWriter = None
+    HAS_PYPDF = False
+
+try:
+    import fitz
+    HAS_PYMUPDF = True
+except Exception:
+    fitz = None
+    HAS_PYMUPDF = False
+
 def _try_import(name: str) -> bool:
     try:
         import importlib
@@ -153,6 +168,8 @@ def missing_runtime_requirements():
         "PIL": "Pillow",
         "docx": "python-docx",
         "faster_whisper": "faster-whisper",
+        "pypdf": "pypdf",
+        "fitz": "PyMuPDF",
     }
     for module_name, label in required_modules.items():
         if not _has_module(module_name):

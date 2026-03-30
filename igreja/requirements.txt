@@ -5,3 +5,5 @@ faster-whisper
 pillow
 rawpy
 tkinterdnd2
+pypdf
+PyMuPDF
