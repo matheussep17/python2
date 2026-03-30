@@ -12,7 +12,7 @@ from ttkbootstrap.constants import *
 
 from app.utils import (
     HAS_DND, HAS_PIL, HAS_RAWPY, DND_FILES, Image,
-    create_no_window_flags, seconds_to_hms, _ext
+    create_no_window_flags, ffmpeg_cmd, ffprobe_cmd, seconds_to_hms, _ext
 )
 
 # ---------- Conversor ----------
@@ -547,13 +547,13 @@ class ConverterFrame(ttk.Frame):
             remove_audio = self._target_has_no_audio(in_path, out_ext)
 
             if out_ext == "mp3":
-                cmd = ["ffmpeg", "-y", "-i", in_path, "-vn", "-acodec", "libmp3lame", "-q:a", "2", out_path]
+                cmd = ffmpeg_cmd("-y", "-i", in_path, "-vn", "-acodec", "libmp3lame", "-q:a", "2", out_path)
             elif out_ext == "gif":
-                cmd = ["ffmpeg", "-y", "-i", in_path, "-vf", "fps=12,scale=iw:-1:flags=lanczos", "-loop", "0", out_path]
+                cmd = ffmpeg_cmd("-y", "-i", in_path, "-vf", "fps=12,scale=iw:-1:flags=lanczos", "-loop", "0", out_path)
             elif remove_audio:
-                cmd = ["ffmpeg", "-y", "-i", in_path, "-an", out_path]
+                cmd = ffmpeg_cmd("-y", "-i", in_path, "-an", out_path)
             else:
-                cmd = ["ffmpeg", "-y", "-i", in_path, out_path]
+                cmd = ffmpeg_cmd("-y", "-i", in_path, out_path)
 
             self.proc = subprocess.Popen(
                 cmd,
@@ -602,7 +602,7 @@ class ConverterFrame(ttk.Frame):
             return False
 
         except FileNotFoundError:
-            self.ui_queue.put(("error", "Nao encontrei o ffmpeg/ffprobe. Instale-os e adicione ao PATH."))
+            self.ui_queue.put(("error", "Nao encontrei ffmpeg/ffprobe no executavel nem no PATH."))
             return False
         except Exception as e:
             if self.cancel_requested:
@@ -699,7 +699,7 @@ class ConverterFrame(ttk.Frame):
     def _probe_duration(self, path):
         try:
             out = subprocess.check_output(
-                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nk=1:nw=1", path],
+                ffprobe_cmd("-v", "error", "-show_entries", "format=duration", "-of", "default=nk=1:nw=1", path),
                 text=True,
                 creationflags=create_no_window_flags(),
                 stderr=subprocess.DEVNULL

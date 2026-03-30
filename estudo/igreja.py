@@ -99,13 +99,13 @@ class YouTubeDownloaderApp(ttk.Window):
 
     def load_config(self):
         if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, 'r') as file:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as file:
                 config = json.load(file)
                 return config.get('destination_folder', '')
         return ''
 
     def save_config(self):
-        with open(CONFIG_FILE, 'w') as file:
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as file:
             config = {'destination_folder': self.destination_folder}
             json.dump(config, file)
 

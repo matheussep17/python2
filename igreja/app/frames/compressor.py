@@ -15,6 +15,8 @@ from app.utils import (
     DND_FILES,
     Image,
     create_no_window_flags,
+    ffmpeg_cmd,
+    ffprobe_cmd,
     seconds_to_hms,
     _ext,
 )
@@ -420,8 +422,7 @@ class CompressorFrame(ttk.Frame):
         try:
             duration = self._probe_duration(in_path)
             params = self._video_params()
-            cmd = [
-                "ffmpeg",
+            cmd = ffmpeg_cmd(
                 "-y",
                 "-i",
                 in_path,
@@ -438,7 +439,7 @@ class CompressorFrame(ttk.Frame):
                 "-movflags",
                 "+faststart",
                 out_path,
-            ]
+            )
 
             self.proc = subprocess.Popen(
                 cmd,
@@ -482,7 +483,7 @@ class CompressorFrame(ttk.Frame):
             self.ui_queue.put(("error", f"Falha ao comprimir: {os.path.basename(in_path)}"))
             return False
         except FileNotFoundError:
-            self.ui_queue.put(("error", "Nao encontrei ffmpeg/ffprobe no PATH."))
+            self.ui_queue.put(("error", "Nao encontrei ffmpeg/ffprobe no executavel nem no PATH."))
             return False
         except Exception as e:
             self.ui_queue.put(("error", f"Erro no video {os.path.basename(in_path)}: {e}"))
@@ -517,7 +518,7 @@ class CompressorFrame(ttk.Frame):
     def _probe_duration(self, path):
         try:
             out = subprocess.check_output(
-                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nk=1:nw=1", path],
+                ffprobe_cmd("-v", "error", "-show_entries", "format=duration", "-of", "default=nk=1:nw=1", path),
                 text=True,
                 creationflags=create_no_window_flags(),
                 stderr=subprocess.DEVNULL,

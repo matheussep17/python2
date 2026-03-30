@@ -12,7 +12,7 @@ from ttkbootstrap.constants import *
 import time
 import subprocess
 
-from app.utils import HAS_DND, HAS_FW, HAS_DOCX, DND_FILES, _ext, seconds_to_hms, create_no_window_flags
+from app.utils import HAS_DND, HAS_FW, HAS_DOCX, DND_FILES, _ext, seconds_to_hms, create_no_window_flags, ffprobe_cmd
 
 # ---------- Transcrição ----------
 AUDIO_VIDEO_EXTS = {"mp3", "wav", "m4a", "mp4", "mkv", "mov", "webm"}
@@ -418,7 +418,7 @@ class TranscriberFrame(ttk.Frame):
     def _probe_duration(self, path):
         try:
             out = subprocess.check_output(
-                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nk=1:nw=1", path],
+                ffprobe_cmd("-v", "error", "-show_entries", "format=duration", "-of", "default=nk=1:nw=1", path),
                 text=True,
                 creationflags=create_no_window_flags(),
                 stderr=subprocess.DEVNULL,

@@ -4,6 +4,7 @@ dist/
 app/__pycache__/
 app/frames/__pycache__/
 app/ui/__pycache__/
+__pycache__/
 
 # PyInstaller files
 *.spec
@@ -13,3 +14,6 @@ venv/
 .venv/
 .buildvenv/
 build.ps1
+
+# Local FFmpeg binaries for packaging
+vendor/ffmpeg/bin/

@@ -11,7 +11,7 @@ from tkinter import filedialog, messagebox
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
-from app.utils import HAS_DND, DND_FILES, create_no_window_flags, seconds_to_hms, _ext
+from app.utils import HAS_DND, DND_FILES, create_no_window_flags, ffmpeg_cmd, ffprobe_cmd, seconds_to_hms, _ext
 
 
 VIDEO_EXTS = {"mp4", "avi", "mkv", "mov", "webm", "flv", "m4v"}
@@ -582,8 +582,7 @@ class EditorFrame(ttk.Frame):
 
                 self.ui_queue.put(("status", "Juntando trechos..."))
                 self.ui_queue.put(("progress", 92))
-                cmd = [
-                    "ffmpeg",
+                cmd = ffmpeg_cmd(
                     "-y",
                     "-f",
                     "concat",
@@ -594,7 +593,7 @@ class EditorFrame(ttk.Frame):
                     "-c",
                     "copy",
                     output_path,
-                ]
+                )
                 if not self._run_ffmpeg_command(cmd):
                     if self.cancel_requested:
                         self.ui_queue.put(("canceled", "Edicao cancelada."))
@@ -602,7 +601,7 @@ class EditorFrame(ttk.Frame):
 
             self.ui_queue.put(("done", {"message": "Video gerado com sucesso.", "last_output": output_path}))
         except FileNotFoundError:
-            self.ui_queue.put(("error", "Nao encontrei ffmpeg/ffprobe. Instale-os e adicione ao PATH."))
+            self.ui_queue.put(("error", "Nao encontrei ffmpeg/ffprobe no executavel nem no PATH."))
         except Exception as exc:
             self.ui_queue.put(("error", f"Erro na edicao: {exc}"))
         finally:
@@ -620,7 +619,7 @@ class EditorFrame(ttk.Frame):
         status_name = os.path.basename(source)
         self.ui_queue.put(("status", f"Processando trecho: {status_name}"))
 
-        cmd = ["ffmpeg", "-y"]
+        cmd = ffmpeg_cmd("-y")
         if start is not None:
             cmd.extend(["-ss", str(start)])
         cmd.extend(["-i", source])
@@ -694,7 +693,7 @@ class EditorFrame(ttk.Frame):
     def _probe_duration(self, path):
         try:
             output = subprocess.check_output(
-                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nk=1:nw=1", path],
+                ffprobe_cmd("-v", "error", "-show_entries", "format=duration", "-of", "default=nk=1:nw=1", path),
                 text=True,
                 encoding="utf-8",
                 errors="replace",
