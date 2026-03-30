@@ -15,7 +15,7 @@ import tkinter as tk
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
-from app.utils import format_bytes
+from app.utils import format_bytes, get_ffmpeg_bin_dir
 
 
 def app_base_dir() -> Path:
@@ -652,6 +652,7 @@ class BaixarFrame(ttk.Frame):
                 "prefer_free_formats": False,
                 "allow_unplayable_formats": False,
                 "windowsfilenames": True,
+                "ffmpeg_location": get_ffmpeg_bin_dir() or None,
             }
 
             if fmt_mode == "Música":

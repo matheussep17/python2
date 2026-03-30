@@ -22,7 +22,13 @@ from app.frames.editor import EditorFrame
 from app.frames.transcriber import TranscriberFrame
 from app.ui.alerts import install_messagebox_hooks, show_info
 from app.ui.theme import apply_design_system, resolve_ttk_theme
-from app.utils import HAS_DND, TkinterDnD
+from app.utils import (
+    HAS_DND,
+    TkinterDnD,
+    configure_runtime_environment,
+    missing_runtime_requirements,
+    runtime_requirement_message,
+)
 
 
 class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
@@ -237,6 +243,18 @@ def single_instance_or_exit(port=54321):
 
 
 def main():
+    configure_runtime_environment()
+    missing, runtime = missing_runtime_requirements()
+    if missing:
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showerror("Dependencias ausentes", runtime_requirement_message(missing, runtime))
+            root.destroy()
+        except Exception:
+            pass
+        sys.exit(1)
+
     _lock = single_instance_or_exit()
     app = SuperApp()
     try:
