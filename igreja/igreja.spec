@@ -5,6 +5,8 @@ from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files
 
 tkdnd_datas = collect_data_files("tkinterdnd2")
+ttkbootstrap_datas = collect_data_files("ttkbootstrap")
+faster_whisper_datas = collect_data_files("faster_whisper")
 project_root = Path.cwd()
 ffmpeg_root = project_root / "vendor" / "ffmpeg"
 ffmpeg_binaries = []
@@ -19,8 +21,8 @@ a = Analysis(
     ['run.py'],
     pathex=[],
     binaries=ffmpeg_binaries,
-    datas=tkdnd_datas,
-    hiddenimports=['tkinterdnd2', 'tkinterdnd2.TkinterDnD', 'pypdf', 'fitz', 'pymupdf'],
+    datas=tkdnd_datas + ttkbootstrap_datas + faster_whisper_datas,
+    hiddenimports=['tkinterdnd2', 'tkinterdnd2.TkinterDnD', 'pypdf', 'fitz', 'pymupdf', 'ttkbootstrap', 'yt_dlp', 'docx', 'whisper', 'PIL', 'rawpy'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

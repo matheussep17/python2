@@ -50,7 +50,7 @@ class PdfEditorFrame(ttk.Frame):
         self.page_annotations = {}
         self.last_output = ""
 
-        self.render_scale = 1.35
+        self.render_scale = 1.0
         self.current_page_size = (0.0, 0.0)
         self.current_render_size = (0, 0)
         self.current_image = None
@@ -80,10 +80,11 @@ class PdfEditorFrame(ttk.Frame):
         self.color_name_var = tk.StringVar(value=COLOR_CHOICES[0][0])
         self.brush_size_var = tk.IntVar(value=4)
         self.font_size_var = tk.IntVar(value=18)
-        self.zoom_var = tk.StringVar(value="135%")
+        self.zoom_var = tk.StringVar(value="100%")
 
         self.is_running = False
         self.ui_queue = queue.Queue()
+        self.auto_fit = True
 
         self.color_map = {name: value for name, value in COLOR_CHOICES}
         self.tool_var.trace_add("write", self._on_tool_changed)
@@ -99,15 +100,26 @@ class PdfEditorFrame(ttk.Frame):
                 pass
 
     def _build_ui(self):
-        card = ttk.Frame(self, padding=18)
-        card.pack(fill="both", expand=True)
+        # Create a canvas with scrollbar for scrolling content
+        self.canvas_frame = ttk.Frame(self)
+        self.canvas_frame.pack(fill="both", expand=True)
+        self.scroll_canvas = tk.Canvas(self.canvas_frame, highlightthickness=0)
+        self.scroll_canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar = ttk.Scrollbar(self.canvas_frame, orient="vertical", command=self.scroll_canvas.yview)
+        self.scrollbar.pack(side="right", fill="y")
+        self.scroll_canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.scroll_canvas.bind("<Configure>", self._on_scroll_canvas_configure)
 
-        header = ttk.Frame(card)
+        self.card = ttk.Frame(self.scroll_canvas, padding=18)
+        self.card_window = self.scroll_canvas.create_window((0, 0), window=self.card, anchor="nw")
+        self.card.bind("<Configure>", self._on_card_configure)
+
+        header = ttk.Frame(self.card)
         header.pack(fill="x")
         ttk.Label(header, text="Editor de PDF", style="SectionTitle.TLabel").pack(side="left")
-        ttk.Separator(card).pack(fill="x", pady=12)
+        ttk.Separator(self.card).pack(fill="x", pady=12)
 
-        intro = ttk.LabelFrame(card, text="Arquivo")
+        intro = ttk.LabelFrame(self.card, text="Arquivo")
         intro.pack(fill="x")
         intro_inner = ttk.Frame(intro, padding=12)
         intro_inner.pack(fill="x")
@@ -146,7 +158,7 @@ class PdfEditorFrame(ttk.Frame):
             self.select_btn.config(state=DISABLED)
             self.clear_btn.config(state=DISABLED)
 
-        self.tools_frame = ttk.LabelFrame(card, text="Ferramentas")
+        self.tools_frame = ttk.LabelFrame(self.card, text="Ferramentas")
         self.tools_frame.pack(fill="x", pady=(10, 6))
         tools_inner = ttk.Frame(self.tools_frame, padding=12)
         tools_inner.pack(fill="x")
@@ -182,7 +194,7 @@ class PdfEditorFrame(ttk.Frame):
         self.font_spin.bind("<KeyRelease>", self._on_text_style_control_changed)
         self.font_spin.bind("<FocusOut>", self._on_text_style_control_changed)
 
-        self.text_row = ttk.Frame(card)
+        self.text_row = ttk.Frame(self.card)
         self.text_row.pack(fill="x", pady=(0, 6))
         ttk.Label(
             self.text_row,
@@ -194,7 +206,7 @@ class PdfEditorFrame(ttk.Frame):
         )
         self.delete_btn.pack(side="left")
 
-        self.adjust_row = ttk.Frame(card)
+        self.adjust_row = ttk.Frame(self.card)
         self.adjust_row.pack(fill="x", pady=(0, 6))
         self.font_minus_btn = ttk.Button(
             self.adjust_row, text="Fonte -", command=lambda: self._adjust_selected_text_font(-2), bootstyle="info-outline"
@@ -218,7 +230,7 @@ class PdfEditorFrame(ttk.Frame):
             style="Muted.TLabel",
         ).pack(side="left", padx=(18, 0))
 
-        self.nav_frame = ttk.Frame(card)
+        self.nav_frame = ttk.Frame(self.card)
         self.nav_frame.pack(fill="x", pady=(0, 8))
         self.prev_btn = ttk.Button(self.nav_frame, text="Pagina anterior", command=lambda: self._change_page(-1), bootstyle=SECONDARY)
         self.prev_btn.pack(side="left")
@@ -239,13 +251,14 @@ class PdfEditorFrame(ttk.Frame):
             side="right", padx=(0, 8)
         )
 
-        self.viewer_frame = ttk.Frame(card)
+        self.viewer_frame = ttk.Frame(self.card)
         self.viewer_frame.pack(fill="both", expand=True)
+        self.viewer_frame.columnconfigure(0, weight=0, minsize=160)
         self.viewer_frame.columnconfigure(1, weight=1)
         self.viewer_frame.rowconfigure(0, weight=1)
 
         thumbs_wrap = ttk.LabelFrame(self.viewer_frame, text="Paginas")
-        thumbs_wrap.grid(row=0, column=0, sticky="nsw", padx=(0, 10))
+        thumbs_wrap.grid(row=0, column=0, sticky="nsw", padx=(0, 8), pady=(0, 0))
         thumbs_inner = ttk.Frame(thumbs_wrap, padding=8)
         thumbs_inner.pack(fill="both", expand=True)
         self.thumbs_canvas = tk.Canvas(thumbs_inner, width=170, highlightthickness=0, bg="#162033")
@@ -260,6 +273,8 @@ class PdfEditorFrame(ttk.Frame):
 
         canvas_wrap = ttk.LabelFrame(self.viewer_frame, text="Pagina")
         canvas_wrap.grid(row=0, column=1, sticky="nsew")
+        canvas_wrap.columnconfigure(0, weight=1)
+        canvas_wrap.rowconfigure(0, weight=1)
         canvas_inner = ttk.Frame(canvas_wrap, padding=10)
         canvas_inner.pack(fill="both", expand=True)
         canvas_inner.rowconfigure(0, weight=1)
@@ -267,6 +282,7 @@ class PdfEditorFrame(ttk.Frame):
 
         self.canvas = tk.Canvas(canvas_inner, bg="#20242c", highlightthickness=0, cursor="cross")
         self.canvas.grid(row=0, column=0, sticky="nsew")
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
         self.v_scroll = ttk.Scrollbar(canvas_inner, orient="vertical", command=self.canvas.yview)
         self.v_scroll.grid(row=0, column=1, sticky="ns")
         self.h_scroll = ttk.Scrollbar(canvas_inner, orient="horizontal", command=self.canvas.xview)
@@ -277,7 +293,7 @@ class PdfEditorFrame(ttk.Frame):
         self.canvas.bind("<ButtonRelease-1>", self._on_canvas_release)
         self.canvas.bind("<Double-Button-1>", self._on_canvas_double_click)
 
-        self.output_frame = ttk.LabelFrame(card, text="Saida")
+        self.output_frame = ttk.LabelFrame(self.card, text="Saida")
         self.output_frame.pack(fill="x", pady=(10, 0))
         output_inner = ttk.Frame(self.output_frame, padding=12)
         output_inner.pack(fill="x")
@@ -292,7 +308,7 @@ class PdfEditorFrame(ttk.Frame):
             style="Muted.TLabel",
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
-        self.actions_frame = ttk.Frame(card)
+        self.actions_frame = ttk.Frame(self.card)
         self.actions_frame.pack(fill="x", pady=(8, 4))
         self.save_btn = ttk.Button(self.actions_frame, text="Salvar PDF anotado", command=self.start_export, bootstyle=SUCCESS)
         self.save_btn.pack(side="left")
@@ -301,7 +317,7 @@ class PdfEditorFrame(ttk.Frame):
         )
         self.open_btn.pack(side="left", padx=(10, 0))
 
-        self.progress_frame = ttk.Frame(card, padding=(10, 6))
+        self.progress_frame = ttk.Frame(self.card, padding=(10, 6))
         self.progress = ttk.Progressbar(
             self.progress_frame, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100
         )
@@ -524,6 +540,15 @@ class PdfEditorFrame(ttk.Frame):
             page = self.pdf_doc.load_page(self.current_page_index)
             rect = page.rect
             self.current_page_size = (float(rect.width), float(rect.height))
+
+            # Ajusta automaticamente a escala para preencher a largura disponível
+            if self.auto_fit and self.current_page_size[0] > 0:
+                canvas_width = max(1, self.canvas.winfo_width())
+                fit_scale = canvas_width / self.current_page_size[0]
+                fit_scale = min(max(0.55, fit_scale), 2.5)
+                if abs(fit_scale - self.render_scale) > 0.01:
+                    self.render_scale = fit_scale
+
             matrix = fitz.Matrix(self.render_scale, self.render_scale)
             pix = page.get_pixmap(matrix=matrix, alpha=False)
             image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
@@ -541,6 +566,14 @@ class PdfEditorFrame(ttk.Frame):
         self.zoom_var.set(f"{int(self.render_scale * 100)}%")
         self._update_thumbnail_selection()
         self._redraw_annotations()
+
+    def _on_canvas_configure(self, event):
+        if not self.auto_fit or not self.pdf_doc or self.page_count <= 0 or self.current_page_size[0] <= 0:
+            return
+        fit_scale = max(0.55, min(2.5, event.width / self.current_page_size[0]))
+        if abs(fit_scale - self.render_scale) > 0.01:
+            self.render_scale = fit_scale
+            self._render_current_page()
 
     def _redraw_annotations(self):
         for item_id in self.current_canvas_items:
@@ -691,6 +724,7 @@ class PdfEditorFrame(ttk.Frame):
         self._go_to_page(self.current_page_index + delta)
 
     def _change_zoom(self, delta):
+        self.auto_fit = False
         new_scale = min(2.5, max(0.55, self.render_scale + delta))
         if abs(new_scale - self.render_scale) < 0.001:
             return
@@ -1294,3 +1328,25 @@ class PdfEditorFrame(ttk.Frame):
                 subprocess.Popen(["xdg-open", folder])
         except Exception as exc:
             messagebox.showerror("Erro", f"Nao foi possivel abrir a pasta: {exc}")
+
+    def _on_scroll_canvas_configure(self, event):
+        # Ajusta a largura do card para preencher o canvas e garantir responsividade.
+        self.scroll_canvas.itemconfigure(self.card_window, width=event.width)
+
+        # Se houver mais espaço vertical, expande o card para não deixar gap no bottom.
+        if self.card.winfo_reqheight() < event.height:
+            self.scroll_canvas.itemconfigure(self.card_window, height=event.height)
+        else:
+            self.scroll_canvas.itemconfigure(self.card_window, height=self.card.winfo_reqheight())
+
+        self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all"))
+
+    def _on_card_configure(self, event):
+        # Atualiza a área total que pode ser rolada quando o conteúdo muda de tamanho.
+        canvas_height = self.scroll_canvas.winfo_height()
+        if self.card.winfo_reqheight() < canvas_height:
+            self.scroll_canvas.itemconfigure(self.card_window, height=canvas_height)
+        else:
+            self.scroll_canvas.itemconfigure(self.card_window, height=self.card.winfo_reqheight())
+
+        self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all"))
