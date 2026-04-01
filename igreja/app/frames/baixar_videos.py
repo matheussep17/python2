@@ -222,6 +222,12 @@ class BaixarFrame(ttk.Frame):
             "skip_download": True,
             "noplaylist": True,
             "extract_flat": False,
+            "socket_timeout": 60,
+            "retries": 5,
+            "fragment_retries": 5,
+            "skip_unavailable_fragments": True,
+            "extractor_args": {"youtube": {"js_runtimes": ["node", "deno"]}},
+            "extractor_sleep_json": {"youtube": 2},
         }
         with y.YoutubeDL(probe_opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -306,7 +312,16 @@ class BaixarFrame(ttk.Frame):
         try:
             import yt_dlp
 
-            ydl_opts = {"quiet": True, "skip_download": True, "noplaylist": True}
+            ydl_opts = {
+                "quiet": True,
+                "skip_download": True,
+                "noplaylist": True,
+                "socket_timeout": 60,
+                "retries": 5,
+                "fragment_retries": 5,
+                "extractor_args": {"youtube": {"js_runtimes": ["node", "deno"]}},
+                "extractor_sleep_json": {"youtube": 2},
+            }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
 
@@ -653,6 +668,13 @@ class BaixarFrame(ttk.Frame):
                 "allow_unplayable_formats": False,
                 "windowsfilenames": True,
                 "ffmpeg_location": get_ffmpeg_bin_dir() or None,
+                # Configurações para resolver erros do YouTube
+                "socket_timeout": 60,
+                "retries": 5,
+                "fragment_retries": 5,
+                "skip_unavailable_fragments": True,
+                "extractor_args": {"youtube": {"js_runtimes": ["node", "deno"]}},
+                "extractor_sleep_json": {"youtube": 2},
             }
 
             if fmt_mode == "Música":
@@ -693,15 +715,36 @@ class BaixarFrame(ttk.Frame):
                     self._cleanup_partial()
                     self._queue_event("canceled")
                     return
-
+            
             self._queue_event("done")
 
         except Exception as e:
+            error_msg = str(e).lower()
+            
+            # Mensagens de erro mais específicas
+            if "no supported javascript runtime" in error_msg or "js_runtimes" in error_msg:
+                msg = (
+                    "Node.js não encontrado. Instale Node.js (https://nodejs.org) "
+                    "e adicione ao PATH do sistema."
+                )
+            elif "http error 429" in error_msg or "too many requests" in error_msg:
+                msg = (
+                    "YouTube limitou as requisições. Aguarde alguns minutos "
+                    "antes de tentar novamente."
+                )
+            elif "sign in to confirm" in error_msg or "authentication" in error_msg:
+                msg = (
+                    "YouTube pediu verificação. Tente novamente ou use um video público. "
+                    "Se o erro persistir, aguarde alguns minutos."
+                )
+            else:
+                msg = str(e)
+            
             if self.cancel_requested:
                 self._cleanup_partial()
                 self._queue_event("canceled")
                 return
-            self._queue_event("error", str(e))
+            self._queue_event("error", msg)
 
     def ydl_hook(self, d):
         if self.cancel_requested:

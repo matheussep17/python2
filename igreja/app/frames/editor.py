@@ -15,10 +15,20 @@ from app.utils import HAS_DND, DND_FILES, create_no_window_flags, ffmpeg_cmd, ff
 
 
 VIDEO_EXTS = {"mp4", "avi", "mkv", "mov", "webm", "flv", "m4v"}
+AUDIO_EXTS = {"mp3", "wav", "aac", "flac", "m4a", "wma", "opus", "ogg"}
+MEDIA_EXTS = VIDEO_EXTS | AUDIO_EXTS
 
 
 def is_video_file(path: str) -> bool:
     return _ext(path) in VIDEO_EXTS
+
+
+def is_audio_file(path: str) -> bool:
+    return _ext(path) in AUDIO_EXTS
+
+
+def is_media_file(path: str) -> bool:
+    return _ext(path) in MEDIA_EXTS
 
 
 def parse_time_to_seconds(value: str):
@@ -103,7 +113,7 @@ class EditorFrame(ttk.Frame):
 
         header = ttk.Frame(card)
         header.pack(fill="x")
-        ttk.Label(header, text="Editor de Video", style="SectionTitle.TLabel").pack(side="left")
+        ttk.Label(header, text="Editor de Mídia", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
 
         files_frame = ttk.LabelFrame(card, text="Arquivos")
@@ -112,7 +122,7 @@ class EditorFrame(ttk.Frame):
         files_inner.pack(fill="x")
         files_inner.columnconfigure(1, weight=1)
 
-        ttk.Button(files_inner, text="Selecionar videos", command=self.select_files, bootstyle=WARNING).grid(
+        ttk.Button(files_inner, text="Selecionar mídia", command=self.select_files, bootstyle=WARNING).grid(
             row=0, column=0, sticky="w"
         )
         ttk.Button(files_inner, text="Limpar", command=self.clear_files, bootstyle=DANGER).grid(
@@ -120,17 +130,17 @@ class EditorFrame(ttk.Frame):
         )
         ttk.Label(
             files_inner,
-            text="Monte um video novo usando um trecho de cada arquivo. Use vazio para considerar o video inteiro.",
+            text="Monte um novo arquivo usando um trecho de cada arquivo. Use vazio para considerar o arquivo inteiro.",
             style="Muted.TLabel",
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 6))
 
-        self.selection_label = ttk.Label(files_inner, text="Nenhum video selecionado", font=("Helvetica", 12))
+        self.selection_label = ttk.Label(files_inner, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
         self.selection_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(2, 6))
 
         if HAS_DND:
             ttk.Label(
                 files_inner,
-                text="Arraste e solte videos aqui para selecionar.",
+                text="Arraste e solte arquivos de mídia aqui para selecionar.",
                 style="Muted.TLabel",
             ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(0, 6))
 
@@ -160,11 +170,11 @@ class EditorFrame(ttk.Frame):
 
         self.controls_frame = ttk.Frame(card)
         self.controls_frame.pack(fill="x", pady=(2, 6))
-        self.run_btn = ttk.Button(self.controls_frame, text="Gerar video", command=self.start_processing, bootstyle=SUCCESS, state=DISABLED)
+        self.run_btn = ttk.Button(self.controls_frame, text="Processar mídia", command=self.start_processing, bootstyle=SUCCESS, state=DISABLED)
         self.run_btn.pack(side="left")
         self.cancel_btn = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_processing, bootstyle=SECONDARY, state=DISABLED)
         self.cancel_btn.pack(side="left", padx=(10, 0))
-        self.open_btn = ttk.Button(self.controls_frame, text="Abrir pasta do video", command=self.open_folder, bootstyle=INFO, state=DISABLED)
+        self.open_btn = ttk.Button(self.controls_frame, text="Abrir pasta do arquivo", command=self.open_folder, bootstyle=INFO, state=DISABLED)
         self.open_btn.pack(side="left", padx=(10, 0))
         self.controls_frame.pack_forget()
 
@@ -188,10 +198,12 @@ class EditorFrame(ttk.Frame):
 
     def select_files(self):
         filetypes = [
-            ("Videos", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v"),
+            ("Mídia (Vídeos/Áudios)", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v *.mp3 *.wav *.aac *.flac *.m4a *.wma *.opus *.ogg"),
+            ("Vídeos", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v"),
+            ("Áudios", "*.mp3 *.wav *.aac *.flac *.m4a *.wma *.opus *.ogg"),
             ("Todos", "*.*"),
         ]
-        paths = filedialog.askopenfilenames(title="Selecione videos", filetypes=filetypes)
+        paths = filedialog.askopenfilenames(title="Selecione arquivos de mídia", filetypes=filetypes)
         if paths:
             self._set_files(list(paths))
 
@@ -199,7 +211,7 @@ class EditorFrame(ttk.Frame):
         items = self.tk.splitlist(event.data)
         paths = []
         for item in items:
-            if os.path.isfile(item) and is_video_file(item):
+            if os.path.isfile(item) and is_media_file(item):
                 paths.append(os.path.abspath(item))
         if paths:
             self._set_files(paths)
@@ -209,7 +221,7 @@ class EditorFrame(ttk.Frame):
         seen = set()
         for path in paths:
             abs_path = os.path.abspath(path)
-            if not os.path.isfile(abs_path) or not is_video_file(abs_path):
+            if not os.path.isfile(abs_path) or not is_media_file(abs_path):
                 continue
             low = abs_path.lower()
             if low in seen:
@@ -243,27 +255,27 @@ class EditorFrame(ttk.Frame):
 
     def _refresh_file_info(self):
         if not self.input_files:
-            self.selection_label.config(text="Nenhum video selecionado")
+            self.selection_label.config(text="Nenhum arquivo selecionado")
             self._rebuild_video_rows()
             self._update_visibility()
             return
 
         count = len(self.input_files)
         if count == 1:
-            self.selection_label.config(text=f"1 video selecionado: {os.path.basename(self.input_files[0])}")
+            self.selection_label.config(text=f"1 arquivo selecionado: {os.path.basename(self.input_files[0])}")
         else:
             self.selection_label.config(
-                text=f"{count} videos selecionados: {os.path.basename(self.input_files[0])} + {os.path.basename(self.input_files[1])}"
+                text=f"{count} arquivos selecionados: {os.path.basename(self.input_files[0])} + {os.path.basename(self.input_files[1])}"
             )
 
         self._rebuild_video_rows()
         self._update_visibility()
-        # Ensure the action buttons are visible after selecting a video in smaller windows.
+        # Ensure the action buttons are visible after selecting a file in smaller windows.
         self._scroll_to_bottom()
         self._update_scrollbar_visibility()
 
     def _rebuild_video_rows(self):
-        """Rebuild the per-video segment editors (Trecho 1, Trecho 2, ...)."""
+        """Rebuild the per-media segment editors (Trecho 1, Trecho 2, ...)."""
         # Clear existing rows
         for row in self.video_rows:
             try:
@@ -311,11 +323,23 @@ class EditorFrame(ttk.Frame):
         if not self.input_files:
             self.output_name_var.set("")
             return
+        
+        # Determina se é áudio ou vídeo pelo primeiro arquivo
+        first_file = self.input_files[0]
+        is_audio = is_audio_file(first_file)
+        
         if len(self.input_files) == 1:
-            base = os.path.splitext(os.path.basename(self.input_files[0]))[0]
-            self.output_name_var.set(f"{base}_editado.mp4")
+            base = os.path.splitext(os.path.basename(first_file))[0]
+            if is_audio:
+                self.output_name_var.set(f"{base}_editado.mp3")
+            else:
+                self.output_name_var.set(f"{base}_editado.mp4")
             return
-        self.output_name_var.set("video_montado.mp4")
+        
+        if is_audio:
+            self.output_name_var.set("audio_montado.mp3")
+        else:
+            self.output_name_var.set("video_montado.mp4")
 
     def _update_visibility(self):
         """Show/hide the editor sections depending on whether any file is selected."""
@@ -439,7 +463,7 @@ class EditorFrame(ttk.Frame):
         if self.is_running:
             return
         if not self.input_files:
-            messagebox.showerror("Erro", "Selecione pelo menos um video.")
+            messagebox.showerror("Erro", "Selecione pelo menos um arquivo de mídia.")
             return
 
         segments = self._build_segments()
@@ -448,22 +472,28 @@ class EditorFrame(ttk.Frame):
 
         output_name = (self.output_name_var.get() or "").strip()
         if not output_name:
-            messagebox.showerror("Erro", "Informe um nome para o arquivo de saida.")
+            messagebox.showerror("Erro", "Informe um nome para o arquivo de saída.")
             return
-        if not output_name.lower().endswith(".mp4"):
-            output_name += ".mp4"
+        
+        # Determina extensão esperada baseado no tipo de mídia
+        first_file = self.input_files[0]
+        is_audio = is_audio_file(first_file)
+        expected_ext = ".mp3" if is_audio else ".mp4"
+        
+        if not output_name.lower().endswith(expected_ext):
+            output_name += expected_ext
 
         output_path = os.path.join(os.path.dirname(self.input_files[0]), output_name)
         normalized_output = os.path.abspath(output_path).lower()
         if normalized_output in {os.path.abspath(path).lower() for path in self.input_files}:
-            messagebox.showerror("Erro", "Escolha um nome diferente do video original para evitar sobrescrita.")
+            messagebox.showerror("Erro", "Escolha um nome diferente do arquivo original para evitar sobrescrita.")
             return
 
         self.is_running = True
         self.cancel_requested = False
         self.progress_var.set(0)
         self.status_var.set("Preparando...")
-        self.on_status("Edicao iniciada...")
+        self.on_status("Processamento iniciado...")
         self.run_btn.config(state=DISABLED)
         self.cancel_btn.config(state=NORMAL)
         self.open_btn.config(state=DISABLED)
@@ -484,7 +514,7 @@ class EditorFrame(ttk.Frame):
 
     def _build_segments(self):
         if not self.video_rows:
-            messagebox.showerror("Erro", "Selecione pelo menos um video.")
+            messagebox.showerror("Erro", "Selecione pelo menos um arquivo de mídia.")
             return None
 
         result = []
@@ -500,7 +530,7 @@ class EditorFrame(ttk.Frame):
             result.append(segment)
 
         if not result:
-            messagebox.showerror("Erro", "Nao foi possivel montar os trechos selecionados.")
+            messagebox.showerror("Erro", "Não foi possível montar os trechos selecionados.")
             return None
 
         return result
@@ -510,28 +540,28 @@ class EditorFrame(ttk.Frame):
         end = parse_time_to_seconds(end_value)
 
         if start_value.strip() and start is None:
-            messagebox.showerror("Tempo invalido", f"{label}: inicio invalido.")
+            messagebox.showerror("Tempo inválido", f"{label}: início inválido.")
             return None
         if end_value.strip() and end is None:
-            messagebox.showerror("Tempo invalido", f"{label}: fim invalido.")
+            messagebox.showerror("Tempo inválido", f"{label}: fim inválido.")
             return None
         if start is not None and start < 0:
-            messagebox.showerror("Tempo invalido", f"{label}: o inicio nao pode ser negativo.")
+            messagebox.showerror("Tempo inválido", f"{label}: o início não pode ser negativo.")
             return None
         if end is not None and end < 0:
-            messagebox.showerror("Tempo invalido", f"{label}: o fim nao pode ser negativo.")
+            messagebox.showerror("Tempo inválido", f"{label}: o fim não pode ser negativo.")
             return None
         if start is not None and end is not None and end <= start:
-            messagebox.showerror("Tempo invalido", f"{label}: o fim precisa ser maior que o inicio.")
+            messagebox.showerror("Tempo inválido", f"{label}: o fim precisa ser maior que o início.")
             return None
 
         duration = self.file_durations.get(path)
         if duration is not None:
             if start is not None and start > duration:
-                messagebox.showerror("Tempo invalido", f"{label}: o inicio ultrapassa a duracao do video.")
+                messagebox.showerror("Tempo inválido", f"{label}: o início ultrapassa a duração do arquivo.")
                 return None
             if end is not None and end > duration:
-                messagebox.showerror("Tempo invalido", f"{label}: o fim ultrapassa a duracao do video.")
+                messagebox.showerror("Tempo inválido", f"{label}: o fim ultrapassa a duração do arquivo.")
                 return None
 
         clip_duration = None
@@ -560,17 +590,20 @@ class EditorFrame(ttk.Frame):
                 ok = self._export_segment(segments[0], output_path, step_index=0, total_steps=1)
                 if not ok:
                     if self.cancel_requested:
-                        self.ui_queue.put(("canceled", "Edicao cancelada."))
+                        self.ui_queue.put(("canceled", "Processamento cancelado."))
                     return
             else:
                 temp_segments = []
                 total_steps = len(segments) + 1
                 for index, segment in enumerate(segments, start=1):
-                    temp_path = os.path.join(temp_dir, f"segmento_{index}.mp4")
+                    # Determina extensão baseada no tipo de mídia
+                    is_audio = is_audio_file(segment["path"])
+                    ext = "mp3" if is_audio else "mp4"
+                    temp_path = os.path.join(temp_dir, f"segmento_{index}.{ext}")
                     ok = self._export_segment(segment, temp_path, step_index=index - 1, total_steps=total_steps)
                     if not ok:
                         if self.cancel_requested:
-                            self.ui_queue.put(("canceled", "Edicao cancelada."))
+                            self.ui_queue.put(("canceled", "Processamento cancelado."))
                         return
                     temp_segments.append(temp_path)
 
@@ -596,14 +629,14 @@ class EditorFrame(ttk.Frame):
                 )
                 if not self._run_ffmpeg_command(cmd):
                     if self.cancel_requested:
-                        self.ui_queue.put(("canceled", "Edicao cancelada."))
+                        self.ui_queue.put(("canceled", "Processamento cancelado."))
                     return
 
-            self.ui_queue.put(("done", {"message": "Video gerado com sucesso.", "last_output": output_path}))
+            self.ui_queue.put(("done", {"message": "Arquivo processado com sucesso.", "last_output": output_path}))
         except FileNotFoundError:
-            self.ui_queue.put(("error", "Nao encontrei ffmpeg/ffprobe no executavel nem no PATH."))
+            self.ui_queue.put(("error", "Não encontrei ffmpeg/ffprobe no executável nem no PATH."))
         except Exception as exc:
-            self.ui_queue.put(("error", f"Erro na edicao: {exc}"))
+            self.ui_queue.put(("error", f"Erro no processamento: {exc}"))
         finally:
             if temp_dir:
                 shutil.rmtree(temp_dir, ignore_errors=True)
@@ -628,23 +661,39 @@ class EditorFrame(ttk.Frame):
             duration_value = end - (start or 0)
             cmd.extend(["-t", str(duration_value)])
 
-        cmd.extend(
-            [
-                "-c:v",
-                "libx264",
-                "-preset",
-                "veryfast",
-                "-crf",
-                "20",
-                "-c:a",
-                "aac",
-                "-b:a",
-                "128k",
-                "-movflags",
-                "+faststart",
-                output_path,
-            ]
-        )
+        # Detecta tipo de mídia
+        is_audio = is_audio_file(source)
+        
+        if is_audio:
+            # Configuração para áudio MP3
+            cmd.extend(
+                [
+                    "-q:a",
+                    "3",  # Qualidade MP3 (3 é boa qualidade, 0 é máxima)
+                    "-y",
+                    output_path,
+                ]
+            )
+        else:
+            # Configuração para vídeo MP4
+            cmd.extend(
+                [
+                    "-c:v",
+                    "libx264",
+                    "-preset",
+                    "veryfast",
+                    "-crf",
+                    "20",
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "128k",
+                    "-movflags",
+                    "+faststart",
+                    output_path,
+                ]
+            )
+        
         return self._run_ffmpeg_command(cmd, step_index=step_index, total_steps=total_steps, expected_duration=clip_duration)
 
     def _run_ffmpeg_command(self, cmd, step_index=0, total_steps=1, expected_duration=None):
@@ -707,8 +756,8 @@ class EditorFrame(ttk.Frame):
     def _duration_text(self, path):
         duration = self.file_durations.get(path)
         if duration is None:
-            return "Duracao nao encontrada"
-        return f"Duracao: {seconds_to_hms(duration)}"
+            return "Duração não encontrada"
+        return f"Duração: {seconds_to_hms(duration)}"
 
     def _drain_ui_queue(self):
         try:
@@ -723,7 +772,7 @@ class EditorFrame(ttk.Frame):
                 elif kind == "done":
                     info = payload if isinstance(payload, dict) else {"message": str(payload)}
                     self.last_output = info.get("last_output") or ""
-                    message = info.get("message", "Video gerado com sucesso.")
+                    message = info.get("message", "Arquivo processado com sucesso.")
                     self._finish_ok(message)
                 elif kind == "canceled":
                     self._finish_canceled(payload)
@@ -738,7 +787,7 @@ class EditorFrame(ttk.Frame):
 
     def open_folder(self):
         if not self.last_output or not os.path.exists(self.last_output):
-            messagebox.showerror("Erro", "Nenhum video gerado foi encontrado.")
+            messagebox.showerror("Erro", "Nenhum arquivo processado foi encontrado.")
             return
 
         folder = os.path.dirname(self.last_output)
@@ -750,7 +799,7 @@ class EditorFrame(ttk.Frame):
             else:
                 subprocess.Popen(["xdg-open", folder])
         except Exception as exc:
-            messagebox.showerror("Erro", f"Nao foi possivel abrir a pasta: {exc}")
+            messagebox.showerror("Erro", f"Não foi possível abrir a pasta: {exc}")
 
     def _finish_ok(self, message):
         self._hide_progress()
@@ -760,7 +809,7 @@ class EditorFrame(ttk.Frame):
         self.on_status(message)
         self._update_action_state()
         self.open_btn.config(state=NORMAL if self.last_output else DISABLED)
-        messagebox.showinfo("Concluido", message)
+        messagebox.showinfo("Concluído", message)
 
     def _finish_canceled(self, payload):
         self._hide_progress()
@@ -772,7 +821,7 @@ class EditorFrame(ttk.Frame):
 
     def _finish_error(self, payload):
         self._hide_progress()
-        self.on_status("Erro na edicao")
+        self.on_status("Erro no processamento")
         self._update_action_state()
         self.open_btn.config(state=DISABLED)
         messagebox.showerror("Erro", str(payload))

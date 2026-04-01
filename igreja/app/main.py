@@ -113,9 +113,9 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             ("baixar", "Baixar", "⬇️"),
             ("compressor", "Comprimir", "🗜️"),
             ("converter", "Conversor", "⚙️"),
-            ("editor", "Editar video", "✂️"),
+            ("editor", "Editar mídia", "✂️"),
             ("pdf", "Editar PDF", "📄"),
-            ("transcribe", "Transcricao", "📝"),
+            ("transcribe", "Transcrição", "📝"),
         ]:
             btn = ttk.Button(
                 side,
