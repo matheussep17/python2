@@ -1,0 +1,50 @@
+﻿name: Build and Release Igreja
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        working-directory: igreja
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create build virtual environment
+        shell: pwsh
+        run: python -m venv .buildvenv
+
+      - name: Build executable
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File .\build.ps1
+
+      - name: Verify build output
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -LiteralPath ".\dist\Igreja.exe")) {
+            throw "Arquivo dist\Igreja.exe nao encontrado apos o build."
+          }
+
+      - name: Create or update GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: igreja/dist/Igreja.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
