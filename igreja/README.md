@@ -24,10 +24,10 @@ O app agora pode verificar atualizações automaticamente no executável Windows
 
 Configuração:
 
-1. Faça a build normalmente.
-2. Crie uma GitHub Release no repositório.
-3. Anexe o arquivo `Igreja.exe` na release.
-4. Use uma tag de versão como `v1.0.1`.
+1. Atualize `APP_VERSION` em `app/version.py`.
+2. Faça commit das mudanças.
+3. Crie e envie uma tag como `v1.0.1`.
+4. O GitHub Actions vai buildar o app e publicar `Igreja.exe` na release automaticamente.
 
 No `config.json`, o fluxo com GitHub Releases usa:
 
@@ -52,3 +52,17 @@ Exemplo:
 ```
 
 O app pode checar isso ao abrir e também oferece o botão `Atualizar`.
+
+### Fluxo automatico de release
+
+Depois de configurar o repositório com este workflow, a rotina fica:
+
+```powershell
+git add .
+git commit -m "Release 1.0.1"
+git push origin main
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+Ao receber a tag, o GitHub executa `.github/workflows/release.yml`, gera `dist/Igreja.exe` e anexa o arquivo na release.
