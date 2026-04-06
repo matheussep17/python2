@@ -271,10 +271,15 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         try:
             manifest = fetch_update_manifest()
         except Exception as exc:
-            self.after(0, lambda: self._finish_update_check_error(exc, user_initiated))
+            self.after(0, lambda error=exc, initiated=user_initiated: self._finish_update_check_error(error, initiated))
             return
 
-        self.after(0, lambda: self._handle_update_manifest(manifest, user_initiated))
+        self.after(
+            0,
+            lambda update_manifest=manifest, initiated=user_initiated: self._handle_update_manifest(
+                update_manifest, initiated
+            ),
+        )
 
     def _finish_update_check_error(self, exc: Exception, user_initiated: bool):
         self.update_check_in_progress = False
@@ -323,12 +328,20 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             package_path = download_update_package(
                 manifest,
                 progress_callback=lambda downloaded, total: self.after(
-                    0, lambda: self._report_update_download_progress(manifest["version"], downloaded, total)
+                    0,
+                    lambda version=manifest["version"], current=downloaded, total_bytes=total: (
+                        self._report_update_download_progress(version, current, total_bytes)
+                    ),
                 ),
             )
-            self.after(0, lambda: self._finish_update_download(package_path, manifest))
+            self.after(
+                0,
+                lambda downloaded_package=package_path, update_manifest=manifest: self._finish_update_download(
+                    downloaded_package, update_manifest
+                ),
+            )
         except Exception as exc:
-            self.after(0, lambda: self._finish_update_download_error(exc))
+            self.after(0, lambda error=exc: self._finish_update_download_error(error))
 
     def _report_update_download_progress(self, version: str, downloaded: int, total: int):
         if total > 0:
