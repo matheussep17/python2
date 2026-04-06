@@ -17,3 +17,38 @@ Como testar rapidamente:
 Observações:
 - O backend usa `yt-dlp` para downloads (já compatível com Instagram). Alguns formatos podem requerer um runtime JS (veja warnings do `yt-dlp`).
 - Se quiser, crio um changelog mais detalhado e faço o push para o repositório remoto.
+
+## Auto-update
+
+O app agora pode verificar atualizações automaticamente no executável Windows.
+
+Configuração:
+
+1. Faça a build normalmente.
+2. Crie uma GitHub Release no repositório.
+3. Anexe o arquivo `Igreja.exe` na release.
+4. Use uma tag de versão como `v1.0.1`.
+
+No `config.json`, o fluxo com GitHub Releases usa:
+
+```json
+{
+  "github_update_repo": "matheussep17/python2",
+  "github_update_asset_name": "Igreja.exe",
+  "auto_check_updates": true
+}
+```
+
+Se preferir, ainda é possível usar um manifesto externo com `update_manifest_url`.
+
+Exemplo:
+
+```json
+{
+  "version": "1.0.1",
+  "url": "https://seu-servidor.com/downloads/Igreja.exe",
+  "notes": "Melhorias gerais e correcoes."
+}
+```
+
+O app pode checar isso ao abrir e também oferece o botão `Atualizar`.

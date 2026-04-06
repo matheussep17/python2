@@ -1,6 +1,7 @@
 ﻿import os
 import socket
 import sys
+import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox
@@ -19,8 +20,19 @@ from app.frames.baixar_videos import BaixarFrame
 from app.frames.compressor import CompressorFrame
 from app.frames.converter import ConverterFrame
 from app.frames.editor import EditorFrame
+from app.frames.lyrics_search import LyricsSearchFrame
 from app.frames.pdf_editor import PdfEditorFrame
 from app.frames.transcriber import TranscriberFrame
+from app.updater import (
+    UpdateError,
+    can_self_update,
+    download_update_package,
+    fetch_update_manifest,
+    get_current_version,
+    get_update_settings,
+    has_update,
+    schedule_windows_self_replace,
+)
 from app.ui.alerts import install_messagebox_hooks, show_info
 from app.ui.theme import apply_design_system, resolve_ttk_theme
 from app.utils import (
@@ -30,6 +42,7 @@ from app.utils import (
     missing_runtime_requirements,
     runtime_requirement_message,
 )
+from app.version import APP_VERSION
 
 
 class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
@@ -60,12 +73,14 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.nav_bootstyles = {
             "converter": "primary",
             "editor": "danger",
+            "lyrics": "secondary",
             "pdf": "info",
             "compressor": "warning",
             "baixar": "info",
             "transcribe": "success",
         }
         self.nav_buttons = {}
+        self.update_check_in_progress = False
 
         self._apply_window_icon()
         install_messagebox_hooks(self)
@@ -99,6 +114,12 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.theme_box.bind("<<ComboboxSelected>>", self._on_theme_changed)
         ttk.Button(
             top_right,
+            text="Atualizar",
+            bootstyle="info-outline",
+            command=lambda: self.check_for_updates(user_initiated=True),
+        ).pack(side="left", padx=(8, 0))
+        ttk.Button(
+            top_right,
             text="Sobre",
             bootstyle="secondary-outline",
             command=self._open_about,
@@ -114,6 +135,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             ("compressor", "Comprimir", "🗜️"),
             ("converter", "Conversor", "⚙️"),
             ("editor", "Editar mídia", "✂️"),
+            ("lyrics", "Letras", "🎵"),
             ("pdf", "Editar PDF", "📄"),
             ("transcribe", "Transcrição", "📝"),
         ]:
@@ -140,6 +162,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.frames = {
             "converter": ConverterFrame(self.content, self._set_status),
             "editor": EditorFrame(self.content, self._set_status),
+            "lyrics": LyricsSearchFrame(self.content, self._set_status),
             "pdf": PdfEditorFrame(self.content, self._set_status),
             "compressor": CompressorFrame(self.content, self._set_status),
             "baixar": BaixarFrame(self.content, self._set_status),
@@ -156,6 +179,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.bind("<Control-Key-4>", lambda _e: self._show("compressor"))
         self.bind("<Control-Key-5>", lambda _e: self._show("pdf"))
         self.bind("<Control-Key-6>", lambda _e: self._show("transcribe"))
+        self.after(2000, self._schedule_auto_update_check)
 
     def _on_theme_changed(self, _event=None):
         mode = self.theme_mode.get()
@@ -205,6 +229,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         show_info(
             self,
             (
+                f"Versao: {APP_VERSION}\n\n"
                 "Desenvolvido por Matheus Torres para utilizacao na igreja.\n"
                 "Projeto sem fins lucrativos, criado para facilitar o trabalho diario."
             ),
@@ -213,6 +238,133 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
     def _set_status(self, text):
         self.statusbar_var.set(text)
+
+    def _schedule_auto_update_check(self):
+        settings = get_update_settings()
+        if settings.get("auto_check"):
+            self.check_for_updates(user_initiated=False)
+
+    def check_for_updates(self, user_initiated: bool):
+        if self.update_check_in_progress:
+            if user_initiated:
+                messagebox.showinfo("Atualizacao", "Ja existe uma verificacao de atualizacao em andamento.")
+            return
+
+        if not can_self_update():
+            if user_initiated:
+                messagebox.showinfo(
+                    "Atualizacao",
+                    "A atualizacao automatica funciona no executavel Windows gerado pelo build.",
+                )
+            return
+
+        self.update_check_in_progress = True
+        self._set_status("Verificando atualizacoes...")
+        threading.Thread(
+            target=self._check_for_updates_worker,
+            args=(user_initiated,),
+            daemon=True,
+        ).start()
+
+    def _check_for_updates_worker(self, user_initiated: bool):
+        try:
+            manifest = fetch_update_manifest()
+        except Exception as exc:
+            self.after(0, lambda: self._finish_update_check_error(exc, user_initiated))
+            return
+
+        self.after(0, lambda: self._handle_update_manifest(manifest, user_initiated))
+
+    def _finish_update_check_error(self, exc: Exception, user_initiated: bool):
+        self.update_check_in_progress = False
+        self._set_status("Pronto.")
+        if user_initiated:
+            if isinstance(exc, UpdateError):
+                messagebox.showwarning("Atualizacao", str(exc))
+            else:
+                messagebox.showerror("Atualizacao", f"Falha ao verificar atualizacoes:\n{exc}")
+
+    def _handle_update_manifest(self, manifest: dict, user_initiated: bool):
+        self.update_check_in_progress = False
+        if not has_update(manifest):
+            self._set_status("Pronto.")
+            if user_initiated:
+                messagebox.showinfo(
+                    "Atualizacao",
+                    f"Voce ja esta na versao mais recente ({get_current_version()}).",
+                )
+            return
+
+        notes = manifest.get("notes", "").strip()
+        prompt = (
+            f"Versao atual: {get_current_version()}\n"
+            f"Nova versao: {manifest['version']}\n\n"
+            "Deseja baixar e instalar agora?"
+        )
+        if notes:
+            prompt += f"\n\nNovidades:\n{notes}"
+
+        should_install = messagebox.askyesno("Atualizacao disponivel", prompt)
+        if not should_install:
+            self._set_status("Atualizacao adiada.")
+            return
+
+        self.update_check_in_progress = True
+        self._set_status(f"Baixando atualizacao {manifest['version']}...")
+        threading.Thread(
+            target=self._download_and_apply_update_worker,
+            args=(manifest,),
+            daemon=True,
+        ).start()
+
+    def _download_and_apply_update_worker(self, manifest: dict):
+        try:
+            package_path = download_update_package(
+                manifest,
+                progress_callback=lambda downloaded, total: self.after(
+                    0, lambda: self._report_update_download_progress(manifest["version"], downloaded, total)
+                ),
+            )
+            self.after(0, lambda: self._finish_update_download(package_path, manifest))
+        except Exception as exc:
+            self.after(0, lambda: self._finish_update_download_error(exc))
+
+    def _report_update_download_progress(self, version: str, downloaded: int, total: int):
+        if total > 0:
+            percent = int((downloaded / total) * 100)
+            self._set_status(f"Baixando atualizacao {version}... {percent}%")
+        else:
+            self._set_status(f"Baixando atualizacao {version}...")
+
+    def _finish_update_download(self, package_path: Path, manifest: dict):
+        self.update_check_in_progress = False
+        self._set_status("Atualizacao pronta para instalar.")
+
+        confirm = messagebox.askyesno(
+            "Instalar atualizacao",
+            (
+                f"A versao {manifest['version']} foi baixada.\n\n"
+                "O aplicativo sera fechado para concluir a atualizacao.\n"
+                "Deseja continuar agora?"
+            ),
+        )
+        if not confirm:
+            self._set_status("Atualizacao baixada, mas nao instalada.")
+            return
+
+        try:
+            schedule_windows_self_replace(package_path)
+        except Exception as exc:
+            messagebox.showerror("Atualizacao", f"Nao foi possivel iniciar a instalacao:\n{exc}")
+            self._set_status("Falha ao iniciar a atualizacao.")
+            return
+
+        self.destroy()
+
+    def _finish_update_download_error(self, exc: Exception):
+        self.update_check_in_progress = False
+        self._set_status("Falha ao baixar atualizacao.")
+        messagebox.showerror("Atualizacao", f"Falha ao baixar a atualizacao:\n{exc}")
 
     def _apply_window_icon(self):
         if not sys.platform.startswith("win"):

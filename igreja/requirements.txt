@@ -7,3 +7,5 @@ rawpy
 tkinterdnd2
 pypdf
 PyMuPDF
+requests
+beautifulsoup4

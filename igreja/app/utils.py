@@ -1,5 +1,6 @@
 # app/utils.py
 import importlib.util
+import json
 import math
 import os
 import shutil
@@ -62,6 +63,29 @@ def app_base_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parents[1]
+
+
+def app_config_path() -> Path:
+    return app_base_dir() / "config.json"
+
+
+def load_app_config() -> dict:
+    config_path = app_config_path()
+    if not config_path.exists():
+        return {}
+
+    try:
+        with config_path.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def save_app_config(data: dict) -> None:
+    config_path = app_config_path()
+    with config_path.open("w", encoding="utf-8") as file:
+        json.dump(data, file, ensure_ascii=False, indent=2)
 
 
 def _runtime_bundle_dir() -> Path:

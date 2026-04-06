@@ -2,7 +2,6 @@
 import os
 import re
 import sys
-import json
 import queue
 import threading
 import urllib.request
@@ -15,7 +14,7 @@ import tkinter as tk
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
-from app.utils import format_bytes, get_ffmpeg_bin_dir
+from app.utils import format_bytes, get_ffmpeg_bin_dir, load_app_config, save_app_config
 
 
 def app_base_dir() -> Path:
@@ -26,9 +25,6 @@ def app_base_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(os.path.dirname(sys.executable))
     return Path(__file__).resolve().parents[2]  # .../igreja
-
-
-CONFIG_FILE = app_base_dir() / "config.json"
 
 
 class BaixarFrame(ttk.Frame):
@@ -241,19 +237,17 @@ class BaixarFrame(ttk.Frame):
         return self._build_outtmpl(title, fmt_mode, quality_choice)
 
     def load_config(self):
-        if CONFIG_FILE.exists():
-            try:
-                with CONFIG_FILE.open("r", encoding="utf-8") as f:
-                    val = json.load(f).get("destination_folder", "")
-                    return self._normalize_path(val)
-            except Exception:
-                return ""
-        return ""
+        try:
+            val = load_app_config().get("destination_folder", "")
+            return self._normalize_path(val)
+        except Exception:
+            return ""
 
     def save_config(self):
         try:
-            with CONFIG_FILE.open("w", encoding="utf-8") as f:
-                json.dump({"destination_folder": self.destination_folder}, f, ensure_ascii=False, indent=2)
+            config = load_app_config()
+            config["destination_folder"] = self.destination_folder
+            save_app_config(config)
         except Exception as e:
             try:
                 self.on_status(f"Aviso: não foi possível salvar a configuração ({e})")
