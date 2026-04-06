@@ -15,6 +15,8 @@ UPDATE_CONFIG_KEY = "update_manifest_url"
 AUTO_UPDATE_CONFIG_KEY = "auto_check_updates"
 GITHUB_REPO_CONFIG_KEY = "github_update_repo"
 GITHUB_ASSET_NAME_CONFIG_KEY = "github_update_asset_name"
+DEFAULT_GITHUB_UPDATE_REPO = "matheussep17/python2"
+DEFAULT_GITHUB_UPDATE_ASSET_NAME = f"{APP_NAME}.exe"
 
 
 class UpdateError(Exception):
@@ -26,8 +28,10 @@ def get_update_settings() -> dict:
     return {
         "manifest_url": str(config.get(UPDATE_CONFIG_KEY, "") or "").strip(),
         "auto_check": bool(config.get(AUTO_UPDATE_CONFIG_KEY, True)),
-        "github_repo": str(config.get(GITHUB_REPO_CONFIG_KEY, "") or "").strip(),
-        "github_asset_name": str(config.get(GITHUB_ASSET_NAME_CONFIG_KEY, f"{APP_NAME}.exe") or "").strip(),
+        "github_repo": str(config.get(GITHUB_REPO_CONFIG_KEY, DEFAULT_GITHUB_UPDATE_REPO) or "").strip(),
+        "github_asset_name": str(
+            config.get(GITHUB_ASSET_NAME_CONFIG_KEY, DEFAULT_GITHUB_UPDATE_ASSET_NAME) or ""
+        ).strip(),
     }
 
 
@@ -60,9 +64,7 @@ def fetch_update_manifest(timeout: int = 8) -> dict:
     if github_repo:
         return _fetch_manifest_from_github_release(github_repo, github_asset_name, timeout)
 
-    raise UpdateError(
-        "Configure 'update_manifest_url' ou 'github_update_repo' no config.json para usar o auto-update."
-    )
+    raise UpdateError("Nao foi possivel localizar uma configuracao valida para o auto-update.")
 
 
 def _fetch_manifest_from_url(manifest_url: str, timeout: int) -> dict:
