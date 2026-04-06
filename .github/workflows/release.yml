@@ -30,6 +30,33 @@ jobs:
         shell: pwsh
         run: python -m venv .buildvenv
 
+      - name: Download FFmpeg for packaging
+        shell: pwsh
+        run: |
+          $ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+          $zipPath = Join-Path $env:RUNNER_TEMP "ffmpeg-release-essentials.zip"
+          $extractPath = Join-Path $env:RUNNER_TEMP "ffmpeg-extract"
+          $targetDir = Join-Path (Get-Location) "vendor\ffmpeg\bin"
+
+          Invoke-WebRequest -Uri $ffmpegUrl -OutFile $zipPath
+
+          if (Test-Path -LiteralPath $extractPath) {
+            Remove-Item -LiteralPath $extractPath -Recurse -Force
+          }
+
+          Expand-Archive -LiteralPath $zipPath -DestinationPath $extractPath -Force
+
+          $ffmpegExe = Get-ChildItem -Path $extractPath -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
+          $ffprobeExe = Get-ChildItem -Path $extractPath -Recurse -Filter "ffprobe.exe" | Select-Object -First 1
+
+          if (-not $ffmpegExe -or -not $ffprobeExe) {
+            throw "Nao encontrei ffmpeg.exe e ffprobe.exe no pacote baixado."
+          }
+
+          New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+          Copy-Item -LiteralPath $ffmpegExe.FullName -Destination (Join-Path $targetDir "ffmpeg.exe") -Force
+          Copy-Item -LiteralPath $ffprobeExe.FullName -Destination (Join-Path $targetDir "ffprobe.exe") -Force
+
       - name: Build executable
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\build.ps1

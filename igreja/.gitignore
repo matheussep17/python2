@@ -14,7 +14,6 @@ __pycache__/
 venv/
 .venv/
 .buildvenv/
-build.ps1
 
 # Local FFmpeg binaries for packaging
 vendor/ffmpeg/bin/
