@@ -29,7 +29,6 @@ from app.updater import (
     download_update_package,
     fetch_update_manifest,
     get_current_version,
-    get_update_settings,
     has_update,
     schedule_windows_self_replace,
 )
@@ -39,6 +38,9 @@ from app.utils import (
     HAS_DND,
     TkinterDnD,
     configure_runtime_environment,
+    download_and_install_ffmpeg,
+    ffmpeg_vendor_bin_dir,
+    get_ffmpeg_download_url,
     missing_runtime_requirements,
     runtime_requirement_message,
 )
@@ -179,7 +181,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.bind("<Control-Key-4>", lambda _e: self._show("compressor"))
         self.bind("<Control-Key-5>", lambda _e: self._show("pdf"))
         self.bind("<Control-Key-6>", lambda _e: self._show("transcribe"))
-        self.after(2000, self._schedule_auto_update_check)
+        self.after(500, self._schedule_startup_update_check)
 
     def _on_theme_changed(self, _event=None):
         mode = self.theme_mode.get()
@@ -239,9 +241,8 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
     def _set_status(self, text):
         self.statusbar_var.set(text)
 
-    def _schedule_auto_update_check(self):
-        settings = get_update_settings()
-        if settings.get("auto_check"):
+    def _schedule_startup_update_check(self):
+        if can_self_update():
             self.check_for_updates(user_initiated=False)
 
     def check_for_updates(self, user_initiated: bool):
@@ -400,6 +401,57 @@ def single_instance_or_exit(port=54321):
     return sock
 
 
+def _try_recover_missing_ffmpeg(root, missing: list[str]) -> bool:
+    missing_set = set(missing)
+    ffmpeg_missing = {"ffmpeg", "ffprobe"}
+    if not missing_set.intersection(ffmpeg_missing):
+        return False
+
+    remaining = [item for item in missing if item not in ffmpeg_missing]
+    if remaining:
+        return False
+
+    download_url = get_ffmpeg_download_url()
+    if not download_url:
+        return False
+
+    install_dir = ffmpeg_vendor_bin_dir()
+    should_install = messagebox.askyesno(
+        "FFmpeg ausente",
+        (
+            "O aplicativo precisa do FFmpeg para iniciar.\n\n"
+            "Deseja baixar e instalar automaticamente agora?\n\n"
+            f"Destino: {install_dir}"
+        ),
+        parent=root,
+    )
+    if not should_install:
+        return False
+
+    try:
+        messagebox.showinfo(
+            "Baixando FFmpeg",
+            "O download do FFmpeg vai iniciar agora. Isso pode levar alguns segundos.",
+            parent=root,
+        )
+        download_and_install_ffmpeg(download_url)
+        configure_runtime_environment()
+    except Exception as exc:
+        messagebox.showerror(
+            "Falha ao instalar FFmpeg",
+            f"Nao foi possivel instalar o FFmpeg automaticamente.\n\n{exc}",
+            parent=root,
+        )
+        return False
+
+    messagebox.showinfo(
+        "FFmpeg instalado",
+        "O FFmpeg foi instalado com sucesso. O aplicativo vai continuar a abertura.",
+        parent=root,
+    )
+    return True
+
+
 def main():
     configure_runtime_environment()
     missing, runtime = missing_runtime_requirements()
@@ -407,11 +459,17 @@ def main():
         try:
             root = tk.Tk()
             root.withdraw()
-            messagebox.showerror("Dependencias ausentes", runtime_requirement_message(missing, runtime))
+            if _try_recover_missing_ffmpeg(root, missing):
+                missing, runtime = missing_runtime_requirements()
+
+            if missing:
+                messagebox.showerror("Dependencias ausentes", runtime_requirement_message(missing, runtime))
             root.destroy()
         except Exception:
             pass
-        sys.exit(1)
+
+        if missing:
+            sys.exit(1)
 
     _lock = single_instance_or_exit()
     app = SuperApp()

@@ -6,7 +6,16 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+import zipfile
 from pathlib import Path
+
+import requests
+
+
+FFMPEG_DOWNLOAD_URL_KEY = "ffmpeg_download_url"
+DEFAULT_FFMPEG_DOWNLOAD_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+
 
 def _has_module(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
@@ -88,6 +97,11 @@ def save_app_config(data: dict) -> None:
         json.dump(data, file, ensure_ascii=False, indent=2)
 
 
+def get_ffmpeg_download_url() -> str:
+    config = load_app_config()
+    return str(config.get(FFMPEG_DOWNLOAD_URL_KEY, DEFAULT_FFMPEG_DOWNLOAD_URL) or "").strip()
+
+
 def _runtime_bundle_dir() -> Path:
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:
@@ -149,6 +163,68 @@ def get_ffmpeg_bin_dir():
     return str(Path(ffmpeg_path).resolve().parent)
 
 
+def ffmpeg_vendor_bin_dir() -> Path:
+    return app_base_dir() / "vendor" / "ffmpeg" / "bin"
+
+
+def download_and_install_ffmpeg(package_url: str | None = None, progress_callback=None) -> Path:
+    if not sys.platform.startswith("win"):
+        raise RuntimeError("A instalacao automatica do FFmpeg esta disponivel apenas no Windows.")
+
+    package_url = str(package_url or get_ffmpeg_download_url()).strip()
+    if not package_url:
+        raise RuntimeError("Configure 'ffmpeg_download_url' no config.json para baixar o FFmpeg automaticamente.")
+
+    download_dir = Path(tempfile.mkdtemp(prefix="igreja-ffmpeg-download-"))
+    package_path = download_dir / "ffmpeg.zip"
+    extract_dir = download_dir / "extract"
+    target_dir = ffmpeg_vendor_bin_dir()
+
+    response = requests.get(package_url, stream=True, timeout=30)
+    response.raise_for_status()
+
+    total_bytes = int(response.headers.get("content-length", "0") or "0")
+    downloaded_bytes = 0
+
+    with package_path.open("wb") as file:
+        for chunk in response.iter_content(chunk_size=1024 * 256):
+            if not chunk:
+                continue
+            file.write(chunk)
+            downloaded_bytes += len(chunk)
+            if progress_callback:
+                progress_callback(downloaded_bytes, total_bytes)
+
+    with zipfile.ZipFile(package_path) as archive:
+        ffmpeg_member = _find_zip_member(archive, "ffmpeg.exe")
+        ffprobe_member = _find_zip_member(archive, "ffprobe.exe")
+
+        if not ffmpeg_member or not ffprobe_member:
+            raise RuntimeError("O pacote baixado nao contem ffmpeg.exe e ffprobe.exe.")
+
+        archive.extract(ffmpeg_member, path=extract_dir)
+        archive.extract(ffprobe_member, path=extract_dir)
+
+    extracted_ffmpeg = extract_dir / Path(ffmpeg_member)
+    extracted_ffprobe = extract_dir / Path(ffprobe_member)
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(extracted_ffmpeg, target_dir / "ffmpeg.exe")
+    shutil.copyfile(extracted_ffprobe, target_dir / "ffprobe.exe")
+
+    return target_dir
+
+
+def _find_zip_member(archive: zipfile.ZipFile, filename: str) -> str | None:
+    expected = filename.lower()
+    for member in archive.namelist():
+        if member.endswith("/"):
+            continue
+        if Path(member).name.lower() == expected:
+            return member
+    return None
+
+
 def configure_runtime_environment():
     ffmpeg_bin = get_ffmpeg_bin_dir()
     if not ffmpeg_bin:
@@ -204,6 +280,7 @@ def missing_runtime_requirements():
 
 def runtime_requirement_message(missing, runtime=None):
     runtime = runtime or {}
+    config = load_app_config()
     lines = [
         "O aplicativo nao conseguiu preparar o ambiente necessario para iniciar.",
         "",
@@ -219,9 +296,11 @@ def runtime_requirement_message(missing, runtime=None):
         else:
             lines.append("")
             lines.append(f"Coloque ffmpeg.exe e ffprobe.exe em: {expected_dir}")
+            if str(config.get(FFMPEG_DOWNLOAD_URL_KEY, "") or "").strip():
+                lines.append("Ou configure o download automatico do FFmpeg no primeiro inicio.")
 
     lines.append("")
-    lines.append("Recompile o executavel depois de ajustar os arquivos necessarios.")
+    lines.append("Ajuste os arquivos necessarios e abra o aplicativo novamente.")
     return "\n".join(lines)
 
 def seconds_to_hms(s):

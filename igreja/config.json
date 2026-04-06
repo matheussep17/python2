@@ -3,5 +3,6 @@
   "update_manifest_url": "",
   "github_update_repo": "matheussep17/python2",
   "github_update_asset_name": "Igreja.exe",
-  "auto_check_updates": true
+  "auto_check_updates": true,
+  "ffmpeg_download_url": "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
 }
