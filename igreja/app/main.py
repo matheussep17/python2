@@ -72,14 +72,6 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             self.style = ttk.Style()
 
         self.theme_mode = tk.StringVar(value=initial_mode)
-        self.nav_bootstyles = {
-            "converter": "primary",
-            "editor": "danger",
-            "pdf": "info",
-            "compressor": "warning",
-            "baixar": "info",
-            "transcribe": "success",
-        }
         self.nav_buttons = {}
         self.update_check_in_progress = False
 
@@ -222,12 +214,8 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
     def _update_nav_appearance(self, active_key):
         for key, btn in self.nav_buttons.items():
-            if key == "lyrics":
-                btn.configure(style="Lyrics.Active.Nav.TButton" if key == active_key else "Lyrics.Nav.TButton")
-                continue
-            color = self.nav_bootstyles.get(key, "secondary")
-            bootstyle = color if key == active_key else f"{color}-outline"
-            btn.configure(style="Nav.TButton", bootstyle=bootstyle)
+            style_name = f"{key}.Active.Nav.TButton" if key == active_key else f"{key}.Nav.TButton"
+            btn.configure(style=style_name)
 
     def _open_about(self):
         show_info(

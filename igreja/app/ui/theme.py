@@ -14,7 +14,15 @@ THEME_PROFILES = {
         "title_fg": "#E2E8F0",
         "subtitle_fg": "#94A3B8",
         "muted_fg": "#9CA3AF",
-        "lyrics_accent": "#E879F9",
+        "nav_accents": {
+            "baixar": "#38BDF8",
+            "compressor": "#F59E0B",
+            "converter": "#60A5FA",
+            "editor": "#FB7185",
+            "lyrics": "#E879F9",
+            "pdf": "#22D3EE",
+            "transcribe": "#34D399",
+        },
     },
     "Claro": {
         "ttk_theme": "litera",
@@ -26,9 +34,28 @@ THEME_PROFILES = {
         "title_fg": "#0F172A",
         "subtitle_fg": "#334155",
         "muted_fg": "#64748B",
-        "lyrics_accent": "#BE185D",
+        "nav_accents": {
+            "baixar": "#0284C7",
+            "compressor": "#D97706",
+            "converter": "#2563EB",
+            "editor": "#DC2626",
+            "lyrics": "#BE185D",
+            "pdf": "#0891B2",
+            "transcribe": "#059669",
+        },
     },
 }
+
+
+NAV_STYLE_KEYS = (
+    "baixar",
+    "compressor",
+    "converter",
+    "editor",
+    "lyrics",
+    "pdf",
+    "transcribe",
+)
 
 
 def resolve_mode(mode: str | None) -> str:
@@ -89,40 +116,42 @@ def apply_design_system(window, style, mode: str | None) -> None:
     style.configure("TButton", font=("Segoe UI", 11, "bold"), padding=(12, 8))
     # Keep navigation buttons compact and consistently spaced.
     style.configure("Nav.TButton", font=("Segoe UI", 11, "bold"), padding=(10, 8), anchor="w")
-    style.configure(
-        "Lyrics.Nav.TButton",
-        font=("Segoe UI", 11, "bold"),
-        padding=(10, 8),
-        anchor="w",
-        foreground=profile["lyrics_accent"],
-        background=profile["side_bg"],
-        bordercolor=profile["lyrics_accent"],
-        darkcolor=profile["side_bg"],
-        lightcolor=profile["side_bg"],
-    )
-    style.map(
-        "Lyrics.Nav.TButton",
-        foreground=[("pressed", profile["lyrics_accent"]), ("active", profile["lyrics_accent"])],
-        background=[("pressed", profile["side_bg"]), ("active", profile["side_bg"])],
-        bordercolor=[("pressed", profile["lyrics_accent"]), ("active", profile["lyrics_accent"])],
-    )
-    style.configure(
-        "Lyrics.Active.Nav.TButton",
-        font=("Segoe UI", 11, "bold"),
-        padding=(10, 8),
-        anchor="w",
-        foreground="#FFFFFF",
-        background=profile["lyrics_accent"],
-        bordercolor=profile["lyrics_accent"],
-        darkcolor=profile["lyrics_accent"],
-        lightcolor=profile["lyrics_accent"],
-    )
-    style.map(
-        "Lyrics.Active.Nav.TButton",
-        foreground=[("pressed", "#FFFFFF"), ("active", "#FFFFFF")],
-        background=[("pressed", profile["lyrics_accent"]), ("active", profile["lyrics_accent"])],
-        bordercolor=[("pressed", profile["lyrics_accent"]), ("active", profile["lyrics_accent"])],
-    )
+    for key in NAV_STYLE_KEYS:
+        accent = profile["nav_accents"][key]
+        style.configure(
+            f"{key}.Nav.TButton",
+            font=("Segoe UI", 11, "bold"),
+            padding=(10, 8),
+            anchor="w",
+            foreground=accent,
+            background=profile["side_bg"],
+            bordercolor=accent,
+            darkcolor=profile["side_bg"],
+            lightcolor=profile["side_bg"],
+        )
+        style.map(
+            f"{key}.Nav.TButton",
+            foreground=[("pressed", accent), ("active", accent)],
+            background=[("pressed", profile["side_bg"]), ("active", profile["side_bg"])],
+            bordercolor=[("pressed", accent), ("active", accent)],
+        )
+        style.configure(
+            f"{key}.Active.Nav.TButton",
+            font=("Segoe UI", 11, "bold"),
+            padding=(10, 8),
+            anchor="w",
+            foreground="#FFFFFF",
+            background=accent,
+            bordercolor=accent,
+            darkcolor=accent,
+            lightcolor=accent,
+        )
+        style.map(
+            f"{key}.Active.Nav.TButton",
+            foreground=[("pressed", "#FFFFFF"), ("active", "#FFFFFF")],
+            background=[("pressed", accent), ("active", accent)],
+            bordercolor=[("pressed", accent), ("active", accent)],
+        )
     style.configure("TEntry", font=("Segoe UI", 11), padding=8)
     style.configure("TCombobox", font=("Segoe UI", 11), padding=6)
     style.configure("Horizontal.TProgressbar", thickness=10)
