@@ -77,6 +77,7 @@ def _fetch_manifest_from_url(manifest_url: str, timeout: int) -> dict:
     version = str(payload.get("version", "") or "").strip()
     download_url = str(payload.get("url", "") or "").strip()
     notes = str(payload.get("notes", "") or "").strip()
+    expected_size = int(payload.get("size", 0) or 0)
 
     if not version or not download_url:
         raise UpdateError("O manifesto precisa conter 'version' e 'url'.")
@@ -85,6 +86,7 @@ def _fetch_manifest_from_url(manifest_url: str, timeout: int) -> dict:
         "version": version,
         "url": download_url,
         "notes": notes,
+        "size": expected_size,
         "mandatory": bool(payload.get("mandatory", False)),
     }
 
@@ -133,6 +135,7 @@ def _fetch_manifest_from_github_release(repo: str, asset_name: str, timeout: int
         "version": version,
         "url": download_url,
         "notes": notes,
+        "size": int(selected_asset.get("size", 0) or 0),
         "mandatory": False,
         "source": f"github:{repo}",
     }
@@ -160,6 +163,22 @@ def download_update_package(manifest: dict, progress_callback=None) -> Path:
             if progress_callback:
                 progress_callback(downloaded_bytes, total_bytes)
 
+    expected_size = int(manifest.get("size", 0) or 0)
+    if expected_size > 0 and downloaded_bytes != expected_size:
+        raise UpdateError(
+            "O download da atualizacao ficou incompleto. "
+            f"Esperado: {expected_size} bytes. Baixado: {downloaded_bytes} bytes."
+        )
+
+    if total_bytes > 0 and downloaded_bytes != total_bytes:
+        raise UpdateError(
+            "O servidor informou um tamanho diferente do arquivo baixado. "
+            f"Esperado: {total_bytes} bytes. Baixado: {downloaded_bytes} bytes."
+        )
+
+    if downloaded_bytes <= 0:
+        raise UpdateError("O arquivo de atualizacao foi baixado vazio.")
+
     return package_path
 
 
@@ -174,6 +193,8 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
     source_path = str(downloaded_exe)
     target_path = str(current_exe)
     target_dir = str(app_dir)
+    target_new_path = str(current_exe.with_suffix(".new.exe"))
+    target_backup_path = str(current_exe.with_suffix(".previous.exe"))
 
     script = "\n".join(
         [
@@ -183,17 +204,27 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             f'set "SOURCE={source_path}"',
             f'set "TARGET={target_path}"',
             f'set "TARGET_DIR={target_dir}"',
+            f'set "TARGET_NEW={target_new_path}"',
+            f'set "TARGET_BACKUP={target_backup_path}"',
             ":wait_exit",
             'tasklist /FI "PID eq %APP_PID%" 2>nul | find "%APP_PID%" >nul',
             "if not errorlevel 1 (",
             "  timeout /t 1 /nobreak >nul",
             "  goto wait_exit",
             ")",
+            'del /Q "%TARGET_NEW%" >nul 2>&1',
             "for /L %%I in (1,1,90) do (",
-            '  move /Y "%SOURCE%" "%TARGET%" >nul 2>&1 && goto launch',
+            '  copy /Y "%SOURCE%" "%TARGET_NEW%" >nul 2>&1 && goto prepare_swap',
             "  timeout /t 1 /nobreak >nul",
             ")",
             "exit /b 1",
+            ":prepare_swap",
+            'for %%F in ("%SOURCE%") do set "SOURCE_SIZE=%%~zF"',
+            'for %%F in ("%TARGET_NEW%") do set "TARGET_NEW_SIZE=%%~zF"',
+            'if not "%SOURCE_SIZE%"=="%TARGET_NEW_SIZE%" exit /b 2',
+            'del /Q "%TARGET_BACKUP%" >nul 2>&1',
+            'move /Y "%TARGET%" "%TARGET_BACKUP%" >nul 2>&1 || exit /b 3',
+            'move /Y "%TARGET_NEW%" "%TARGET%" >nul 2>&1 || (move /Y "%TARGET_BACKUP%" "%TARGET%" >nul 2>&1 & exit /b 4)',
             ":launch",
             'start "" /D "%TARGET_DIR%" "%TARGET%"',
             ":cleanup",
