@@ -173,7 +173,7 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
     current_pid = os.getpid()
     source_path = str(downloaded_exe)
     target_path = str(current_exe)
-    start_path = str(current_exe)
+    target_dir = str(app_dir)
 
     script = "\n".join(
         [
@@ -182,6 +182,7 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             f'set "APP_PID={current_pid}"',
             f'set "SOURCE={source_path}"',
             f'set "TARGET={target_path}"',
+            f'set "TARGET_DIR={target_dir}"',
             ":wait_exit",
             'tasklist /FI "PID eq %APP_PID%" 2>nul | find "%APP_PID%" >nul',
             "if not errorlevel 1 (",
@@ -189,17 +190,12 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             "  goto wait_exit",
             ")",
             "for /L %%I in (1,1,90) do (",
-            '  copy /Y "%SOURCE%" "%TARGET%" >nul 2>&1 && goto launch',
+            '  move /Y "%SOURCE%" "%TARGET%" >nul 2>&1 && goto launch',
             "  timeout /t 1 /nobreak >nul",
             ")",
             "exit /b 1",
             ":launch",
-            "for /L %%I in (1,1,15) do (",
-            f'  start "" "{start_path}"',
-            "  timeout /t 1 /nobreak >nul",
-            '  tasklist /FI "PID eq %APP_PID%" 2>nul | find "%APP_PID%" >nul',
-            "  if errorlevel 1 goto cleanup",
-            ")",
+            'start "" /D "%TARGET_DIR%" "%TARGET%"',
             ":cleanup",
             'del /Q "%SOURCE%" >nul 2>&1',
             'del /Q "%~f0" >nul 2>&1',

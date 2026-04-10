@@ -176,16 +176,44 @@ def ask_yes_no(parent, message: str, title: str = "Confirmacao") -> bool:
         )
         body.pack(fill="x")
 
-        btns = ttk.Frame(card)
+        btns = tk.Frame(card, bg=palette["surface"], bd=0, highlightthickness=0)
         btns.pack(anchor="e", pady=(2, 0))
 
         def _set_and_close(value: bool):
             result["value"] = value
             dlg.destroy()
 
-        no_btn = ttk.Button(btns, text="Nao", bootstyle="secondary", command=lambda: _set_and_close(False))
+        no_btn = tk.Button(
+            btns,
+            text="Nao",
+            command=lambda: _set_and_close(False),
+            bg=palette["shell"],
+            fg=palette["title"],
+            activebackground=palette["shell"],
+            activeforeground=palette["title"],
+            relief="flat",
+            padx=16,
+            pady=6,
+            bd=0,
+            highlightthickness=0,
+            cursor="hand2",
+        )
         no_btn.pack(side="right")
-        yes_btn = ttk.Button(btns, text="Sim", bootstyle="success", command=lambda: _set_and_close(True))
+        yes_btn = tk.Button(
+            btns,
+            text="Sim",
+            command=lambda: _set_and_close(True),
+            bg="#16A34A",
+            fg="#FFFFFF",
+            activebackground="#15803D",
+            activeforeground="#FFFFFF",
+            relief="flat",
+            padx=16,
+            pady=6,
+            bd=0,
+            highlightthickness=0,
+            cursor="hand2",
+        )
         yes_btn.pack(side="right", padx=(0, 8))
 
         dlg.bind("<Escape>", lambda _e: _set_and_close(False))
