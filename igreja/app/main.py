@@ -30,7 +30,7 @@ from app.updater import (
     fetch_update_manifest,
     get_current_version,
     has_update,
-    schedule_windows_self_replace,
+    persist_update_package,
 )
 from app.ui.alerts import install_messagebox_hooks, show_info
 from app.ui.theme import apply_design_system, resolve_ttk_theme
@@ -346,29 +346,23 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.update_check_in_progress = False
         self._set_status("Atualizacao pronta para instalar.")
 
-        confirm = messagebox.askyesno(
-            "Instalar atualizacao",
+        try:
+            saved_package = persist_update_package(package_path, manifest["version"])
+        except Exception as exc:
+            messagebox.showerror("Atualizacao", f"Nao foi possivel preparar a atualizacao:\n{exc}")
+            self._set_status("Falha ao preparar a atualizacao.")
+            return
+
+        self._set_status("Atualizacao baixada. Instale manualmente a nova versao.")
+        messagebox.showinfo(
+            "Atualizacao pronta",
             (
-                f"A versao {manifest['version']} foi baixada.\n\n"
-                "Para concluir a atualizacao com seguranca, o aplicativo sera fechado agora.\n"
-                "Assim que ele encerrar, a nova versao sera preparada automaticamente em segundo plano.\n\n"
-                "Depois, abra o aplicativo novamente manualmente.\n\n"
-                "Deseja fechar e concluir a atualizacao agora?"
+                f"A versao {manifest['version']} foi baixada com sucesso.\n\n"
+                "Para evitar erro no fechamento, o aplicativo atual nao sera substituido automaticamente.\n"
+                "Quando quiser atualizar, feche o app e execute este arquivo manualmente:\n\n"
+                f"{saved_package}"
             ),
         )
-        if not confirm:
-            self._set_status("Atualizacao baixada, mas nao instalada.")
-            return
-
-        try:
-            schedule_windows_self_replace(package_path)
-        except Exception as exc:
-            messagebox.showerror("Atualizacao", f"Nao foi possivel iniciar a instalacao:\n{exc}")
-            self._set_status("Falha ao iniciar a atualizacao.")
-            return
-
-        self._set_status("Fechando para concluir a atualizacao...")
-        self.destroy()
 
     def _finish_update_download_error(self, exc: Exception):
         self.update_check_in_progress = False

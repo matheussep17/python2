@@ -211,27 +211,58 @@ class BaixarFrame(ttk.Frame):
         reserved_path = self._next_available_path(self.destination_folder, stem, final_ext)
         return f"{os.path.splitext(reserved_path)[0]}.%(ext)s", reserved_path
 
-    def _resolve_download_target(self, url, fmt_mode, quality_choice):
+    def _probe_media_info(self, url):
         y = self._yt_dlp
-        probe_opts = {
-            "quiet": True,
-            "skip_download": True,
-            "noplaylist": True,
-            "extract_flat": False,
-            "socket_timeout": 60,
-            "retries": 5,
-            "fragment_retries": 5,
-            "skip_unavailable_fragments": True,
-            "extractor_args": {"youtube": {"js_runtimes": ["node", "deno"]}},
-            "extractor_sleep_json": {"youtube": 2},
-        }
-        with y.YoutubeDL(probe_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
+        attempts = [
+            {
+                "quiet": True,
+                "skip_download": True,
+                "noplaylist": True,
+                "extract_flat": False,
+                "socket_timeout": 60,
+                "retries": 5,
+                "fragment_retries": 5,
+                "skip_unavailable_fragments": True,
+                "extractor_args": {"youtube": {"js_runtimes": ["node", "deno"]}},
+                "extractor_sleep_json": {"youtube": 2},
+            },
+            {
+                "quiet": True,
+                "skip_download": True,
+                "noplaylist": True,
+                "extract_flat": False,
+                "socket_timeout": 60,
+                "retries": 3,
+                "fragment_retries": 3,
+                "skip_unavailable_fragments": True,
+            },
+        ]
+
+        last_error = None
+        for probe_opts in attempts:
+            try:
+                with y.YoutubeDL(probe_opts) as ydl:
+                    return ydl.extract_info(url, download=False)
+            except Exception as exc:
+                last_error = exc
+
+        if last_error:
+            raise last_error
+        return {}
+
+    def _resolve_download_target(self, url, fmt_mode, quality_choice):
+        try:
+            info = self._probe_media_info(url)
+        except Exception:
+            info = {}
 
         title = (
             (info or {}).get("title")
             or (info or {}).get("fulltitle")
+            or (info or {}).get("track")
+            or (info or {}).get("alt_title")
             or (info or {}).get("id")
+            or self._sanitize_filename(self.url_title_var.get()).replace("_", " ")
             or "download"
         )
         return self._build_outtmpl(title, fmt_mode, quality_choice)
@@ -306,20 +337,16 @@ class BaixarFrame(ttk.Frame):
         try:
             import yt_dlp
 
-            ydl_opts = {
-                "quiet": True,
-                "skip_download": True,
-                "noplaylist": True,
-                "socket_timeout": 60,
-                "retries": 5,
-                "fragment_retries": 5,
-                "extractor_args": {"youtube": {"js_runtimes": ["node", "deno"]}},
-                "extractor_sleep_json": {"youtube": 2},
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
+            self._yt_dlp = yt_dlp
+            info = self._probe_media_info(url)
 
-            title = (info or {}).get("title") or "(sem título)"
+            title = (
+                (info or {}).get("title")
+                or (info or {}).get("fulltitle")
+                or (info or {}).get("track")
+                or (info or {}).get("alt_title")
+                or "(sem título)"
+            )
             self._queue_event("preview_title", title)
 
             # também tenta obter thumbnail

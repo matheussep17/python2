@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -180,6 +181,25 @@ def download_update_package(manifest: dict, progress_callback=None) -> Path:
         raise UpdateError("O arquivo de atualizacao foi baixado vazio.")
 
     return package_path
+
+
+def persist_update_package(downloaded_exe: Path, version: str) -> Path:
+    target_dir = app_base_dir() / "updates"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / f"{APP_NAME}-{version}.exe"
+
+    if target_path.exists():
+        try:
+            target_path.unlink()
+        except Exception as exc:
+            raise UpdateError(f"Nao foi possivel substituir o pacote de atualizacao existente:\n{exc}") from exc
+
+    try:
+        shutil.move(str(downloaded_exe), str(target_path))
+    except Exception as exc:
+        raise UpdateError(f"Nao foi possivel salvar a atualizacao para instalacao manual:\n{exc}") from exc
+
+    return target_path
 
 
 def schedule_windows_self_replace(downloaded_exe: Path) -> None:
