@@ -295,7 +295,9 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         prompt = (
             f"Versao atual: {get_current_version()}\n"
             f"Nova versao: {manifest['version']}\n\n"
-            "Deseja baixar e instalar agora?"
+            "A atualizacao sera baixada agora e aplicada quando o aplicativo for fechado.\n"
+            "Depois disso, basta abrir o app novamente normalmente.\n\n"
+            "Deseja continuar?"
         )
         if notes:
             prompt += f"\n\nNovidades:\n{notes}"
@@ -348,8 +350,10 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             "Instalar atualizacao",
             (
                 f"A versao {manifest['version']} foi baixada.\n\n"
-                "O aplicativo sera fechado para concluir a atualizacao.\n"
-                "Deseja continuar agora?"
+                "Para concluir a atualizacao com seguranca, o aplicativo sera fechado agora.\n"
+                "Assim que ele encerrar, a nova versao sera preparada automaticamente em segundo plano.\n\n"
+                "Depois, abra o aplicativo novamente manualmente.\n\n"
+                "Deseja fechar e concluir a atualizacao agora?"
             ),
         )
         if not confirm:
@@ -363,6 +367,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             self._set_status("Falha ao iniciar a atualizacao.")
             return
 
+        self._set_status("Fechando para concluir a atualizacao...")
         self.destroy()
 
     def _finish_update_download_error(self, exc: Exception):

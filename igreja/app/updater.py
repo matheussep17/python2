@@ -225,8 +225,6 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             'del /Q "%TARGET_BACKUP%" >nul 2>&1',
             'move /Y "%TARGET%" "%TARGET_BACKUP%" >nul 2>&1 || exit /b 3',
             'move /Y "%TARGET_NEW%" "%TARGET%" >nul 2>&1 || (move /Y "%TARGET_BACKUP%" "%TARGET%" >nul 2>&1 & exit /b 4)',
-            ":launch",
-            'start "" /D "%TARGET_DIR%" "%TARGET%"',
             ":cleanup",
             'del /Q "%SOURCE%" >nul 2>&1',
             'del /Q "%~f0" >nul 2>&1',
