@@ -170,6 +170,7 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
     current_exe = Path(sys.executable).resolve()
     app_dir = current_exe.parent
     script_path = Path(tempfile.gettempdir()) / f"igreja-update-{os.getpid()}.cmd"
+    current_pid = os.getpid()
     source_path = str(downloaded_exe)
     target_path = str(current_exe)
     start_path = str(current_exe)
@@ -178,15 +179,28 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
         [
             "@echo off",
             "setlocal",
+            f'set "APP_PID={current_pid}"',
             f'set "SOURCE={source_path}"',
             f'set "TARGET={target_path}"',
+            ":wait_exit",
+            'tasklist /FI "PID eq %APP_PID%" 2>nul | find "%APP_PID%" >nul',
+            "if not errorlevel 1 (",
+            "  timeout /t 1 /nobreak >nul",
+            "  goto wait_exit",
+            ")",
             "for /L %%I in (1,1,90) do (",
             '  copy /Y "%SOURCE%" "%TARGET%" >nul 2>&1 && goto launch',
             "  timeout /t 1 /nobreak >nul",
             ")",
             "exit /b 1",
             ":launch",
-            f'start "" "{start_path}"',
+            "for /L %%I in (1,1,15) do (",
+            f'  start "" "{start_path}"',
+            "  timeout /t 1 /nobreak >nul",
+            '  tasklist /FI "PID eq %APP_PID%" 2>nul | find "%APP_PID%" >nul',
+            "  if errorlevel 1 goto cleanup",
+            ")",
+            ":cleanup",
             'del /Q "%SOURCE%" >nul 2>&1',
             'del /Q "%~f0" >nul 2>&1',
         ]

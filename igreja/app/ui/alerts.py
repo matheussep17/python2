@@ -30,10 +30,12 @@ def install_messagebox_hooks(root) -> None:
         _ORIGINAL["showinfo"] = messagebox.showinfo
         _ORIGINAL["showwarning"] = messagebox.showwarning
         _ORIGINAL["showerror"] = messagebox.showerror
+        _ORIGINAL["askyesno"] = messagebox.askyesno
 
     messagebox.showinfo = lambda title=None, message=None, **kw: _proxy("info", title, message, **kw)
     messagebox.showwarning = lambda title=None, message=None, **kw: _proxy("warning", title, message, **kw)
     messagebox.showerror = lambda title=None, message=None, **kw: _proxy("error", title, message, **kw)
+    messagebox.askyesno = lambda title=None, message=None, **kw: _confirm_proxy(title, message, **kw)
 
 
 def _proxy(level: str, title, message, **kwargs):
@@ -53,6 +55,14 @@ def _fallback(level: str, title, message):
     }.get(level, "showinfo")
     func = _ORIGINAL.get(func_name, messagebox.showinfo)
     return func(title or _LEVELS[level]["title"], message or "")
+
+
+def _confirm_proxy(title, message, **kwargs):
+    parent = kwargs.get("parent") or _APP_ROOT
+    if parent is None:
+        func = _ORIGINAL.get("askyesno", messagebox.askyesno)
+        return func(title or "Confirmacao", message or "")
+    return ask_yes_no(parent, str(message or ""), str(title or "Confirmacao"))
 
 
 def show_alert(parent, title: str, message: str, level: str = "info") -> None:
@@ -117,6 +127,80 @@ def show_alert(parent, title: str, message: str, level: str = "info") -> None:
         top.wait_window(dlg)
     except Exception:
         _fallback(level_key, title, message)
+
+
+def ask_yes_no(parent, message: str, title: str = "Confirmacao") -> bool:
+    try:
+        top = parent.winfo_toplevel()
+    except Exception:
+        top = parent
+
+    mode = getattr(top, "app_theme_mode", "escuro")
+    palette = _PALETTE.get(mode, _PALETTE["escuro"])
+    result = {"value": False}
+
+    try:
+        dlg = tk.Toplevel(top)
+        dlg.title(title or "Confirmacao")
+        dlg.transient(top)
+        dlg.resizable(False, False)
+        dlg.configure(background=palette["shell"])
+
+        shell = tk.Frame(dlg, bg=palette["shell"], padx=1, pady=1, bd=0, highlightthickness=0)
+        shell.pack(fill="both", expand=True)
+
+        card = tk.Frame(shell, bg=palette["surface"], padx=18, pady=14, bd=0, highlightthickness=0)
+        card.pack(fill="both", expand=True)
+
+        head = tk.Label(
+            card,
+            text=f"[?] {title or 'Confirmacao'}",
+            bg=palette["surface"],
+            fg=palette["title"],
+            font=("Segoe UI", 12, "bold"),
+            anchor="w",
+            justify="left",
+        )
+        head.pack(fill="x")
+
+        body = tk.Label(
+            card,
+            text=message or "Sem detalhes.",
+            bg=palette["surface"],
+            fg=palette["text"],
+            font=("Segoe UI", 10),
+            anchor="w",
+            justify="left",
+            wraplength=520,
+            pady=10,
+        )
+        body.pack(fill="x")
+
+        btns = ttk.Frame(card)
+        btns.pack(anchor="e", pady=(2, 0))
+
+        def _set_and_close(value: bool):
+            result["value"] = value
+            dlg.destroy()
+
+        no_btn = ttk.Button(btns, text="Nao", bootstyle="secondary", command=lambda: _set_and_close(False))
+        no_btn.pack(side="right")
+        yes_btn = ttk.Button(btns, text="Sim", bootstyle="success", command=lambda: _set_and_close(True))
+        yes_btn.pack(side="right", padx=(0, 8))
+
+        dlg.bind("<Escape>", lambda _e: _set_and_close(False))
+        dlg.bind("<Return>", lambda _e: _set_and_close(True))
+        dlg.protocol("WM_DELETE_WINDOW", lambda: _set_and_close(False))
+        dlg.update_idletasks()
+        _center(top, dlg)
+
+        yes_btn.focus_set()
+        dlg.grab_set()
+        top.wait_window(dlg)
+        return bool(result["value"])
+    except Exception:
+        func = _ORIGINAL.get("askyesno", messagebox.askyesno)
+        return bool(func(title or "Confirmacao", message or ""))
 
 
 def _center(parent, dialog) -> None:
