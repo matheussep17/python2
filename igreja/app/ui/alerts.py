@@ -8,6 +8,7 @@ import ttkbootstrap as ttk
 
 _ORIGINAL = {}
 _APP_ROOT = None
+_DIALOG_ACTIVE = False
 
 _LEVELS = {
     "info": {"icon": "[i]", "title": "Informacao", "bootstyle": "info"},
@@ -66,6 +67,7 @@ def _confirm_proxy(title, message, **kwargs):
 
 
 def show_alert(parent, title: str, message: str, level: str = "info") -> None:
+    global _DIALOG_ACTIVE
     level_key = level if level in _LEVELS else "info"
     meta = _LEVELS[level_key]
 
@@ -78,11 +80,15 @@ def show_alert(parent, title: str, message: str, level: str = "info") -> None:
     palette = _PALETTE.get(mode, _PALETTE["escuro"])
 
     try:
+        if _DIALOG_ACTIVE:
+            return _fallback(level_key, title, message)
+        _DIALOG_ACTIVE = True
         dlg = tk.Toplevel(top)
         dlg.title(title or meta["title"])
         dlg.transient(top)
         dlg.resizable(False, False)
         dlg.configure(background=palette["shell"])
+        dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
 
         shell = tk.Frame(dlg, bg=palette["shell"], padx=1, pady=1, bd=0, highlightthickness=0)
         shell.pack(fill="both", expand=True)
@@ -117,8 +123,19 @@ def show_alert(parent, title: str, message: str, level: str = "info") -> None:
         btn = ttk.Button(card, text="Entendi", bootstyle=meta["bootstyle"], command=dlg.destroy)
         btn.pack(anchor="e", pady=(2, 0))
 
-        dlg.bind("<Escape>", lambda _e: dlg.destroy())
-        dlg.bind("<Return>", lambda _e: dlg.destroy())
+        def _close(_event=None):
+            try:
+                dlg.destroy()
+            except Exception:
+                pass
+            return "break"
+
+        dlg.bind("<Escape>", _close)
+        dlg.bind("<Return>", _close)
+        dlg.bind("<KP_Enter>", _close)
+        btn.bind("<Return>", _close)
+        btn.bind("<KP_Enter>", _close)
+        btn.bind("<space>", _close)
         dlg.update_idletasks()
         _center(top, dlg)
 
@@ -127,9 +144,12 @@ def show_alert(parent, title: str, message: str, level: str = "info") -> None:
         top.wait_window(dlg)
     except Exception:
         _fallback(level_key, title, message)
+    finally:
+        _DIALOG_ACTIVE = False
 
 
 def ask_yes_no(parent, message: str, title: str = "Confirmacao") -> bool:
+    global _DIALOG_ACTIVE
     try:
         top = parent.winfo_toplevel()
     except Exception:
@@ -140,6 +160,10 @@ def ask_yes_no(parent, message: str, title: str = "Confirmacao") -> bool:
     result = {"value": False}
 
     try:
+        if _DIALOG_ACTIVE:
+            func = _ORIGINAL.get("askyesno", messagebox.askyesno)
+            return bool(func(title or "Confirmacao", message or ""))
+        _DIALOG_ACTIVE = True
         dlg = tk.Toplevel(top)
         dlg.title(title or "Confirmacao")
         dlg.transient(top)
@@ -181,7 +205,11 @@ def ask_yes_no(parent, message: str, title: str = "Confirmacao") -> bool:
 
         def _set_and_close(value: bool):
             result["value"] = value
-            dlg.destroy()
+            try:
+                dlg.destroy()
+            except Exception:
+                pass
+            return "break"
 
         no_btn = tk.Button(
             btns,
@@ -218,7 +246,14 @@ def ask_yes_no(parent, message: str, title: str = "Confirmacao") -> bool:
 
         dlg.bind("<Escape>", lambda _e: _set_and_close(False))
         dlg.bind("<Return>", lambda _e: _set_and_close(True))
+        dlg.bind("<KP_Enter>", lambda _e: _set_and_close(True))
         dlg.protocol("WM_DELETE_WINDOW", lambda: _set_and_close(False))
+        yes_btn.bind("<Return>", lambda _e: _set_and_close(True))
+        yes_btn.bind("<KP_Enter>", lambda _e: _set_and_close(True))
+        yes_btn.bind("<space>", lambda _e: _set_and_close(True))
+        no_btn.bind("<Return>", lambda _e: _set_and_close(False))
+        no_btn.bind("<KP_Enter>", lambda _e: _set_and_close(False))
+        no_btn.bind("<space>", lambda _e: _set_and_close(False))
         dlg.update_idletasks()
         _center(top, dlg)
 
@@ -229,6 +264,8 @@ def ask_yes_no(parent, message: str, title: str = "Confirmacao") -> bool:
     except Exception:
         func = _ORIGINAL.get("askyesno", messagebox.askyesno)
         return bool(func(title or "Confirmacao", message or ""))
+    finally:
+        _DIALOG_ACTIVE = False
 
 
 def _center(parent, dialog) -> None:

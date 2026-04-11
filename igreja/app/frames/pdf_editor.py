@@ -2,6 +2,7 @@ import os
 import queue
 import sys
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
@@ -85,11 +86,14 @@ class PdfEditorFrame(ttk.Frame):
         self.is_running = False
         self.ui_queue = queue.Queue()
         self.auto_fit = True
+        self._last_action_key_ts = 0.0
 
         self.color_map = {name: value for name, value in COLOR_CHOICES}
         self.tool_var.trace_add("write", self._on_tool_changed)
 
         self._build_ui()
+        self.bind_all("<Return>", self._handle_return_key, add="+")
+        self.bind_all("<Escape>", self._handle_escape_key, add="+")
         self.after(100, self._drain_ui_queue)
 
         if HAS_DND:
@@ -365,6 +369,33 @@ class PdfEditorFrame(ttk.Frame):
     def _next_annotation_id(self):
         self.annotation_seq += 1
         return self.annotation_seq
+
+    def _is_active_screen(self):
+        top = self.winfo_toplevel()
+        return getattr(top, "current_screen", None) == getattr(self, "screen_key", None)
+
+    def _handle_return_key(self, event=None):
+        if not self._is_active_screen() or self.is_running:
+            return
+        if event is not None and event.widget is self.active_text_editor:
+            return
+        if self.active_text_editor:
+            return
+        if str(self.save_btn["state"]) != str(NORMAL):
+            return
+        now = time.monotonic()
+        if now - self._last_action_key_ts < 0.35:
+            return "break"
+        self._last_action_key_ts = now
+        self.start_export()
+        return "break"
+
+    def _handle_escape_key(self, _event=None):
+        if not self._is_active_screen():
+            return
+        if self.active_text_editor:
+            self._cancel_inline_edit()
+            return "break"
 
     def select_file(self):
         if not HAS_PYMUPDF or not HAS_PIL:
@@ -1281,7 +1312,8 @@ class PdfEditorFrame(ttk.Frame):
         except queue.Empty:
             pass
         finally:
-            self.after(100, self._drain_ui_queue)
+            if self.winfo_exists():
+                self.after(100, self._drain_ui_queue)
 
     def _show_progress(self):
         if not self.progress_frame.winfo_ismapped():

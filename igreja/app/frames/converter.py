@@ -4,6 +4,7 @@ import sys
 import queue
 import threading
 import subprocess
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
@@ -43,6 +44,7 @@ class ConverterFrame(ttk.Frame):
         self.proc = None
         self.cancel_requested = False
         self._current_output_path = None
+        self._last_action_key_ts = 0.0
         self.ui_queue = queue.Queue()
 
         self.video_formats = ["mp3", "mp4", "avi", "mkv", "mov", "gif"]
@@ -50,6 +52,8 @@ class ConverterFrame(ttk.Frame):
         self.current_mode = "video"
 
         self._build_ui()
+        self.bind_all("<Return>", self._handle_return_key, add="+")
+        self.bind_all("<Escape>", self._handle_escape_key, add="+")
         self.after(100, self._drain_ui_queue)
 
         if HAS_DND:
@@ -261,6 +265,28 @@ class ConverterFrame(ttk.Frame):
             filename = f"{filename}{suffix}"
 
         return self._next_available_path(os.path.join(output_dir, filename + f".{out_ext}"))
+
+    def _is_active_screen(self):
+        top = self.winfo_toplevel()
+        return getattr(top, "current_screen", None) == getattr(self, "screen_key", None)
+
+    def _handle_return_key(self, event=None):
+        if not self._is_active_screen() or self.is_converting or str(self.convert_btn["state"]) != str(NORMAL):
+            return
+        if isinstance(event.widget, tk.Text):
+            return
+        now = time.monotonic()
+        if now - self._last_action_key_ts < 0.35:
+            return "break"
+        self._last_action_key_ts = now
+        self.start_conversion()
+        return "break"
+
+    def _handle_escape_key(self, _event=None):
+        if not self._is_active_screen() or not self.is_converting:
+            return
+        self.cancel_conversion()
+        return "break"
 
     def _update_action_state(self):
         if self.is_converting:
@@ -766,7 +792,8 @@ class ConverterFrame(ttk.Frame):
         finally:
             if not self.is_converting and self.cancel_btn["state"] == NORMAL:
                 self._update_action_state()
-            self.after(100, self._drain_ui_queue)
+            if self.winfo_exists():
+                self.after(100, self._drain_ui_queue)
 
     def abrir_pasta(self):
         if self.ultimo_arquivo_convertido and os.path.exists(self.ultimo_arquivo_convertido):

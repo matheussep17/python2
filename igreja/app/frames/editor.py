@@ -5,6 +5,7 @@ import shutil
 import tempfile
 import threading
 import subprocess
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
@@ -69,9 +70,12 @@ class EditorFrame(ttk.Frame):
         self.is_running = False
         self.cancel_requested = False
         self.proc = None
+        self._last_action_key_ts = 0.0
         self.ui_queue = queue.Queue()
 
         self._build_ui()
+        self.bind_all("<Return>", self._handle_return_key, add="+")
+        self.bind_all("<Escape>", self._handle_escape_key, add="+")
         self.after(100, self._drain_ui_queue)
 
         if HAS_DND:
@@ -430,6 +434,28 @@ class EditorFrame(ttk.Frame):
             self.scrollbar.pack_forget()
             self.canvas.configure(yscrollcommand=None)
 
+    def _is_active_screen(self):
+        top = self.winfo_toplevel()
+        return getattr(top, "current_screen", None) == getattr(self, "screen_key", None)
+
+    def _handle_return_key(self, event=None):
+        if not self._is_active_screen() or self.is_running or str(self.run_btn["state"]) != str(NORMAL):
+            return
+        if isinstance(event.widget, tk.Text):
+            return
+        now = time.monotonic()
+        if now - self._last_action_key_ts < 0.35:
+            return "break"
+        self._last_action_key_ts = now
+        self.start_processing()
+        return "break"
+
+    def _handle_escape_key(self, _event=None):
+        if not self._is_active_screen() or not self.is_running:
+            return
+        self.cancel_processing()
+        return "break"
+
     def _update_action_state(self):
         if self.is_running:
             self.run_btn.config(state=DISABLED)
@@ -783,7 +809,8 @@ class EditorFrame(ttk.Frame):
         finally:
             if not self.is_running and self.cancel_btn["state"] == NORMAL:
                 self._update_action_state()
-            self.after(100, self._drain_ui_queue)
+            if self.winfo_exists():
+                self.after(100, self._drain_ui_queue)
 
     def open_folder(self):
         if not self.last_output or not os.path.exists(self.last_output):

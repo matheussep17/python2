@@ -52,6 +52,8 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         import traceback
 
         def report_callback_exception(exc, val, tb):
+            if exc is tk.TclError and val and "application has been destroyed" in str(val).lower():
+                return
             traceback.print_exception(exc, val, tb)
 
         tk.Tk.report_callback_exception = report_callback_exception
@@ -74,6 +76,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.theme_mode = tk.StringVar(value=initial_mode)
         self.nav_buttons = {}
         self.update_check_in_progress = False
+        self._is_closing = False
 
         self._apply_window_icon()
         install_messagebox_hooks(self)
@@ -161,7 +164,8 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             "baixar": BaixarFrame(self.content, self._set_status),
             "transcribe": TranscriberFrame(self.content, self._set_status),
         }
-        for frame in self.frames.values():
+        for key, frame in self.frames.items():
+            frame.screen_key = key
             frame.grid(row=0, column=0, sticky="nsew")
 
         self._show("converter")
@@ -172,6 +176,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.bind("<Control-Key-4>", lambda _e: self._show("compressor"))
         self.bind("<Control-Key-5>", lambda _e: self._show("pdf"))
         self.bind("<Control-Key-6>", lambda _e: self._show("transcribe"))
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(500, self._schedule_startup_update_check)
 
     def _on_theme_changed(self, _event=None):
@@ -232,10 +237,22 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.statusbar_var.set(text)
 
     def _schedule_startup_update_check(self):
+        if self._is_closing:
+            return
         if can_self_update():
             self.check_for_updates(user_initiated=False)
 
+    def _safe_after(self, delay_ms: int, callback):
+        if self._is_closing:
+            return
+        try:
+            self.after(delay_ms, callback)
+        except tk.TclError:
+            pass
+
     def check_for_updates(self, user_initiated: bool):
+        if self._is_closing:
+            return
         if self.update_check_in_progress:
             if user_initiated:
                 messagebox.showinfo("Atualizacao", "Ja existe uma verificacao de atualizacao em andamento.")
@@ -261,10 +278,10 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         try:
             manifest = fetch_update_manifest()
         except Exception as exc:
-            self.after(0, lambda error=exc, initiated=user_initiated: self._finish_update_check_error(error, initiated))
+            self._safe_after(0, lambda error=exc, initiated=user_initiated: self._finish_update_check_error(error, initiated))
             return
 
-        self.after(
+        self._safe_after(
             0,
             lambda update_manifest=manifest, initiated=user_initiated: self._handle_update_manifest(
                 update_manifest, initiated
@@ -272,6 +289,8 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         )
 
     def _finish_update_check_error(self, exc: Exception, user_initiated: bool):
+        if self._is_closing:
+            return
         self.update_check_in_progress = False
         self._set_status("Pronto.")
         if user_initiated:
@@ -281,6 +300,8 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
                 messagebox.showerror("Atualizacao", f"Falha ao verificar atualizacoes:\n{exc}")
 
     def _handle_update_manifest(self, manifest: dict, user_initiated: bool):
+        if self._is_closing:
+            return
         self.update_check_in_progress = False
         if not has_update(manifest):
             self._set_status("Pronto.")
@@ -319,23 +340,25 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         try:
             package_path = download_update_package(
                 manifest,
-                progress_callback=lambda downloaded, total: self.after(
+                progress_callback=lambda downloaded, total: self._safe_after(
                     0,
                     lambda version=manifest["version"], current=downloaded, total_bytes=total: (
                         self._report_update_download_progress(version, current, total_bytes)
                     ),
                 ),
             )
-            self.after(
+            self._safe_after(
                 0,
                 lambda downloaded_package=package_path, update_manifest=manifest: self._finish_update_download(
                     downloaded_package, update_manifest
                 ),
             )
         except Exception as exc:
-            self.after(0, lambda error=exc: self._finish_update_download_error(error))
+            self._safe_after(0, lambda error=exc: self._finish_update_download_error(error))
 
     def _report_update_download_progress(self, version: str, downloaded: int, total: int):
+        if self._is_closing:
+            return
         if total > 0:
             percent = int((downloaded / total) * 100)
             self._set_status(f"Baixando atualizacao {version}... {percent}%")
@@ -343,6 +366,8 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             self._set_status(f"Baixando atualizacao {version}...")
 
     def _finish_update_download(self, package_path: Path, manifest: dict):
+        if self._is_closing:
+            return
         self.update_check_in_progress = False
         self._set_status("Atualizacao pronta para instalar.")
 
@@ -370,6 +395,8 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.destroy()
 
     def _finish_update_download_error(self, exc: Exception):
+        if self._is_closing:
+            return
         self.update_check_in_progress = False
         self._set_status("Falha ao baixar atualizacao.")
         messagebox.showerror("Atualizacao", f"Falha ao baixar a atualizacao:\n{exc}")
@@ -393,6 +420,19 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
                     return
             except Exception:
                 continue
+
+    def _on_close(self):
+        if self._is_closing:
+            return
+        self._is_closing = True
+        try:
+            self.quit()
+        except Exception:
+            pass
+        try:
+            self.destroy()
+        except Exception:
+            pass
 
 
 def single_instance_or_exit(port=54321):

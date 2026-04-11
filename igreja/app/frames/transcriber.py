@@ -3,6 +3,7 @@ import os
 import sys
 import queue
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
@@ -47,8 +48,11 @@ class TranscriberFrame(ttk.Frame):
         self._completed_file_times = []
         self._last_progress_ts = 0.0
         self._heartbeat_running = False
+        self._last_action_key_ts = 0.0
 
         self._build_ui()
+        self.bind_all("<Return>", self._handle_return_key, add="+")
+        self.bind_all("<Escape>", self._handle_escape_key, add="+")
         self.after(100, self._drain_ui_queue)
 
         if HAS_DND:
@@ -206,6 +210,28 @@ class TranscriberFrame(ttk.Frame):
             os.path.dirname(in_path),
             os.path.splitext(os.path.basename(in_path))[0] + ".docx"
         )
+
+    def _is_active_screen(self):
+        top = self.winfo_toplevel()
+        return getattr(top, "current_screen", None) == getattr(self, "screen_key", None)
+
+    def _handle_return_key(self, event=None):
+        if not self._is_active_screen() or self.is_running or str(self.btn_run["state"]) != str(NORMAL):
+            return
+        if isinstance(event.widget, tk.Text):
+            return
+        now = time.monotonic()
+        if now - self._last_action_key_ts < 0.35:
+            return "break"
+        self._last_action_key_ts = now
+        self.start_transcription()
+        return "break"
+
+    def _handle_escape_key(self, _event=None):
+        if not self._is_active_screen() or not self.is_running:
+            return
+        self.cancel_transcription()
+        return "break"
 
     def _update_action_state(self):
         if self.is_running:
@@ -742,7 +768,8 @@ class TranscriberFrame(ttk.Frame):
             self._update_heartbeat_state()
             if not self.is_running and self.btn_cancel["state"] == NORMAL:
                 self._update_action_state()
-            self.after(100, self._drain_ui_queue)
+            if self.winfo_exists():
+                self.after(100, self._drain_ui_queue)
 
     def abrir_pasta(self):
         if self.last_output and os.path.exists(self.last_output):

@@ -461,7 +461,8 @@ class LyricsSearchFrame(ttk.Frame):
         except queue.Empty:
             pass
         finally:
-            self.after(100 if self.is_searching else 500, self._drain_ui_queue)
+            if self.winfo_exists():
+                self.after(100 if self.is_searching else 500, self._drain_ui_queue)
 
     def _display_lyrics(self, lyrics: str, title: str = ""):
         """Exibe a letra no campo de texto."""

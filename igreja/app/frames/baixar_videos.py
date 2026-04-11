@@ -8,6 +8,7 @@ import urllib.parse
 import urllib.request
 import base64
 import io
+import time
 from pathlib import Path
 from tkinter import filedialog, messagebox
 import tkinter as tk
@@ -44,6 +45,7 @@ class BaixarFrame(ttk.Frame):
         self._yt_dlp = None
         self._quality_pack_options = {}
         self.is_running = False
+        self._last_action_key_ts = 0.0
 
         self._url_preview_job = None
         self._last_preview_url = None
@@ -52,6 +54,8 @@ class BaixarFrame(ttk.Frame):
         self._build_ui()
 
         self.ui_queue = queue.Queue()
+        self.bind_all("<Return>", self._handle_return_key, add="+")
+        self.bind_all("<Escape>", self._handle_escape_key, add="+")
         self.after(100, self._drain_ui_queue)
         self._apply_quality_visibility()
 
@@ -530,6 +534,26 @@ class BaixarFrame(ttk.Frame):
         except queue.Full:
             pass
 
+    def _is_active_screen(self):
+        top = self.winfo_toplevel()
+        return getattr(top, "current_screen", None) == getattr(self, "screen_key", None)
+
+    def _handle_return_key(self, _event=None):
+        if not self._is_active_screen() or self.is_running or str(self.download_btn["state"]) != str(NORMAL):
+            return
+        now = time.monotonic()
+        if now - self._last_action_key_ts < 0.35:
+            return "break"
+        self._last_action_key_ts = now
+        self.start_download()
+        return "break"
+
+    def _handle_escape_key(self, _event=None):
+        if not self._is_active_screen() or not self.is_running:
+            return
+        self.cancel_download()
+        return "break"
+
     def _set_thumbnail(self, data: bytes):
         try:
             if not data:
@@ -582,7 +606,8 @@ class BaixarFrame(ttk.Frame):
         except queue.Empty:
             pass
         finally:
-            self.after(100, self._drain_ui_queue)
+            if self.winfo_exists():
+                self.after(100, self._drain_ui_queue)
 
     # --------- seleção de qualidade (EXATO e depois <= alvo) ---------
     def _build_yt_format(self, quality_choice):
