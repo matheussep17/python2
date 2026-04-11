@@ -1,6 +1,5 @@
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -183,25 +182,6 @@ def download_update_package(manifest: dict, progress_callback=None) -> Path:
     return package_path
 
 
-def persist_update_package(downloaded_exe: Path, version: str) -> Path:
-    target_dir = app_base_dir() / "updates"
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target_path = target_dir / f"{APP_NAME}-{version}.exe"
-
-    if target_path.exists():
-        try:
-            target_path.unlink()
-        except Exception as exc:
-            raise UpdateError(f"Nao foi possivel substituir o pacote de atualizacao existente:\n{exc}") from exc
-
-    try:
-        shutil.move(str(downloaded_exe), str(target_path))
-    except Exception as exc:
-        raise UpdateError(f"Nao foi possivel salvar a atualizacao para instalacao manual:\n{exc}") from exc
-
-    return target_path
-
-
 def schedule_windows_self_replace(downloaded_exe: Path) -> None:
     if not can_self_update():
         raise UpdateError("Auto-update disponivel apenas no executavel Windows.")
@@ -212,9 +192,6 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
     current_pid = os.getpid()
     source_path = str(downloaded_exe)
     target_path = str(current_exe)
-    target_dir = str(app_dir)
-    target_new_path = str(current_exe.with_suffix(".new.exe"))
-    target_backup_path = str(current_exe.with_suffix(".previous.exe"))
 
     script = "\n".join(
         [
@@ -223,28 +200,17 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             f'set "APP_PID={current_pid}"',
             f'set "SOURCE={source_path}"',
             f'set "TARGET={target_path}"',
-            f'set "TARGET_DIR={target_dir}"',
-            f'set "TARGET_NEW={target_new_path}"',
-            f'set "TARGET_BACKUP={target_backup_path}"',
             ":wait_exit",
             'tasklist /FI "PID eq %APP_PID%" 2>nul | find "%APP_PID%" >nul',
             "if not errorlevel 1 (",
             "  timeout /t 1 /nobreak >nul",
             "  goto wait_exit",
             ")",
-            'del /Q "%TARGET_NEW%" >nul 2>&1',
             "for /L %%I in (1,1,90) do (",
-            '  copy /Y "%SOURCE%" "%TARGET_NEW%" >nul 2>&1 && goto prepare_swap',
+            '  move /Y "%SOURCE%" "%TARGET%" >nul 2>&1 && goto cleanup',
             "  timeout /t 1 /nobreak >nul",
             ")",
             "exit /b 1",
-            ":prepare_swap",
-            'for %%F in ("%SOURCE%") do set "SOURCE_SIZE=%%~zF"',
-            'for %%F in ("%TARGET_NEW%") do set "TARGET_NEW_SIZE=%%~zF"',
-            'if not "%SOURCE_SIZE%"=="%TARGET_NEW_SIZE%" exit /b 2',
-            'del /Q "%TARGET_BACKUP%" >nul 2>&1',
-            'move /Y "%TARGET%" "%TARGET_BACKUP%" >nul 2>&1 || exit /b 3',
-            'move /Y "%TARGET_NEW%" "%TARGET%" >nul 2>&1 || (move /Y "%TARGET_BACKUP%" "%TARGET%" >nul 2>&1 & exit /b 4)',
             ":cleanup",
             'del /Q "%SOURCE%" >nul 2>&1',
             'del /Q "%~f0" >nul 2>&1',

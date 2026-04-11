@@ -214,13 +214,7 @@ class BaixarFrame(ttk.Frame):
         return f"{os.path.splitext(reserved_path)[0]}.%(ext)s", reserved_path
 
     def _iter_ydl_attempts(self, base_opts):
-        attempts = [dict(base_opts)]
-        if getattr(self, "service", None) and self.service.get() == "YouTube":
-            for browser_name in ("edge", "chrome", "firefox", "brave"):
-                opts = dict(base_opts)
-                opts["cookiesfrombrowser"] = (browser_name,)
-                attempts.append(opts)
-        return attempts
+        return [dict(base_opts)]
 
     def _fetch_youtube_oembed_title(self, url: str):
         if not (getattr(self, "service", None) and self.service.get() == "YouTube"):
@@ -252,7 +246,12 @@ class BaixarFrame(ttk.Frame):
                 "retries": 5,
                 "fragment_retries": 5,
                 "skip_unavailable_fragments": True,
-                "extractor_args": {"youtube": {"js_runtimes": ["node", "deno"]}},
+                "extractor_args": {
+                    "youtube": {
+                        "js_runtimes": ["node", "deno"],
+                        "player_client": ["android", "web"],
+                    }
+                },
                 "extractor_sleep_json": {"youtube": 2},
             }
         )
@@ -727,7 +726,12 @@ class BaixarFrame(ttk.Frame):
                 "retries": 5,
                 "fragment_retries": 5,
                 "skip_unavailable_fragments": True,
-                "extractor_args": {"youtube": {"js_runtimes": ["node", "deno"]}},
+                "extractor_args": {
+                    "youtube": {
+                        "js_runtimes": ["node", "deno"],
+                        "player_client": ["android", "web"],
+                    }
+                },
                 "extractor_sleep_json": {"youtube": 2},
             }
 
