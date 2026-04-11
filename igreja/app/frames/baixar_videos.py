@@ -4,6 +4,7 @@ import re
 import sys
 import queue
 import threading
+import urllib.parse
 import urllib.request
 import base64
 import io
@@ -11,6 +12,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox
 import tkinter as tk
 
+import requests
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
@@ -211,9 +213,36 @@ class BaixarFrame(ttk.Frame):
         reserved_path = self._next_available_path(self.destination_folder, stem, final_ext)
         return f"{os.path.splitext(reserved_path)[0]}.%(ext)s", reserved_path
 
+    def _iter_ydl_attempts(self, base_opts):
+        attempts = [dict(base_opts)]
+        if getattr(self, "service", None) and self.service.get() == "YouTube":
+            for browser_name in ("edge", "chrome", "firefox", "brave"):
+                opts = dict(base_opts)
+                opts["cookiesfrombrowser"] = (browser_name,)
+                attempts.append(opts)
+        return attempts
+
+    def _fetch_youtube_oembed_title(self, url: str):
+        if not (getattr(self, "service", None) and self.service.get() == "YouTube"):
+            return None
+
+        try:
+            encoded_url = urllib.parse.quote(url, safe="")
+            response = requests.get(
+                f"https://www.youtube.com/oembed?url={encoded_url}&format=json",
+                timeout=8,
+                headers={"User-Agent": "Mozilla/5.0"},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            title = str(payload.get("title", "") or "").strip()
+            return title or None
+        except Exception:
+            return None
+
     def _probe_media_info(self, url):
         y = self._yt_dlp
-        attempts = [
+        attempts = self._iter_ydl_attempts(
             {
                 "quiet": True,
                 "skip_download": True,
@@ -225,7 +254,9 @@ class BaixarFrame(ttk.Frame):
                 "skip_unavailable_fragments": True,
                 "extractor_args": {"youtube": {"js_runtimes": ["node", "deno"]}},
                 "extractor_sleep_json": {"youtube": 2},
-            },
+            }
+        )
+        attempts.append(
             {
                 "quiet": True,
                 "skip_download": True,
@@ -235,8 +266,8 @@ class BaixarFrame(ttk.Frame):
                 "retries": 3,
                 "fragment_retries": 3,
                 "skip_unavailable_fragments": True,
-            },
-        ]
+            }
+        )
 
         last_error = None
         for probe_opts in attempts:
@@ -263,6 +294,7 @@ class BaixarFrame(ttk.Frame):
             or (info or {}).get("alt_title")
             or (info or {}).get("id")
             or self._sanitize_filename(self.url_title_var.get()).replace("_", " ")
+            or self._fetch_youtube_oembed_title(url)
             or "download"
         )
         return self._build_outtmpl(title, fmt_mode, quality_choice)
@@ -364,7 +396,8 @@ class BaixarFrame(ttk.Frame):
             if thumb:
                 self._fetch_thumbnail(thumb)
         except Exception:
-            self._queue_event("preview_title", "(não foi possível obter o título)")
+            fallback_title = self._fetch_youtube_oembed_title(url)
+            self._queue_event("preview_title", fallback_title or "(não foi possível obter o título)")
     
     def _fetch_thumbnail(self, url: str):
         try:
@@ -729,13 +762,23 @@ class BaixarFrame(ttk.Frame):
                 }
 
             y = self._yt_dlp
-            with y.YoutubeDL(ydl_opts) as ydl:
+            last_error = None
+            for attempt_opts in self._iter_ydl_attempts(ydl_opts):
                 try:
-                    ydl.download([url])
+                    with y.YoutubeDL(attempt_opts) as ydl:
+                        ydl.download([url])
+                    last_error = None
+                    break
                 except y.utils.DownloadCancelled:
                     self._cleanup_partial()
                     self._queue_event("canceled")
                     return
+                except Exception as exc:
+                    last_error = exc
+                    continue
+
+            if last_error is not None:
+                raise last_error
             
             self._queue_event("done")
 
