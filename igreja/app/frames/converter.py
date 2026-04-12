@@ -370,8 +370,10 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
                 self.opts_frame.pack(fill="x", pady=(10, 0))
             if not self.controls_frame.winfo_ismapped():
                 self.controls_frame.pack(fill="x", pady=(10, 6))
-            if not self.open_btn.winfo_ismapped():
+            if self.ultimo_arquivo_convertido and not self.open_btn.winfo_ismapped():
                 self.open_btn.pack(pady=8)
+            elif not self.ultimo_arquivo_convertido and self.open_btn.winfo_ismapped():
+                self.open_btn.pack_forget()
         else:
             self.opts_frame.pack_forget()
             self.controls_frame.pack_forget()

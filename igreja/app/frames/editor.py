@@ -246,19 +246,11 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
             seen.add(low)
             uniq.append(abs_path)
 
-        # Add new videos to the list (do not overwrite the existing ones).
-        existing_set = {p.lower() for p in self.input_files}
-        additions = []
-        for path in uniq:
-            if path.lower() not in existing_set:
-                existing_set.add(path.lower())
-                additions.append(path)
-
-        if not additions:
+        if not uniq:
             return
 
-        self.input_files.extend(additions)
-        self.file_durations.update({path: self._probe_duration(path) for path in additions})
+        self.input_files = uniq
+        self.file_durations = {path: self._probe_duration(path) for path in uniq}
         self.progress_var.set(0)
         self.status_var.set("")
         self.last_output = ""
@@ -367,6 +359,10 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
                 self.options_frame.pack(fill="x", pady=(2, 6))
             if not self.controls_frame.winfo_ismapped():
                 self.controls_frame.pack(fill="x", pady=(2, 6))
+            if self.last_output and not self.open_btn.winfo_ismapped():
+                self.open_btn.pack(side="left", padx=(10, 0))
+            elif not self.last_output and self.open_btn.winfo_ismapped():
+                self.open_btn.pack_forget()
         else:
             self.videos_container.pack_forget()
             self.options_frame.pack_forget()
@@ -855,6 +851,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         self.on_status(message)
         self._update_action_state()
         self.open_btn.config(state=NORMAL if self.last_output else DISABLED)
+        self._update_visibility()
         messagebox.showinfo("Concluído", message)
 
     def _finish_canceled(self, payload):
@@ -864,10 +861,12 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         self.on_status(str(payload))
         self._update_action_state()
         self.open_btn.config(state=DISABLED)
+        self._update_visibility()
 
     def _finish_error(self, payload):
         self._hide_progress()
         self.on_status("Erro no processamento")
         self._update_action_state()
         self.open_btn.config(state=DISABLED)
+        self._update_visibility()
         messagebox.showerror("Erro", str(payload))

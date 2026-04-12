@@ -362,6 +362,10 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
                 self.output_frame.pack(fill="x", pady=(10, 0))
             if not self.actions_frame.winfo_ismapped():
                 self.actions_frame.pack(fill="x", pady=(8, 4))
+            if self.last_output and not self.open_btn.winfo_ismapped():
+                self.open_btn.pack(side="left", padx=(10, 0))
+            elif not self.last_output and self.open_btn.winfo_ismapped():
+                self.open_btn.pack_forget()
             return
 
         self.tools_frame.pack_forget()
@@ -1340,6 +1344,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         self.progress_var.set(100)
         self.status_var.set(message)
         self.open_btn.config(state=NORMAL if self.last_output else DISABLED)
+        self._update_editor_visibility()
         self._update_action_state()
         self.on_status(message)
         messagebox.showinfo("Concluido", message)
@@ -1349,6 +1354,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         self.progress_var.set(0)
         self.status_var.set(message)
         self.open_btn.config(state=DISABLED)
+        self._update_editor_visibility()
         self._update_action_state()
         self.on_status("Erro ao salvar PDF")
         messagebox.showerror("Erro", message)

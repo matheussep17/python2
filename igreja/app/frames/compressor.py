@@ -339,8 +339,10 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
                 self.opts_frame.pack(fill="x", pady=(10, 0))
             if not self.controls_frame.winfo_ismapped():
                 self.controls_frame.pack(fill="x", pady=(12, 6))
-            if not self.btn_open.winfo_ismapped():
+            if self.last_output and not self.btn_open.winfo_ismapped():
                 self.btn_open.pack(pady=8)
+            elif not self.last_output and self.btn_open.winfo_ismapped():
+                self.btn_open.pack_forget()
         else:
             self.opts_frame.pack_forget()
             self.controls_frame.pack_forget()
