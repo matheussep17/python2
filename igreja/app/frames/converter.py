@@ -11,9 +11,10 @@ from tkinter import filedialog, messagebox
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
+from app.ui.output_folder import OutputFolderMixin
 from app.utils import (
     HAS_DND, HAS_PIL, HAS_RAWPY, DND_FILES, Image,
-    create_no_window_flags, ffmpeg_cmd, ffprobe_cmd, seconds_to_hms, _ext
+    create_no_window_flags, ffmpeg_cmd, ffprobe_cmd, seconds_to_hms, _ext,
 )
 
 # ---------- Conversor ----------
@@ -27,7 +28,7 @@ def is_video_file(p): return _ext(p) in VIDEO_EXTS or _ext(p) in AUDIO_EXTS
 def is_image_file(p): return _ext(p) in IMAGE_EXTS
 
 
-class ConverterFrame(ttk.Frame):
+class ConverterFrame(OutputFolderMixin, ttk.Frame):
     def __init__(self, master, on_status):
         super().__init__(master)
         self.on_status = on_status
@@ -37,6 +38,7 @@ class ConverterFrame(ttk.Frame):
         self.formato_destino = tk.StringVar(value="mp4")
         self.output_name_var = tk.StringVar()
         self.remove_audio = tk.BooleanVar(value=False)
+        self.init_output_folder("Mesma pasta do arquivo original")
 
         self.progress_var = tk.DoubleVar(value=0)
         self.status_var = tk.StringVar(value="")
@@ -139,6 +141,20 @@ class ConverterFrame(ttk.Frame):
             row=0, column=2, sticky="w", padx=(10, 0)
         )
         self.output_name_entry.configure(state=DISABLED)
+        self.output_row.pack(fill="x", pady=(10, 0))
+
+        self.dest_row = ttk.Frame(self.opts_frame)
+        self.dest_row.columnconfigure(1, weight=1)
+        ttk.Button(self.dest_row, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS).grid(
+            row=0, column=0, sticky="w"
+        )
+        self.dest_label = ttk.Label(
+            self.dest_row,
+            text=self.get_destination_label_text(),
+            style="Muted.TLabel",
+        )
+        self.dest_label.grid(row=0, column=1, sticky="ew", padx=(10, 0))
+        self.dest_row.pack(fill="x", pady=(10, 0))
 
         # --- Acoes ---
         self.controls_frame = ttk.Frame(card)
@@ -251,7 +267,7 @@ class ConverterFrame(ttk.Frame):
         original_ext = _ext(in_path)
         filename = os.path.splitext(os.path.basename(in_path))[0]
 
-        output_dir = os.path.dirname(in_path)
+        output_dir = self.resolve_output_dir(in_path)
 
         if len(self.input_files) == 1:
             custom_name = (self.output_name_var.get() or "").strip()
@@ -467,6 +483,12 @@ class ConverterFrame(ttk.Frame):
         formato_destino = self.formato_destino.get()
         if not formato_destino:
             messagebox.showerror("Erro", "Selecione um formato de saida.")
+            return
+
+        try:
+            self.ensure_output_dir(self.input_files[0])
+        except Exception as exc:
+            messagebox.showerror("Erro", f"Nao foi possivel preparar a pasta de destino:\n{exc}")
             return
 
         if len(self.input_files) == 1:

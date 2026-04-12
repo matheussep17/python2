@@ -10,6 +10,7 @@ import ttkbootstrap as ttk
 from PIL import Image, ImageTk
 from ttkbootstrap.constants import *
 
+from app.ui.output_folder import OutputFolderMixin
 from app.utils import DND_FILES, HAS_DND, HAS_PIL, HAS_PYMUPDF, fitz
 
 
@@ -39,7 +40,7 @@ def hex_to_rgb(color: str):
     return tuple(int(value[i : i + 2], 16) / 255.0 for i in (0, 2, 4))
 
 
-class PdfEditorFrame(ttk.Frame):
+class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
     def __init__(self, master, on_status):
         super().__init__(master)
         self.on_status = on_status
@@ -50,6 +51,7 @@ class PdfEditorFrame(ttk.Frame):
         self.current_page_index = 0
         self.page_annotations = {}
         self.last_output = ""
+        self.init_output_folder("Mesma pasta do PDF aberto")
 
         self.render_scale = 1.0
         self.current_page_size = (0.0, 0.0)
@@ -306,11 +308,15 @@ class PdfEditorFrame(ttk.Frame):
         ttk.Label(output_inner, text="Nome do arquivo", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w")
         self.output_entry = ttk.Entry(output_inner, textvariable=self.output_name_var, width=32)
         self.output_entry.grid(row=0, column=1, sticky="ew", padx=(10, 0))
-        ttk.Label(
+        ttk.Button(output_inner, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS).grid(
+            row=1, column=0, sticky="w", pady=(8, 0)
+        )
+        self.dest_label = ttk.Label(
             output_inner,
-            text="O PDF anotado sera salvo na mesma pasta do arquivo aberto.",
+            text=self.get_destination_label_text(),
             style="Muted.TLabel",
-        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        )
+        self.dest_label.grid(row=1, column=1, sticky="ew", padx=(10, 0), pady=(8, 0))
 
         self.actions_frame = ttk.Frame(self.card)
         self.actions_frame.pack(fill="x", pady=(8, 4))
@@ -1208,7 +1214,13 @@ class PdfEditorFrame(ttk.Frame):
         if not output_name.lower().endswith(".pdf"):
             output_name += ".pdf"
 
-        output_path = os.path.join(os.path.dirname(self.pdf_path), output_name)
+        output_dir = self.resolve_output_dir(self.pdf_path)
+        output_path = os.path.join(output_dir, output_name)
+        try:
+            self.ensure_output_dir(self.pdf_path)
+        except Exception as exc:
+            messagebox.showerror("Erro", f"Nao foi possivel preparar a pasta de destino:\n{exc}")
+            return
         if os.path.abspath(output_path).lower() == os.path.abspath(self.pdf_path).lower():
             messagebox.showerror("Erro", "Escolha um nome diferente do PDF original.")
             return

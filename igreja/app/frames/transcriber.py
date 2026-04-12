@@ -13,7 +13,10 @@ from ttkbootstrap.constants import *
 import time
 import subprocess
 
-from app.utils import HAS_DND, HAS_FW, HAS_DOCX, DND_FILES, _ext, seconds_to_hms, create_no_window_flags, ffprobe_cmd
+from app.ui.output_folder import OutputFolderMixin
+from app.utils import (
+    HAS_DND, HAS_FW, HAS_DOCX, DND_FILES, _ext, seconds_to_hms, create_no_window_flags, ffprobe_cmd,
+)
 
 # ---------- Transcrição ----------
 AUDIO_VIDEO_EXTS = {"mp3", "wav", "m4a", "mp4", "mkv", "mov", "webm"}
@@ -29,7 +32,7 @@ MIN_TEXT_CHARS_FOR_OK = 120     # se sair menos que isso, considera fraco e tent
 HEARTBEAT_IDLE_SECONDS = 3.0
 
 
-class TranscriberFrame(ttk.Frame):
+class TranscriberFrame(OutputFolderMixin, ttk.Frame):
     def __init__(self, master, on_status):
         super().__init__(master)
         self.on_status = on_status
@@ -38,6 +41,7 @@ class TranscriberFrame(ttk.Frame):
         self.progress_var = tk.DoubleVar(value=0)
         self.status_var = tk.StringVar(value="")
         self.output_name_var = tk.StringVar()
+        self.init_output_folder("Mesma pasta do arquivo original")
 
         self.is_running = False
         self.cancel_requested = False
@@ -107,6 +111,15 @@ class TranscriberFrame(ttk.Frame):
             row=0, column=2, sticky="w", padx=(10, 0)
         )
         self.output_name_entry.configure(state=DISABLED)
+        ttk.Button(output_inner, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS).grid(
+            row=1, column=0, sticky="w", pady=(10, 0)
+        )
+        self.dest_label = ttk.Label(
+            output_inner,
+            text=self.get_destination_label_text(),
+            style="Muted.TLabel",
+        )
+        self.dest_label.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(10, 0), pady=(10, 0))
 
         self.controls_frame = ttk.Frame(card)
         self.controls_frame.pack_forget()
@@ -200,14 +213,15 @@ class TranscriberFrame(ttk.Frame):
         self.output_name_entry.configure(state=NORMAL)
 
     def _build_output_path(self, in_path):
+        output_dir = self.resolve_output_dir(in_path)
         if len(self.input_files) == 1:
             custom_name = (self.output_name_var.get() or "").strip()
             if custom_name:
                 if "." not in os.path.basename(custom_name):
                     custom_name += ".docx"
-                return os.path.join(os.path.dirname(in_path), custom_name)
+                return os.path.join(output_dir, custom_name)
         return os.path.join(
-            os.path.dirname(in_path),
+            output_dir,
             os.path.splitext(os.path.basename(in_path))[0] + ".docx"
         )
 
@@ -304,6 +318,12 @@ class TranscriberFrame(ttk.Frame):
             if os.path.abspath(proposed_output).lower() == os.path.abspath(self.input_files[0]).lower():
                 messagebox.showerror("Erro", "Escolha um nome diferente do arquivo original.")
                 return
+
+        try:
+            self.ensure_output_dir(self.input_files[0])
+        except Exception as exc:
+            messagebox.showerror("Erro", f"Nao foi possivel preparar a pasta de destino:\n{exc}")
+            return
 
         self.is_running = True
         self.cancel_requested = False

@@ -15,6 +15,7 @@ import requests
 
 FFMPEG_DOWNLOAD_URL_KEY = "ffmpeg_download_url"
 DEFAULT_FFMPEG_DOWNLOAD_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+OUTPUT_FOLDER_KEY = "output_folder"
 
 
 def _has_module(name: str) -> bool:
@@ -95,6 +96,26 @@ def save_app_config(data: dict) -> None:
     config_path = app_config_path()
     with config_path.open("w", encoding="utf-8") as file:
         json.dump(data, file, ensure_ascii=False, indent=2)
+
+
+def normalize_folder_path(path_value) -> str:
+    try:
+        return os.path.abspath(os.path.expanduser(str(path_value))) if path_value else ""
+    except Exception:
+        return str(path_value or "")
+
+
+def get_output_folder() -> str:
+    config = load_app_config()
+    return normalize_folder_path(config.get(OUTPUT_FOLDER_KEY) or config.get("destination_folder", ""))
+
+
+def save_output_folder(folder: str) -> str:
+    normalized = normalize_folder_path(folder)
+    config = load_app_config()
+    config[OUTPUT_FOLDER_KEY] = normalized
+    save_app_config(config)
+    return normalized
 
 
 def get_ffmpeg_download_url() -> str:

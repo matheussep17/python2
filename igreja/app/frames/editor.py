@@ -12,7 +12,10 @@ from tkinter import filedialog, messagebox
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
-from app.utils import HAS_DND, DND_FILES, create_no_window_flags, ffmpeg_cmd, ffprobe_cmd, seconds_to_hms, _ext
+from app.ui.output_folder import OutputFolderMixin
+from app.utils import (
+    HAS_DND, DND_FILES, create_no_window_flags, ffmpeg_cmd, ffprobe_cmd, seconds_to_hms, _ext,
+)
 
 
 VIDEO_EXTS = {"mp4", "avi", "mkv", "mov", "webm", "flv", "m4v"}
@@ -52,7 +55,7 @@ def parse_time_to_seconds(value: str):
     return None
 
 
-class EditorFrame(ttk.Frame):
+class EditorFrame(OutputFolderMixin, ttk.Frame):
     def __init__(self, master, on_status):
         super().__init__(master)
         self.on_status = on_status
@@ -64,6 +67,7 @@ class EditorFrame(ttk.Frame):
         # Dynamically generated UI rows for each selected video (Trecho 1, 2, 3...)
         self.video_rows = []
         self.output_name_var = tk.StringVar()
+        self.init_output_folder("Mesma pasta do primeiro arquivo selecionado")
 
         self.progress_var = tk.DoubleVar(value=0)
         self.status_var = tk.StringVar(value="")
@@ -171,6 +175,15 @@ class EditorFrame(ttk.Frame):
             row=1, column=0, sticky="w", padx=(0, 20)
         )
         ttk.Entry(options_inner, textvariable=self.output_name_var, width=28).grid(row=1, column=1, sticky="ew")
+        ttk.Button(options_inner, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS).grid(
+            row=2, column=0, sticky="w", pady=(10, 0)
+        )
+        self.dest_label = ttk.Label(
+            options_inner,
+            text=self.get_destination_label_text(),
+            style="Muted.TLabel",
+        )
+        self.dest_label.grid(row=2, column=1, sticky="ew", pady=(10, 0))
 
         self.controls_frame = ttk.Frame(card)
         self.controls_frame.pack(fill="x", pady=(2, 6))
@@ -509,7 +522,13 @@ class EditorFrame(ttk.Frame):
         if not output_name.lower().endswith(expected_ext):
             output_name += expected_ext
 
-        output_path = os.path.join(os.path.dirname(self.input_files[0]), output_name)
+        output_dir = self.resolve_output_dir(self.input_files[0])
+        output_path = os.path.join(output_dir, output_name)
+        try:
+            self.ensure_output_dir(self.input_files[0])
+        except Exception as exc:
+            messagebox.showerror("Erro", f"Nao foi possivel preparar a pasta de destino:\n{exc}")
+            return
         normalized_output = os.path.abspath(output_path).lower()
         if normalized_output in {os.path.abspath(path).lower() for path in self.input_files}:
             messagebox.showerror("Erro", "Escolha um nome diferente do arquivo original para evitar sobrescrita.")

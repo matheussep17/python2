@@ -17,7 +17,7 @@ import requests
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
-from app.utils import format_bytes, get_ffmpeg_bin_dir, load_app_config, save_app_config
+from app.utils import format_bytes, get_ffmpeg_bin_dir, get_output_folder, save_output_folder
 
 
 def app_base_dir() -> Path:
@@ -304,16 +304,13 @@ class BaixarFrame(ttk.Frame):
 
     def load_config(self):
         try:
-            val = load_app_config().get("destination_folder", "")
-            return self._normalize_path(val)
+            return self._normalize_path(get_output_folder())
         except Exception:
             return ""
 
     def save_config(self):
         try:
-            config = load_app_config()
-            config["destination_folder"] = self.destination_folder
-            save_app_config(config)
+            self.destination_folder = save_output_folder(self.destination_folder)
         except Exception as e:
             try:
                 self.on_status(f"Aviso: não foi possível salvar a configuração ({e})")

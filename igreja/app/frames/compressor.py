@@ -10,6 +10,7 @@ from tkinter import filedialog, messagebox
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
+from app.ui.output_folder import OutputFolderMixin
 from app.utils import (
     HAS_DND,
     HAS_PIL,
@@ -36,7 +37,7 @@ def is_image_file(path: str) -> bool:
     return _ext(path) in IMAGE_EXTS
 
 
-class CompressorFrame(ttk.Frame):
+class CompressorFrame(OutputFolderMixin, ttk.Frame):
     def __init__(self, master, on_status):
         super().__init__(master)
         self.on_status = on_status
@@ -44,6 +45,7 @@ class CompressorFrame(ttk.Frame):
         self.input_files = []
         self.last_output = ""
         self.output_name_var = tk.StringVar()
+        self.init_output_folder("Mesma pasta do arquivo original")
 
         self.video_preset = tk.StringVar(value="Equilibrado")
         self.image_quality = tk.StringVar(value="75")
@@ -145,6 +147,19 @@ class CompressorFrame(ttk.Frame):
             row=0, column=2, sticky="w", padx=(10, 0)
         )
         self.output_name_entry.configure(state=DISABLED)
+
+        self.dest_row = ttk.Frame(self.opts_frame)
+        self.dest_row.columnconfigure(1, weight=1)
+        self.dest_row.pack(fill="x", pady=(10, 0))
+        ttk.Button(self.dest_row, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS).grid(
+            row=0, column=0, sticky="w"
+        )
+        self.dest_label = ttk.Label(
+            self.dest_row,
+            text=self.get_destination_label_text(),
+            style="Muted.TLabel",
+        )
+        self.dest_label.grid(row=0, column=1, sticky="ew", padx=(10, 0))
 
         # --- Acoes ---
         self.controls_frame = ttk.Frame(card)
@@ -362,6 +377,12 @@ class CompressorFrame(ttk.Frame):
                 messagebox.showerror("Erro", "Escolha um nome diferente do arquivo original.")
                 return
 
+        try:
+            self.ensure_output_dir(self.input_files[0])
+        except Exception as exc:
+            messagebox.showerror("Erro", f"Nao foi possivel preparar a pasta de destino:\n{exc}")
+            return
+
         self.current_mode = "video" if all_video else "image"
         self.is_running = True
         self.cancel_requested = False
@@ -422,15 +443,16 @@ class CompressorFrame(ttk.Frame):
             self.proc = None
 
     def _build_output_path(self, in_path):
+        output_dir = self.resolve_output_dir(in_path)
         if len(self.input_files) == 1:
             custom_name = (self.output_name_var.get() or "").strip()
             if custom_name:
                 if "." not in os.path.basename(custom_name):
                     custom_name += os.path.splitext(in_path)[1]
-                return os.path.join(os.path.dirname(in_path), custom_name)
+                return os.path.join(output_dir, custom_name)
 
         base, ext = os.path.splitext(in_path)
-        return f"{base}_compactado{ext}"
+        return os.path.join(output_dir, f"{os.path.basename(base)}_compactado{ext}")
 
     def _video_params(self):
         preset = self.video_preset.get()
