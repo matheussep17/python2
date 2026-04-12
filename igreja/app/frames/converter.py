@@ -38,6 +38,7 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
         self.formato_destino = tk.StringVar(value="mp4")
         self.output_name_var = tk.StringVar()
         self.remove_audio = tk.BooleanVar(value=False)
+        self.quality_preset = tk.StringVar(value="Alta qualidade")
         self.init_output_folder("Mesma pasta do arquivo original")
 
         self.progress_var = tk.DoubleVar(value=0)
@@ -71,7 +72,7 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
 
         header = ttk.Frame(card)
         header.pack(fill="x")
-        ttk.Label(header, text="Conversor de Video / Imagem", style="SectionTitle.TLabel").pack(side="left")
+        ttk.Label(header, text="Conversor de Video / Audio / Imagem", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
 
         # --- Arquivos ---
@@ -114,6 +115,18 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
         self.format_menu = ttk.Combobox(self.fmt_row, textvariable=self.formato_destino, values=[], state="readonly", width=14)
         self.format_menu.grid(row=0, column=1, sticky="w", padx=(10, 0))
         self.format_menu.bind("<<ComboboxSelected>>", lambda _e: self._refresh_output_name())
+
+        self.quality_row = ttk.Frame(opts_inner)
+        self.quality_row.columnconfigure(1, weight=1)
+        ttk.Label(self.quality_row, text="Qualidade:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
+        self.quality_menu = ttk.Combobox(
+            self.quality_row,
+            textvariable=self.quality_preset,
+            values=["Alta qualidade", "Equilibrado", "Compacto"],
+            state="readonly",
+            width=16,
+        )
+        self.quality_menu.grid(row=0, column=1, sticky="w", padx=(10, 0))
 
         self.audio_row = ttk.Frame(self.opts_frame)
         self.audio_row_visible = False
@@ -184,10 +197,12 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
         if not self.fmt_row_visible:
             self.fmt_row.pack(fill="x", pady=(8, 5))
             self.fmt_row_visible = True
+            self.quality_row.pack(fill="x", pady=(0, 5))
 
     def _hide_format_row(self):
         if self.fmt_row_visible:
             self.fmt_row.pack_forget()
+            self.quality_row.pack_forget()
             self.fmt_row_visible = False
 
     def _show_audio_row(self):
@@ -281,6 +296,39 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
             filename = f"{filename}{suffix}"
 
         return self._next_available_path(os.path.join(output_dir, filename + f".{out_ext}"))
+
+    def _quality_settings(self):
+        preset = self.quality_preset.get() or "Alta qualidade"
+        mapping = {
+            "Alta qualidade": {
+                "video_crf": "20",
+                "video_preset": "slow",
+                "audio_bitrate": "192k",
+                "mp3_quality": "0",
+                "image_quality": 95,
+                "png_compress_level": 6,
+                "gif_fps": 15,
+            },
+            "Equilibrado": {
+                "video_crf": "24",
+                "video_preset": "medium",
+                "audio_bitrate": "128k",
+                "mp3_quality": "2",
+                "image_quality": 88,
+                "png_compress_level": 8,
+                "gif_fps": 12,
+            },
+            "Compacto": {
+                "video_crf": "28",
+                "video_preset": "faster",
+                "audio_bitrate": "96k",
+                "mp3_quality": "5",
+                "image_quality": 78,
+                "png_compress_level": 9,
+                "gif_fps": 10,
+            },
+        }
+        return mapping.get(preset, mapping["Alta qualidade"])
 
     def _is_active_screen(self):
         top = self.winfo_toplevel()
@@ -464,6 +512,7 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
         self._hide_format_row()
         self._hide_audio_row()
         self.format_menu.config(values=[])
+        self.quality_preset.set("Alta qualidade")
         self._update_action_state()
         self._update_visibility()
 
@@ -593,15 +642,71 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
             total_seconds = float(duration) if duration else None
             out_ext = _ext(out_path)
             remove_audio = self._target_has_no_audio(in_path, out_ext)
+            settings = self._quality_settings()
+            source_is_audio = _ext(in_path) in AUDIO_EXTS
 
             if out_ext == "mp3":
-                cmd = ffmpeg_cmd("-y", "-i", in_path, "-vn", "-acodec", "libmp3lame", "-q:a", "2", out_path)
+                cmd = ffmpeg_cmd(
+                    "-y", "-i", in_path, "-vn",
+                    "-acodec", "libmp3lame",
+                    "-q:a", settings["mp3_quality"],
+                    out_path,
+                )
+            elif source_is_audio:
+                if out_ext == "gif":
+                    self.ui_queue.put(("error", f"Nao e possivel converter audio para GIF: {os.path.basename(in_path)}"))
+                    return False
+
+                audio_codec = "libopus" if out_ext == "webm" else "aac"
+                if out_ext == "avi":
+                    audio_codec = "libmp3lame"
+
+                cmd = ffmpeg_cmd(
+                    "-y", "-i", in_path, "-vn",
+                    "-c:a", audio_codec,
+                    "-b:a", settings["audio_bitrate"],
+                    out_path,
+                )
             elif out_ext == "gif":
-                cmd = ffmpeg_cmd("-y", "-i", in_path, "-vf", "fps=12,scale=iw:-1:flags=lanczos", "-loop", "0", out_path)
+                cmd = ffmpeg_cmd(
+                    "-y", "-i", in_path,
+                    "-vf", f"fps={settings['gif_fps']},scale=iw:-1:flags=lanczos",
+                    "-loop", "0",
+                    out_path,
+                )
             elif remove_audio:
-                cmd = ffmpeg_cmd("-y", "-i", in_path, "-an", out_path)
+                cmd = ffmpeg_cmd(
+                    "-y", "-i", in_path,
+                    "-c:v", "libx264",
+                    "-preset", settings["video_preset"],
+                    "-crf", settings["video_crf"],
+                    "-an",
+                    "-movflags", "+faststart",
+                    out_path,
+                )
             else:
-                cmd = ffmpeg_cmd("-y", "-i", in_path, out_path)
+                if out_ext == "webm":
+                    cmd = ffmpeg_cmd(
+                        "-y", "-i", in_path,
+                        "-c:v", "libvpx-vp9",
+                        "-crf", settings["video_crf"],
+                        "-b:v", "0",
+                        "-c:a", "libopus",
+                        "-b:a", settings["audio_bitrate"],
+                        out_path,
+                    )
+                else:
+                    extra_args = ["-movflags", "+faststart"] if out_ext in {"mp4", "mov"} else []
+                    cmd = ffmpeg_cmd(
+                        "-y", "-i", in_path,
+                        "-c:v", "libx264",
+                        "-preset", settings["video_preset"],
+                        "-crf", settings["video_crf"],
+                        "-c:a", "aac",
+                        "-b:a", settings["audio_bitrate"],
+                        *extra_args,
+                        out_path,
+                    )
 
             self.proc = subprocess.Popen(
                 cmd,
@@ -685,11 +790,13 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
                     if base_image.mode in ("RGBA", "LA", "P"):
                         converted = base_image.convert("RGB")
                         image_to_save = converted
-                    save_kwargs["quality"] = 92
+                    save_kwargs["quality"] = self._quality_settings()["image_quality"]
                     fmt = "JPEG"
                 elif dst == "webp":
                     fmt = "WEBP"
-                    save_kwargs["quality"] = 92
+                    save_kwargs["quality"] = self._quality_settings()["image_quality"]
+                elif dst == "png":
+                    save_kwargs["compress_level"] = self._quality_settings()["png_compress_level"]
                 elif dst in ("tif", "tiff"):
                     fmt = "TIFF"
                 elif dst == "bmp":

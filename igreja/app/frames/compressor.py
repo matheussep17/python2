@@ -25,12 +25,17 @@ from app.utils import (
 
 
 VIDEO_EXTS = {"mp4", "avi", "mkv", "mov", "webm", "flv", "m4v"}
+AUDIO_EXTS = {"mp3", "wav", "m4a", "aac", "flac", "opus", "ogg", "wma"}
 IMAGE_EXTS = {"jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff"}
-ALL_EXTS = VIDEO_EXTS | IMAGE_EXTS
+ALL_EXTS = VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS
 
 
 def is_video_file(path: str) -> bool:
     return _ext(path) in VIDEO_EXTS
+
+
+def is_audio_file(path: str) -> bool:
+    return _ext(path) in AUDIO_EXTS
 
 
 def is_image_file(path: str) -> bool:
@@ -48,6 +53,7 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
         self.init_output_folder("Mesma pasta do arquivo original")
 
         self.video_preset = tk.StringVar(value="Equilibrado")
+        self.audio_bitrate = tk.StringVar(value="128 kbps")
         self.image_quality = tk.StringVar(value="75")
 
         self.progress_var = tk.DoubleVar(value=0)
@@ -77,7 +83,7 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
 
         header = ttk.Frame(card)
         header.pack(fill="x")
-        ttk.Label(header, text="Compressor de Video / Foto", style="SectionTitle.TLabel").pack(side="left")
+        ttk.Label(header, text="Compressor de Video / Audio / Foto", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
 
         # --- Arquivos ---
@@ -102,7 +108,7 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
         if HAS_DND:
             ttk.Label(
                 files_inner,
-                text="Arraste e solte videos/imagens aqui para selecionar.",
+                text="Arraste e solte videos, audios ou imagens aqui para selecionar.",
                 style="Muted.TLabel",
             ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(6, 4))
 
@@ -124,6 +130,18 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
             width=16,
         )
         self.video_menu.grid(row=0, column=1, sticky="w", padx=(10, 0))
+
+        self.audio_opts = ttk.Frame(opts_inner)
+        self.audio_opts.columnconfigure(1, weight=1)
+        ttk.Label(self.audio_opts, text="Bitrate do audio:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
+        self.audio_menu = ttk.Combobox(
+            self.audio_opts,
+            textvariable=self.audio_bitrate,
+            values=["192 kbps", "128 kbps", "96 kbps", "64 kbps"],
+            state="readonly",
+            width=12,
+        )
+        self.audio_menu.grid(row=0, column=1, sticky="w", padx=(10, 0))
 
         self.image_opts = ttk.Frame(opts_inner)
         self.image_opts.columnconfigure(1, weight=1)
@@ -187,8 +205,9 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
 
     def select_files(self):
         filetypes = [
-            ("Videos e imagens", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v *.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff"),
+            ("Videos, audios e imagens", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v *.mp3 *.wav *.m4a *.aac *.flac *.opus *.ogg *.wma *.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff"),
             ("Videos", "*.mp4 *.avi *.mkv *.mov *.webm *.flv *.m4v"),
+            ("Audios", "*.mp3 *.wav *.m4a *.aac *.flac *.opus *.ogg *.wma"),
             ("Imagens", "*.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff"),
             ("Todos", "*.*"),
         ]
@@ -231,9 +250,10 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
             return
 
         all_video = all(is_video_file(p) for p in uniq)
+        all_audio = all(is_audio_file(p) for p in uniq)
         all_image = all(is_image_file(p) for p in uniq)
-        if not (all_video or all_image):
-            messagebox.showerror("Selecao invalida", "Selecione apenas videos ou apenas imagens.")
+        if not (all_video or all_audio or all_image):
+            messagebox.showerror("Selecao invalida", "Selecione apenas videos, audios ou apenas imagens.")
             self.input_files = []
             self.label_selected.config(text="Nenhum arquivo selecionado")
             self.label_mode.config(text="")
@@ -241,12 +261,13 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
             self._refresh_output_name()
             return
 
-        self.current_mode = "video" if all_video else "image"
+        self.current_mode = "video" if all_video else "audio" if all_audio else "image"
         if len(uniq) == 1:
             self.label_selected.config(text=f"Arquivo: {os.path.basename(uniq[0])}")
         else:
             self.label_selected.config(text=f"{len(uniq)} arquivos (ex.: {os.path.basename(uniq[0])})")
-        self.label_mode.config(text=f"Modo: {'Video' if self.current_mode == 'video' else 'Imagem'}")
+        mode_label = "Video" if self.current_mode == "video" else "Audio" if self.current_mode == "audio" else "Imagem"
+        self.label_mode.config(text=f"Modo: {mode_label}")
         self._apply_mode(self.current_mode)
         self._refresh_output_name()
         self._update_action_state()
@@ -254,9 +275,12 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
 
     def _apply_mode(self, mode):
         self.video_opts.pack_forget()
+        self.audio_opts.pack_forget()
         self.image_opts.pack_forget()
         if mode == "video":
             self.video_opts.pack(fill="x", pady=(10, 0))
+        elif mode == "audio":
+            self.audio_opts.pack(fill="x", pady=(10, 0))
         elif mode == "image":
             self.image_opts.pack(fill="x", pady=(10, 0))
 
@@ -272,6 +296,8 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
             return
 
         base, ext = os.path.splitext(os.path.basename(self.input_files[0]))
+        if self.current_mode == "audio":
+            ext = ".mp3"
         self.output_name_var.set(f"{base}_compactado{ext}")
         self.output_name_entry.configure(state=NORMAL)
 
@@ -358,9 +384,10 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
             return
 
         all_video = all(is_video_file(p) for p in self.input_files)
+        all_audio = all(is_audio_file(p) for p in self.input_files)
         all_image = all(is_image_file(p) for p in self.input_files)
-        if not (all_video or all_image):
-            messagebox.showerror("Selecao invalida", "Selecione apenas videos ou apenas imagens.")
+        if not (all_video or all_audio or all_image):
+            messagebox.showerror("Selecao invalida", "Selecione apenas videos, audios ou apenas imagens.")
             return
 
         if all_image and (not HAS_PIL or Image is None):
@@ -383,7 +410,7 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
             messagebox.showerror("Erro", f"Nao foi possivel preparar a pasta de destino:\n{exc}")
             return
 
-        self.current_mode = "video" if all_video else "image"
+        self.current_mode = "video" if all_video else "audio" if all_audio else "image"
         self.is_running = True
         self.cancel_requested = False
         self.btn_run.config(state=DISABLED)
@@ -420,6 +447,8 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
                 self.ui_queue.put(("status", f"[{idx}/{total}] Preparando..."))
                 if mode == "video":
                     ok = self._compress_video(in_path, out_path, idx, total)
+                elif mode == "audio":
+                    ok = self._compress_audio(in_path, out_path, idx, total)
                 else:
                     ok = self._compress_image(in_path, out_path, idx, total)
                 if ok:
@@ -444,14 +473,17 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
 
     def _build_output_path(self, in_path):
         output_dir = self.resolve_output_dir(in_path)
+        default_ext = ".mp3" if self.current_mode == "audio" else os.path.splitext(in_path)[1]
         if len(self.input_files) == 1:
             custom_name = (self.output_name_var.get() or "").strip()
             if custom_name:
                 if "." not in os.path.basename(custom_name):
-                    custom_name += os.path.splitext(in_path)[1]
+                    custom_name += default_ext
                 return os.path.join(output_dir, custom_name)
 
         base, ext = os.path.splitext(in_path)
+        if self.current_mode == "audio":
+            ext = ".mp3"
         return os.path.join(output_dir, f"{os.path.basename(base)}_compactado{ext}")
 
     def _video_params(self):
@@ -535,6 +567,72 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
             return False
         except Exception as e:
             self.ui_queue.put(("error", f"Erro no video {os.path.basename(in_path)}: {e}"))
+            return False
+        finally:
+            self.proc = None
+
+    def _compress_audio(self, in_path, out_path, idx, total):
+        try:
+            duration = self._probe_duration(in_path)
+            bitrate = (self.audio_bitrate.get() or "128 kbps").split()[0] + "k"
+            cmd = ffmpeg_cmd(
+                "-y",
+                "-i",
+                in_path,
+                "-vn",
+                "-c:a",
+                "libmp3lame",
+                "-b:a",
+                bitrate,
+                out_path,
+            )
+
+            self.proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                creationflags=create_no_window_flags(),
+            )
+
+            total_seconds = float(duration) if duration else None
+            for line in self.proc.stderr:
+                if self.cancel_requested:
+                    break
+                if "time=" not in line:
+                    continue
+                try:
+                    t = line.split("time=")[1].split(" ")[0]
+                    h, m, s = t.split(":")
+                    sec = float(h) * 3600 + float(m) * 60 + float(s)
+                    if total_seconds and total_seconds > 0:
+                        pct = max(0.0, min(100.0, (sec / total_seconds) * 100.0))
+                        self.ui_queue.put(("progress", pct))
+                        self.ui_queue.put(
+                            ("status", f"[{idx}/{total}] Comprimindo audio... {pct:.1f}% ({seconds_to_hms(sec)} de {seconds_to_hms(total_seconds)})")
+                        )
+                except Exception:
+                    pass
+
+            ret = self.proc.wait()
+            if self.cancel_requested:
+                try:
+                    if os.path.exists(out_path):
+                        os.remove(out_path)
+                except Exception:
+                    pass
+                return False
+            if ret == 0:
+                self.ui_queue.put(("status", f"[{idx}/{total}] Salvo: {os.path.basename(out_path)}"))
+                return True
+            self.ui_queue.put(("error", f"Falha ao comprimir audio: {os.path.basename(in_path)}"))
+            return False
+        except FileNotFoundError:
+            self.ui_queue.put(("error", "Nao encontrei ffmpeg/ffprobe no executavel nem no PATH."))
+            return False
+        except Exception as e:
+            self.ui_queue.put(("error", f"Erro no audio {os.path.basename(in_path)}: {e}"))
             return False
         finally:
             self.proc = None
