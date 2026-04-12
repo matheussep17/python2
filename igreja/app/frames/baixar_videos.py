@@ -38,7 +38,7 @@ class BaixarFrame(ttk.Frame):
         self.destination_folder = self.load_config()
         self.selected_format = ttk.StringVar(value="Música")
         self.selected_quality = ttk.StringVar(value="best")
-        self.video_profile = ttk.StringVar(value="CompatÃ­vel com Holyrics")
+        self.video_profile = ttk.StringVar(value="Compatível com Holyrics")
 
         self.downloaded_file = None
         self.cancel_requested = False
@@ -163,7 +163,7 @@ class BaixarFrame(ttk.Frame):
         self.profile_menu = ttk.Combobox(
             opts_inner,
             textvariable=self.video_profile,
-            values=["MÃ¡xima qualidade", "CompatÃ­vel com Holyrics"],
+            values=["Máxima qualidade", "Compatível com Holyrics"],
             state="readonly",
             width=24,
         )
@@ -801,7 +801,7 @@ class BaixarFrame(ttk.Frame):
                     "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}],
                 }
             else:
-                if self.video_profile.get() == "CompatÃ­vel com Holyrics":
+                if self.video_profile.get() == "Compatível com Holyrics":
                     fmt = self._build_yt_format(quality_choice)
                 else:
                     fmt = self._build_best_quality_format(quality_choice)
