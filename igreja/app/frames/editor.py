@@ -133,9 +133,8 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         ttk.Button(files_inner, text="Selecionar mídia", command=self.select_files, bootstyle=WARNING).grid(
             row=0, column=0, sticky="w"
         )
-        ttk.Button(files_inner, text="Limpar", command=self.clear_files, bootstyle=DANGER).grid(
-            row=0, column=1, sticky="w", padx=(10, 0)
-        )
+        self.clear_btn = ttk.Button(files_inner, text="Limpar", command=self.clear_files, bootstyle=DANGER)
+        self.clear_btn.grid(row=0, column=1, sticky="w", padx=(10, 0))
         ttk.Label(
             files_inner,
             text="Monte um novo arquivo usando um trecho de cada arquivo. Use vazio para considerar o arquivo inteiro.",
@@ -191,6 +190,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         self.run_btn.pack(side="left")
         self.cancel_btn = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_processing, bootstyle=SECONDARY, state=DISABLED)
         self.cancel_btn.pack(side="left", padx=(10, 0))
+        self.cancel_btn.pack_forget()
         self.open_btn = ttk.Button(self.controls_frame, text="Abrir pasta do arquivo", command=self.open_folder, bootstyle=INFO, state=DISABLED)
         self.open_btn.pack(side="left", padx=(10, 0))
         self.controls_frame.pack_forget()
@@ -353,20 +353,28 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
     def _update_visibility(self):
         """Show/hide the editor sections depending on whether any file is selected."""
         if self.input_files:
+            self.clear_btn.grid()
             if not self.videos_container.winfo_ismapped():
                 self.videos_container.pack(fill="x", pady=(2, 6))
             if not self.options_frame.winfo_ismapped():
                 self.options_frame.pack(fill="x", pady=(2, 6))
             if not self.controls_frame.winfo_ismapped():
                 self.controls_frame.pack(fill="x", pady=(2, 6))
+            if self.is_running:
+                if not self.cancel_btn.winfo_ismapped():
+                    self.cancel_btn.pack(side="left", padx=(10, 0))
+            elif self.cancel_btn.winfo_ismapped():
+                self.cancel_btn.pack_forget()
             if self.last_output and not self.open_btn.winfo_ismapped():
                 self.open_btn.pack(side="left", padx=(10, 0))
             elif not self.last_output and self.open_btn.winfo_ismapped():
                 self.open_btn.pack_forget()
         else:
+            self.clear_btn.grid_remove()
             self.videos_container.pack_forget()
             self.options_frame.pack_forget()
             self.controls_frame.pack_forget()
+            self.cancel_btn.pack_forget()
 
         # Only show progress while processing is running.
         if self.is_running:
@@ -540,6 +548,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         self.open_btn.config(state=DISABLED)
         self._show_progress()
         self._update_action_state()
+        self._update_visibility()
 
         threading.Thread(target=self._worker, args=(segments, output_path), daemon=True).start()
 

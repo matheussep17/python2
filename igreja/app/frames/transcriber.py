@@ -84,9 +84,8 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
         ttk.Button(files_inner, text="Selecionar Arquivo(s)", command=self.selecionar_arquivos, bootstyle=WARNING).grid(
             row=0, column=0, sticky="w"
         )
-        ttk.Button(files_inner, text="Remover", command=self.remover_arquivos, bootstyle=DANGER).grid(
-            row=0, column=1, sticky="w", padx=(10, 0)
-        )
+        self.btn_remove = ttk.Button(files_inner, text="Remover", command=self.remover_arquivos, bootstyle=DANGER)
+        self.btn_remove.grid(row=0, column=1, sticky="w", padx=(10, 0))
 
         self.label_sel = ttk.Label(files_inner, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
         self.label_sel.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
@@ -127,6 +126,7 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
         self.btn_run.pack(side="left")
         self.btn_cancel = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_transcription, bootstyle=SECONDARY, state=DISABLED)
         self.btn_cancel.pack(side="left", padx=(10, 0))
+        self.btn_cancel.pack_forget()
 
         self.progress_frame = ttk.Frame(card, padding=10)
         self.progress = ttk.Progressbar(self.progress_frame, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
@@ -261,17 +261,25 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
     def _update_visibility(self):
         """Show/hide output and control panels when there are selected files."""
         if self.input_files:
+            self.btn_remove.grid()
             if not self.opts_frame.winfo_ismapped():
                 self.opts_frame.pack(fill="x", pady=(10, 0))
             if not self.controls_frame.winfo_ismapped():
                 self.controls_frame.pack(fill="x", pady=(10, 6))
+            if self.is_running:
+                if not self.btn_cancel.winfo_ismapped():
+                    self.btn_cancel.pack(side="left", padx=(10, 0))
+            elif self.btn_cancel.winfo_ismapped():
+                self.btn_cancel.pack_forget()
             if self.last_output and not self.btn_open.winfo_ismapped():
                 self.btn_open.pack(pady=8)
             elif not self.last_output and self.btn_open.winfo_ismapped():
                 self.btn_open.pack_forget()
         else:
+            self.btn_remove.grid_remove()
             self.opts_frame.pack_forget()
             self.controls_frame.pack_forget()
+            self.btn_cancel.pack_forget()
             self.btn_open.pack_forget()
 
         # Only show progress when transcription is running.
@@ -335,6 +343,7 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
         self.btn_open.config(state=DISABLED)
         self._show_progress()
         self._update_action_state()
+        self._update_visibility()
 
         self.progress_var.set(0)
         self.status_var.set("Preparando...")

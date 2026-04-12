@@ -178,6 +178,7 @@ class BaixarFrame(ttk.Frame):
         self.download_btn.pack(side="left")
         self.cancel_btn = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_download, bootstyle=SECONDARY, state=DISABLED)
         self.cancel_btn.pack(side="left", padx=(10, 0))
+        self.cancel_btn.pack_forget()
 
         self.progress_frame = ttk.Frame(card, padding=10)
         self.progress = ttk.Progressbar(self.progress_frame, orient="horizontal", mode="determinate")
@@ -512,9 +513,15 @@ class BaixarFrame(ttk.Frame):
                 self.opts_frame.pack(fill="x", pady=(10, 0))
             if not self.controls_frame.winfo_ismapped():
                 self.controls_frame.pack(fill="x", pady=(14, 8))
+            if self.is_running:
+                if not self.cancel_btn.winfo_ismapped():
+                    self.cancel_btn.pack(side="left", padx=(10, 0))
+            elif self.cancel_btn.winfo_ismapped():
+                self.cancel_btn.pack_forget()
         else:
             self.opts_frame.pack_forget()
             self.controls_frame.pack_forget()
+            self.cancel_btn.pack_forget()
 
         if self.downloaded_file:
             if not self.open_folder_button.winfo_ismapped():

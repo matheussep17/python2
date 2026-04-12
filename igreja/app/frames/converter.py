@@ -85,9 +85,8 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
         ttk.Button(files_inner, text="Selecionar Arquivo(s)", command=self.selecionar_arquivos, bootstyle=WARNING).grid(
             row=0, column=0, sticky="w"
         )
-        ttk.Button(files_inner, text="Remover", command=self.remover_arquivos, bootstyle=DANGER).grid(
-            row=0, column=1, sticky="w", padx=(10, 0)
-        )
+        self.remove_btn = ttk.Button(files_inner, text="Remover", command=self.remover_arquivos, bootstyle=DANGER)
+        self.remove_btn.grid(row=0, column=1, sticky="w", padx=(10, 0))
 
         self.label_video = ttk.Label(files_inner, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
         self.label_video.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
@@ -176,6 +175,7 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
         self.convert_btn.pack(side="left")
         self.cancel_btn = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_conversion, bootstyle=SECONDARY, state=DISABLED)
         self.cancel_btn.pack(side="left", padx=(10, 0))
+        self.cancel_btn.pack_forget()
         self.controls_frame.pack_forget()
 
         self.progress_frame = ttk.Frame(card, padding=10)
@@ -366,17 +366,25 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
     def _update_visibility(self):
         """Show/hide the options + action area depending on whether files are selected."""
         if self.input_files:
+            self.remove_btn.grid()
             if not self.opts_frame.winfo_ismapped():
                 self.opts_frame.pack(fill="x", pady=(10, 0))
             if not self.controls_frame.winfo_ismapped():
                 self.controls_frame.pack(fill="x", pady=(10, 6))
+            if self.is_converting:
+                if not self.cancel_btn.winfo_ismapped():
+                    self.cancel_btn.pack(side="left", padx=(10, 0))
+            elif self.cancel_btn.winfo_ismapped():
+                self.cancel_btn.pack_forget()
             if self.ultimo_arquivo_convertido and not self.open_btn.winfo_ismapped():
                 self.open_btn.pack(pady=8)
             elif not self.ultimo_arquivo_convertido and self.open_btn.winfo_ismapped():
                 self.open_btn.pack_forget()
         else:
+            self.remove_btn.grid_remove()
             self.opts_frame.pack_forget()
             self.controls_frame.pack_forget()
+            self.cancel_btn.pack_forget()
             self.open_btn.pack_forget()
 
         # Only show progress when conversion is running.
@@ -561,6 +569,7 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
         self.open_btn.config(state=DISABLED)
         self._show_progress()
         self._update_action_state()
+        self._update_visibility()
 
         self.progress_var.set(0)
         self.status_var.set("Preparando...")

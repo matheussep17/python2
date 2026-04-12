@@ -33,6 +33,7 @@ from app.updater import (
     schedule_windows_self_replace,
 )
 from app.ui.alerts import install_messagebox_hooks, show_info
+from app.ui.cursors import install_cursor_profile
 from app.ui.theme import apply_design_system, resolve_ttk_theme
 from app.utils import (
     HAS_DND,
@@ -81,6 +82,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self._apply_window_icon()
         install_messagebox_hooks(self)
         apply_design_system(self, self.style, self.theme_mode.get())
+        install_cursor_profile(self)
 
         self.title("Media Suite - Conversor")
         # Some frames (like the video editor) can grow tall/wide when generating output,
