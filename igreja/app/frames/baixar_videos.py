@@ -38,6 +38,7 @@ class BaixarFrame(ttk.Frame):
         self.destination_folder = self.load_config()
         self.selected_format = ttk.StringVar(value="Música")
         self.selected_quality = ttk.StringVar(value="best")
+        self.video_profile = ttk.StringVar(value="CompatÃ­vel com Holyrics")
 
         self.downloaded_file = None
         self.cancel_requested = False
@@ -135,6 +136,7 @@ class BaixarFrame(ttk.Frame):
         opts_inner.pack(fill="x")
         opts_inner.columnconfigure(1, weight=1)
         opts_inner.columnconfigure(3, weight=1)
+        opts_inner.columnconfigure(5, weight=1)
 
         ttk.Label(opts_inner, text="Formato:", font=("Helvetica", 13)).grid(row=0, column=0, sticky="w")
         self.format_menu = ttk.Combobox(
@@ -155,6 +157,19 @@ class BaixarFrame(ttk.Frame):
         self.quality_menu.grid(row=0, column=3, sticky="w", padx=(8, 0))
         self._quality_widgets = [self.quality_label, self.quality_menu]
         self._quality_pack_options = {w: w.grid_info() for w in self._quality_widgets}
+
+        self.profile_label = ttk.Label(opts_inner, text="Perfil:", font=("Helvetica", 13))
+        self.profile_label.grid(row=0, column=4, sticky="w", padx=(20, 0))
+        self.profile_menu = ttk.Combobox(
+            opts_inner,
+            textvariable=self.video_profile,
+            values=["MÃ¡xima qualidade", "CompatÃ­vel com Holyrics"],
+            state="readonly",
+            width=24,
+        )
+        self.profile_menu.grid(row=0, column=5, sticky="w", padx=(8, 0))
+        self._profile_widgets = [self.profile_label, self.profile_menu]
+        self._profile_pack_options = {w: w.grid_info() for w in self._profile_widgets}
 
         # --- Ações ---
         self.controls_frame = ttk.Frame(card)
@@ -209,10 +224,13 @@ class BaixarFrame(ttk.Frame):
     def _build_outtmpl(self, title, fmt_mode, quality_choice):
         stem = self._sanitize_filename(title)
         is_video = "deo" in str(fmt_mode or "").lower()
-        final_ext = "mp4" if is_video else "mp3"
+        is_holyrics = "Holyrics" in self.video_profile.get()
+        final_ext = "mp4" if is_video and is_holyrics else "mkv" if is_video else "mp3"
 
         if is_video and quality_choice and quality_choice != "best":
             stem = f"{stem} [{quality_choice}]"
+        if is_video and not is_holyrics:
+            stem = f"{stem} [max]"
 
         reserved_path = self._next_available_path(self.destination_folder, stem, final_ext)
         return f"{os.path.splitext(reserved_path)[0]}.%(ext)s", reserved_path
@@ -437,8 +455,20 @@ class BaixarFrame(ttk.Frame):
                         w.grid(**grid_options)
                 except Exception:
                     pass
+            for w in self._profile_widgets:
+                try:
+                    if not w.winfo_ismapped():
+                        grid_options = self._profile_pack_options.get(w) or {}
+                        w.grid(**grid_options)
+                except Exception:
+                    pass
         else:
             for w in self._quality_widgets:
+                try:
+                    w.grid_forget()
+                except Exception:
+                    pass
+            for w in self._profile_widgets:
                 try:
                     w.grid_forget()
                 except Exception:
@@ -641,6 +671,13 @@ class BaixarFrame(ttk.Frame):
         )
         return fmt
 
+    def _build_best_quality_format(self, quality_choice):
+        if quality_choice == "best":
+            return "bv*+ba/b"
+
+        h = "".join(ch for ch in quality_choice if ch.isdigit()) or "1080"
+        return f"(bv*[height={h}]/bv*[height<={h}])+ba/b[height<={h}]/b"
+
     def start_download(self):
         url = self.url_entry.get().strip()
         if not url:
@@ -764,7 +801,10 @@ class BaixarFrame(ttk.Frame):
                     "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}],
                 }
             else:
-                fmt = self._build_yt_format(quality_choice)
+                if self.video_profile.get() == "CompatÃ­vel com Holyrics":
+                    fmt = self._build_yt_format(quality_choice)
+                else:
+                    fmt = self._build_best_quality_format(quality_choice)
 
                 # Além de selecionar H.264/AAC, garante que o final seja MP4 "normalizado"
                 # (útil quando o áudio vem Opus e precisa virar AAC).
@@ -786,6 +826,13 @@ class BaixarFrame(ttk.Frame):
                         "-movflags", "+faststart",
                     ],
                 }
+
+                if "Holyrics" not in self.video_profile.get():
+                    ydl_opts = {
+                        **common_args,
+                        "format": self._build_best_quality_format(quality_choice),
+                        "merge_output_format": "mkv",
+                    }
 
             y = self._yt_dlp
             last_error = None

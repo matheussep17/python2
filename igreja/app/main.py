@@ -321,7 +321,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             "Deseja continuar?"
         )
         if notes:
-            prompt += f"\n\nNovidades:\n{notes}"
+            prompt += f"\n\nO que ha de novo nesta versao:\n{notes}"
 
         should_install = messagebox.askyesno("Atualizacao disponivel", prompt)
         if not should_install:
