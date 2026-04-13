@@ -48,6 +48,14 @@ from app.utils import (
 from app.version import APP_VERSION
 
 
+DEFAULT_WINDOW_WIDTH = 1280
+DEFAULT_WINDOW_HEIGHT = 760
+MIN_WINDOW_WIDTH = 960
+MIN_WINDOW_HEIGHT = 600
+SMALL_SCREEN_WIDTH = 1366
+SMALL_SCREEN_HEIGHT = 768
+
+
 class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
     def __init__(self):
         import traceback
@@ -65,12 +73,11 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         if HAS_DND:
             super().__init__()
             self.style = ttk.Style(theme=initial_theme)
-            self.geometry("1280x760")
         else:
             super().__init__(
                 title="Media Suite - Conversor",
                 themename=initial_theme,
-                size=(1280, 760),
+                size=(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT),
             )
             self.style = ttk.Style()
 
@@ -85,9 +92,9 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         install_cursor_profile(self)
 
         self.title("Media Suite - Conversor")
+        self._configure_initial_window()
         # Some frames (like the video editor) can grow tall/wide when generating output,
         # so keep the window from being resized too small.
-        self.minsize(1280, 760)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
@@ -180,6 +187,30 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.bind("<Control-Key-6>", lambda _e: self._show("transcribe"))
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(500, self._schedule_startup_update_check)
+
+    def _configure_initial_window(self):
+        screen_width = max(1, int(self.winfo_screenwidth()))
+        screen_height = max(1, int(self.winfo_screenheight()))
+
+        min_width = min(DEFAULT_WINDOW_WIDTH, max(MIN_WINDOW_WIDTH, screen_width - 80))
+        min_height = min(DEFAULT_WINDOW_HEIGHT, max(MIN_WINDOW_HEIGHT, screen_height - 120))
+        self.minsize(min_width, min_height)
+
+        should_zoom = screen_width <= SMALL_SCREEN_WIDTH or screen_height <= SMALL_SCREEN_HEIGHT
+        target_width = min(DEFAULT_WINDOW_WIDTH, max(min_width, int(screen_width * 0.92)))
+        target_height = min(DEFAULT_WINDOW_HEIGHT, max(min_height, int(screen_height * 0.9)))
+
+        if should_zoom:
+            self.geometry(f"{target_width}x{target_height}+0+0")
+            try:
+                self.state("zoomed")
+                return
+            except tk.TclError:
+                pass
+
+        x = max(0, (screen_width - target_width) // 2)
+        y = max(0, (screen_height - target_height) // 2)
+        self.geometry(f"{target_width}x{target_height}+{x}+{y}")
 
     def _on_theme_changed(self, _event=None):
         mode = self.theme_mode.get()

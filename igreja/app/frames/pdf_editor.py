@@ -135,6 +135,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         self.select_btn.grid(row=0, column=0, sticky="w")
         self.clear_btn = ttk.Button(intro_inner, text="Limpar", command=self.clear_file, bootstyle=DANGER)
         self.clear_btn.grid(row=0, column=1, sticky="w", padx=(10, 0))
+        self.clear_btn.grid_remove()
         self.selection_label = ttk.Label(intro_inner, text="Nenhum PDF aberto", font=("Helvetica", 12))
         self.selection_label.grid(row=1, column=0, columnspan=3, sticky="w", pady=(8, 4))
         ttk.Label(
@@ -348,6 +349,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
     def _update_editor_visibility(self):
         has_document = bool(self.pdf_doc and self.page_count > 0)
         if has_document:
+            self.clear_btn.grid()
             if not self.tools_frame.winfo_ismapped():
                 self.tools_frame.pack(fill="x", pady=(10, 6))
             if not self.text_row.winfo_ismapped():
@@ -368,6 +370,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
                 self.open_btn.pack_forget()
             return
 
+        self.clear_btn.grid_remove()
         self.tools_frame.pack_forget()
         self.text_row.pack_forget()
         self.adjust_row.pack_forget()
