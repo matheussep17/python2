@@ -10,24 +10,6 @@ BUTTON_CLASSES = {
     "TRadiobutton",
     "Menubutton",
     "TMenubutton",
-    "Combobox",
-    "TCombobox",
-}
-
-TEXT_CLASSES = {
-    "Entry",
-    "TEntry",
-    "Text",
-    "Spinbox",
-}
-
-MOVE_CLASSES = {
-    "Canvas",
-}
-
-SCROLL_CLASSES = {
-    "Scrollbar",
-    "TScrollbar",
 }
 
 
@@ -35,12 +17,6 @@ def _choose_cursor(widget) -> str | None:
     widget_class = widget.winfo_class()
     if widget_class in BUTTON_CLASSES:
         return "hand2"
-    if widget_class in TEXT_CLASSES:
-        return "xterm"
-    if widget_class in MOVE_CLASSES:
-        return "fleur"
-    if widget_class in SCROLL_CLASSES:
-        return "sb_v_double_arrow"
     return None
 
 
