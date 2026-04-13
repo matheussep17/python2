@@ -13,16 +13,20 @@ if ($LASTEXITCODE -ne 0) {
     throw "A .buildvenv nao consegue importar tkinter. Use um CPython com suporte a Tk."
 }
 
-Write-Host "Garantindo pip na .buildvenv..."
-& $BuildPython -m ensurepip --upgrade
-if ($LASTEXITCODE -ne 0) {
-    throw "Falha ao inicializar o pip na .buildvenv."
-}
+if (-not $env:BUILD_SKIP_BOOTSTRAP) {
+    Write-Host "Garantindo pip na .buildvenv..."
+    & $BuildPython -m ensurepip --upgrade
+    if ($LASTEXITCODE -ne 0) {
+        throw "Falha ao inicializar o pip na .buildvenv."
+    }
 
-Write-Host "Instalando dependencias de build..."
-& $BuildPython -m pip install -r (Join-Path $ProjectRoot "requirements.txt") pyinstaller
-if ($LASTEXITCODE -ne 0) {
-    throw "Falha ao instalar dependencias na .buildvenv."
+    Write-Host "Instalando dependencias de build..."
+    & $BuildPython -m pip install -r (Join-Path $ProjectRoot "requirements.txt") pyinstaller
+    if ($LASTEXITCODE -ne 0) {
+        throw "Falha ao instalar dependencias na .buildvenv."
+    }
+} else {
+    Write-Host "Bootstrap de dependencias ignorado (BUILD_SKIP_BOOTSTRAP=1)."
 }
 
 $FfmpegDir = Join-Path $ProjectRoot "vendor\\ffmpeg\\bin"
