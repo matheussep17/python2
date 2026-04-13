@@ -41,6 +41,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/Igreja.exe
-          generate_release_notes: true
+          body: |
+            Melhorias visuais em toda a interface.
+            Ajustes nos modais e refinamentos gerais de usabilidade.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

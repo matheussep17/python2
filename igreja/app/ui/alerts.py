@@ -11,10 +11,10 @@ _APP_ROOT = None
 _DIALOG_ACTIVE = False
 
 _LEVELS = {
-    "info": {"icon": "[i]", "title": "Informacao", "bootstyle": "info"},
-    "success": {"icon": "[ok]", "title": "Sucesso", "bootstyle": "success"},
-    "warning": {"icon": "[!]", "title": "Aviso", "bootstyle": "warning"},
-    "error": {"icon": "[x]", "title": "Erro", "bootstyle": "danger"},
+    "info": {"title": "Informacao", "bootstyle": "info"},
+    "success": {"title": "Sucesso", "bootstyle": "success"},
+    "warning": {"title": "Aviso", "bootstyle": "warning"},
+    "error": {"title": "Erro", "bootstyle": "danger"},
 }
 
 _PALETTE = {
@@ -98,7 +98,7 @@ def show_alert(parent, title: str, message: str, level: str = "info") -> None:
 
         head = tk.Label(
             card,
-            text=f"{meta['icon']} {title or meta['title']}",
+            text=title or meta["title"],
             bg=palette["surface"],
             fg=palette["title"],
             font=("Segoe UI", 12, "bold"),
@@ -178,7 +178,7 @@ def ask_yes_no(parent, message: str, title: str = "Confirmacao") -> bool:
 
         head = tk.Label(
             card,
-            text=f"[?] {title or 'Confirmacao'}",
+            text=title or "Confirmacao",
             bg=palette["surface"],
             fg=palette["title"],
             font=("Segoe UI", 12, "bold"),

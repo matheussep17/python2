@@ -78,7 +78,7 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
                 pass
 
     def _build_ui(self):
-        card = ttk.Frame(self, padding=18)
+        card = ttk.Frame(self, padding=20, style="Card.TFrame")
         card.pack(fill="both", expand=True)
 
         header = ttk.Frame(card)
@@ -87,7 +87,7 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
         ttk.Separator(card).pack(fill="x", pady=12)
 
         # --- Arquivos ---
-        files_frame = ttk.LabelFrame(card, text="Arquivos")
+        files_frame = ttk.Labelframe(card, text="Arquivos", style="Hero.TLabelframe")
         files_frame.pack(fill="x")
         files_inner = ttk.Frame(files_frame, padding=12)
         files_inner.pack(fill="x")
@@ -112,7 +112,7 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
             ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(6, 4))
 
         # --- Opções ---
-        self.opts_frame = ttk.LabelFrame(card, text="Opções")
+        self.opts_frame = ttk.Labelframe(card, text="Opções")
         self.opts_frame.pack(fill="x", pady=(10, 0))
         opts_inner = ttk.Frame(self.opts_frame, padding=12)
         opts_inner.pack(fill="x")

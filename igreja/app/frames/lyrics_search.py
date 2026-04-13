@@ -9,6 +9,8 @@ import requests
 import ttkbootstrap as ttk
 from bs4 import BeautifulSoup
 
+from app.ui.theme import get_theme_profile
+
 
 class LyricsSearchFrame(ttk.Frame):
     def __init__(self, master, on_status):
@@ -25,21 +27,31 @@ class LyricsSearchFrame(ttk.Frame):
 
     def _build_ui(self):
         """Constroi a interface do usuario."""
-        input_frame = ttk.LabelFrame(self, text="Buscar Letra")
-        input_frame.pack(fill="x", padx=10, pady=10)
+        profile = get_theme_profile(getattr(self.winfo_toplevel(), "theme_mode", None))
 
-        inner_frame = ttk.Frame(input_frame)
-        inner_frame.pack(fill="x", padx=12, pady=12)
+        card = ttk.Frame(self, padding=20, style="Card.TFrame")
+        card.pack(fill="both", expand=True)
+
+        header = ttk.Frame(card, style="Card.TFrame")
+        header.pack(fill="x")
+        ttk.Label(header, text="Busca de Letras", style="SectionTitle.TLabel").pack(side="left")
+        ttk.Separator(card).pack(fill="x", pady=12)
+
+        input_frame = ttk.Labelframe(card, text="Buscar Letra", style="Hero.TLabelframe")
+        input_frame.pack(fill="x")
+
+        inner_frame = ttk.Frame(input_frame, padding=14, style="Surface.TFrame")
+        inner_frame.pack(fill="x")
         inner_frame.grid_columnconfigure(1, weight=1)
 
-        ttk.Label(inner_frame, text="Artista:", style="SidebarHint.TLabel").grid(
+        ttk.Label(inner_frame, text="Artista:", style="SectionLabel.TLabel").grid(
             row=0, column=0, sticky="w", pady=5
         )
         self.artist_var = tk.StringVar()
         self.artist_entry = ttk.Entry(inner_frame, textvariable=self.artist_var)
         self.artist_entry.grid(row=0, column=1, sticky="ew", padx=(8, 0))
 
-        ttk.Label(inner_frame, text="Musica:", style="SidebarHint.TLabel").grid(
+        ttk.Label(inner_frame, text="Musica:", style="SectionLabel.TLabel").grid(
             row=1, column=0, sticky="w", pady=5
         )
         self.song_var = tk.StringVar()
@@ -66,15 +78,15 @@ class LyricsSearchFrame(ttk.Frame):
         )
         self.cancel_button.pack(side="left", padx=5)
 
-        result_frame = ttk.LabelFrame(self, text="Letra da Musica")
-        result_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        result_frame = ttk.Labelframe(card, text="Letra da Musica", style="TLabelframe")
+        result_frame.pack(fill="both", expand=True, pady=(12, 0))
 
-        result_inner = ttk.Frame(result_frame)
-        result_inner.pack(fill="both", expand=True, padx=12, pady=12)
+        result_inner = ttk.Frame(result_frame, padding=14, style="Surface.TFrame")
+        result_inner.pack(fill="both", expand=True)
         result_inner.grid_rowconfigure(1, weight=1)
         result_inner.grid_columnconfigure(0, weight=1)
 
-        header_frame = ttk.Frame(result_inner)
+        header_frame = ttk.Frame(result_inner, style="Inset.TFrame", padding=12)
         header_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         header_frame.grid_columnconfigure(0, weight=1)
 
@@ -89,7 +101,7 @@ class LyricsSearchFrame(ttk.Frame):
         ttk.Label(
             header_frame,
             textvariable=self.artist_name_var,
-            style="SidebarHint.TLabel",
+            style="InsetMuted.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(2, 0))
 
         scrollbar = ttk.Scrollbar(result_inner)
@@ -103,14 +115,21 @@ class LyricsSearchFrame(ttk.Frame):
             padx=10,
             pady=10,
             undo=True,
+            relief="flat",
+            bd=0,
+            background=profile["panel_alt_bg"],
+            foreground=profile["field_fg"],
+            insertbackground=profile["field_fg"],
+            selectbackground=profile["panel_highlight"],
+            selectforeground="#FFFFFF",
         )
         self.lyrics_text.grid(row=1, column=0, sticky="nsew")
         scrollbar.config(command=self.lyrics_text.yview)
         self._build_context_menu()
 
         self.status_var = tk.StringVar(value="Pronto para pesquisar")
-        ttk.Label(self, textvariable=self.status_var, style="Status.TLabel", anchor="w").pack(
-            fill="x", padx=10, pady=(0, 5)
+        ttk.Label(card, textvariable=self.status_var, style="CardMuted.TLabel", anchor="w").pack(
+            fill="x", pady=(10, 0)
         )
 
     def _build_context_menu(self):

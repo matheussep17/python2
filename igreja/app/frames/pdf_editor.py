@@ -61,6 +61,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         self.canvas_item_roles = {}
         self.thumbnail_images = []
         self.thumbnail_buttons = []
+        self._last_thumbnail_width = 0
         self.annotation_seq = 0
 
         self.current_pen_annotation = None
@@ -115,17 +116,21 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         self.scrollbar.pack(side="right", fill="y")
         self.scroll_canvas.configure(yscrollcommand=self.scrollbar.set)
         self.scroll_canvas.bind("<Configure>", self._on_scroll_canvas_configure)
+        self.scroll_canvas.bind("<Enter>", self._bind_mousewheel_scroll)
+        self.scroll_canvas.bind("<Leave>", self._unbind_mousewheel_scroll)
 
-        self.card = ttk.Frame(self.scroll_canvas, padding=18)
+        self.card = ttk.Frame(self.scroll_canvas, padding=20, style="Card.TFrame")
         self.card_window = self.scroll_canvas.create_window((0, 0), window=self.card, anchor="nw")
         self.card.bind("<Configure>", self._on_card_configure)
+        self.card.bind("<Enter>", self._bind_mousewheel_scroll)
+        self.card.bind("<Leave>", self._unbind_mousewheel_scroll)
 
         header = ttk.Frame(self.card)
         header.pack(fill="x")
         ttk.Label(header, text="Editor de PDF", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(self.card).pack(fill="x", pady=12)
 
-        intro = ttk.LabelFrame(self.card, text="Arquivo")
+        intro = ttk.Labelframe(self.card, text="Arquivo", style="Hero.TLabelframe")
         intro.pack(fill="x")
         intro_inner = ttk.Frame(intro, padding=12)
         intro_inner.pack(fill="x")
@@ -165,7 +170,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
             self.select_btn.config(state=DISABLED)
             self.clear_btn.config(state=DISABLED)
 
-        self.tools_frame = ttk.LabelFrame(self.card, text="Ferramentas")
+        self.tools_frame = ttk.Labelframe(self.card, text="Ferramentas")
         self.tools_frame.pack(fill="x", pady=(10, 6))
         tools_inner = ttk.Frame(self.tools_frame, padding=12)
         tools_inner.pack(fill="x")
@@ -206,7 +211,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         ttk.Label(
             self.text_row,
             text="No modo texto, clique na pagina para criar a caixa e digitar direto no documento.",
-            style="Muted.TLabel",
+            style="CardMuted.TLabel",
         ).pack(side="left", fill="x", expand=True)
         self.delete_btn = ttk.Button(
             self.text_row, text="Apagar selecionado", command=self.delete_selected_annotation, bootstyle="danger-outline"
@@ -234,7 +239,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         ttk.Label(
             self.adjust_row,
             text="No modo texto, clique para digitar. No modo selecionar, arraste para mover e use o puxador lateral para largura.",
-            style="Muted.TLabel",
+            style="CardMuted.TLabel",
         ).pack(side="left", padx=(18, 0))
 
         self.nav_frame = ttk.Frame(self.card)
@@ -263,8 +268,9 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         self.viewer_frame.columnconfigure(0, weight=0, minsize=160)
         self.viewer_frame.columnconfigure(1, weight=1)
         self.viewer_frame.rowconfigure(0, weight=1)
+        self.viewer_frame.bind("<Configure>", self._on_viewer_frame_configure)
 
-        thumbs_wrap = ttk.LabelFrame(self.viewer_frame, text="Paginas")
+        thumbs_wrap = ttk.Labelframe(self.viewer_frame, text="Paginas")
         thumbs_wrap.grid(row=0, column=0, sticky="nsw", padx=(0, 8), pady=(0, 0))
         thumbs_inner = ttk.Frame(thumbs_wrap, padding=8)
         thumbs_inner.pack(fill="both", expand=True)
@@ -278,7 +284,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         self.thumbs_frame.bind("<Configure>", self._on_thumbs_configure)
         self.thumbs_canvas.bind("<Configure>", self._on_thumbs_canvas_configure)
 
-        canvas_wrap = ttk.LabelFrame(self.viewer_frame, text="Pagina")
+        canvas_wrap = ttk.Labelframe(self.viewer_frame, text="Pagina")
         canvas_wrap.grid(row=0, column=1, sticky="nsew")
         canvas_wrap.columnconfigure(0, weight=1)
         canvas_wrap.rowconfigure(0, weight=1)
@@ -300,7 +306,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         self.canvas.bind("<ButtonRelease-1>", self._on_canvas_release)
         self.canvas.bind("<Double-Button-1>", self._on_canvas_double_click)
 
-        self.output_frame = ttk.LabelFrame(self.card, text="Saida")
+        self.output_frame = ttk.Labelframe(self.card, text="Saida")
         self.output_frame.pack(fill="x", pady=(10, 0))
         output_inner = ttk.Frame(self.output_frame, padding=12)
         output_inner.pack(fill="x")
@@ -531,10 +537,15 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         if not self.pdf_doc:
             return
 
+        available_width = max(88, int(self.thumbs_canvas.winfo_width() or 0) - 28)
+        self._last_thumbnail_width = available_width
+
         for page_index in range(self.page_count):
             try:
                 page = self.pdf_doc.load_page(page_index)
-                pix = page.get_pixmap(matrix=fitz.Matrix(0.22, 0.22), alpha=False)
+                rect = page.rect
+                thumb_scale = min(0.22, max(0.12, available_width / max(1.0, float(rect.width))))
+                pix = page.get_pixmap(matrix=fitz.Matrix(thumb_scale, thumb_scale), alpha=False)
                 image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                 photo = ImageTk.PhotoImage(image)
             except Exception:
@@ -548,7 +559,6 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
                 compound="top",
                 style="Nav.TButton",
                 command=lambda idx=page_index: self._go_to_page(idx),
-                width=16,
             )
             btn.pack(fill="x", pady=(0, 8))
             self.thumbnail_buttons.append(btn)
@@ -574,6 +584,9 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
 
     def _on_thumbs_canvas_configure(self, event):
         self.thumbs_canvas.itemconfigure(self.thumbs_window, width=event.width)
+        available_width = max(88, int(event.width) - 28)
+        if self.pdf_doc and self.thumbnail_buttons and abs(available_width - self._last_thumbnail_width) >= 16:
+            self.after_idle(self._build_thumbnails)
 
     def _render_current_page(self):
         if not self.pdf_doc or self.page_count <= 0:
@@ -1393,6 +1406,43 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
             self.scroll_canvas.itemconfigure(self.card_window, height=self.card.winfo_reqheight())
 
         self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all"))
+
+    def _bind_mousewheel_scroll(self, _event=None):
+        if not self._is_active_screen():
+            return
+        self.bind_all("<MouseWheel>", self._on_outer_mousewheel, add="+")
+
+    def _unbind_mousewheel_scroll(self, _event=None):
+        try:
+            self.unbind_all("<MouseWheel>")
+        except Exception:
+            pass
+
+    def _on_outer_mousewheel(self, event):
+        if not self._is_active_screen():
+            return
+        if self.active_text_editor and event.widget is self.active_text_editor:
+            return
+        if self.scroll_canvas.yview() == (0.0, 1.0):
+            return
+        if getattr(event, "delta", 0):
+            direction = -1 if event.delta > 0 else 1
+            self.scroll_canvas.yview_scroll(direction, "units")
+            return "break"
+
+    def _on_viewer_frame_configure(self, event):
+        width = max(1, int(event.width))
+        if width < 760:
+            thumbs_width = 92
+        elif width < 980:
+            thumbs_width = 112
+        elif width < 1180:
+            thumbs_width = 128
+        else:
+            thumbs_width = 160
+
+        self.viewer_frame.columnconfigure(0, minsize=thumbs_width)
+        self.thumbs_canvas.configure(width=max(88, thumbs_width - 6))
 
     def _on_card_configure(self, event):
         # Atualiza a área total que pode ser rolada quando o conteúdo muda de tamanho.

@@ -67,7 +67,7 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
                 pass
 
     def _build_ui(self):
-        card = ttk.Frame(self, padding=18)
+        card = ttk.Frame(self, padding=20, style="Card.TFrame")
         card.pack(fill="both", expand=True)
 
         header = ttk.Frame(card)
@@ -75,7 +75,7 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
         ttk.Label(header, text="Transcritor de Audio (Word)", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
 
-        files_frame = ttk.LabelFrame(card, text="Arquivos")
+        files_frame = ttk.Labelframe(card, text="Arquivos", style="Hero.TLabelframe")
         files_frame.pack(fill="x")
         files_inner = ttk.Frame(files_frame, padding=12)
         files_inner.pack(fill="x")
@@ -97,7 +97,7 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
                 style="Muted.TLabel",
             ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(6, 4))
 
-        self.opts_frame = ttk.LabelFrame(card, text="Saída")
+        self.opts_frame = ttk.Labelframe(card, text="Saída")
         self.opts_frame.pack_forget()
         output_inner = ttk.Frame(self.opts_frame, padding=12)
         output_inner.pack(fill="x")

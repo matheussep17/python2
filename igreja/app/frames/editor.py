@@ -116,7 +116,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
             "<Leave>", lambda e: self.canvas.unbind_all("<MouseWheel>")
         )
 
-        card = ttk.Frame(self.scrollable_frame, padding=18)
+        card = ttk.Frame(self.scrollable_frame, padding=20, style="Card.TFrame")
         card.pack(fill="both", expand=True)
 
         header = ttk.Frame(card)
@@ -124,7 +124,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         ttk.Label(header, text="Editor de Mídia", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
 
-        files_frame = ttk.LabelFrame(card, text="Arquivos")
+        files_frame = ttk.Labelframe(card, text="Arquivos", style="Hero.TLabelframe")
         files_frame.pack(fill="x")
         files_inner = ttk.Frame(files_frame, padding=12)
         files_inner.pack(fill="x")
@@ -158,7 +158,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         # Build initial empty list (no videos selected yet).
         self._rebuild_video_rows()
 
-        options = ttk.LabelFrame(card, text="Opções", font=("Segoe UI", 14, "bold"))
+        options = ttk.Labelframe(card, text="Opções")
         options.pack(fill="x", pady=(2, 6))
         options_inner = ttk.Frame(options, padding=12)
         options_inner.pack(fill="x")
@@ -198,7 +198,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         hint = ttk.Label(
             card,
             text="Formatos de tempo aceitos: 90, 01:30, 00:01:30.500",
-            style="Muted.TLabel",
+            style="CardMuted.TLabel",
         )
         hint.pack(anchor="w", pady=(0, 6))
 
@@ -294,7 +294,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         self.video_rows = []
 
         for idx, path in enumerate(self.input_files, start=1):
-            row_frame = ttk.LabelFrame(self.videos_container, text=f"Trecho {idx}", font=("Segoe UI", 14, "bold"))
+            row_frame = ttk.Labelframe(self.videos_container, text=f"Trecho {idx}")
             row_frame.pack(fill="x", pady=(0, 6))
 
             base_name = os.path.basename(path)

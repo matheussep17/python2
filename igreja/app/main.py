@@ -48,9 +48,9 @@ from app.utils import (
 from app.version import APP_VERSION
 
 
-DEFAULT_WINDOW_WIDTH = 1280
+DEFAULT_WINDOW_WIDTH = 1480
 DEFAULT_WINDOW_HEIGHT = 760
-MIN_WINDOW_WIDTH = 960
+MIN_WINDOW_WIDTH = 1120
 MIN_WINDOW_HEIGHT = 600
 SMALL_SCREEN_WIDTH = 1366
 SMALL_SCREEN_HEIGHT = 768
@@ -60,7 +60,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
     def __init__(self):
         import traceback
 
-        def report_callback_exception(exc, val, tb):
+        def report_callback_exception(_root, exc, val, tb):
             if exc is tk.TclError and val and "application has been destroyed" in str(val).lower():
                 return
             traceback.print_exception(exc, val, tb)
@@ -85,6 +85,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.nav_buttons = {}
         self.update_check_in_progress = False
         self._is_closing = False
+        self._sidebar_width = 320
 
         self._apply_window_icon()
         install_messagebox_hooks(self)
@@ -93,21 +94,72 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
         self.title("Media Suite - Conversor")
         self._configure_initial_window()
-        # Some frames (like the video editor) can grow tall/wide when generating output,
-        # so keep the window from being resized too small.
-        self.grid_columnconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        top = ttk.Frame(self, padding=(18, 12), style="TopBar.TFrame")
-        top.grid(row=0, column=0, columnspan=2, sticky="ew")
+        self.screen_meta = {
+            "converter": {
+                "window": "Conversor",
+                "nav": "01  Conversor",
+                "title": "Conversor Multiformato",
+                "subtitle": "Transforme vídeo, áudio e imagem com uma estação limpa, previsível e pronta para produção.",
+            },
+            "compressor": {
+                "window": "Comprimir",
+                "nav": "02  Comprimir",
+                "title": "Compressão Inteligente",
+                "subtitle": "Reduza tamanho de arquivos preservando qualidade e clareza para entregas reais.",
+            },
+            "editor": {
+                "window": "Editar mídia",
+                "nav": "03  Editar mídia",
+                "title": "Montagem de Trechos",
+                "subtitle": "Organize segmentos, combine mídias e produza saídas com ritmo e precisão.",
+            },
+            "pdf": {
+                "window": "Editar PDF",
+                "nav": "04  Editar PDF",
+                "title": "Anotação e Revisão de PDF",
+                "subtitle": "Abra, revise, marque e exporte documentos com uma interface mais segura e focada.",
+            },
+            "baixar": {
+                "window": "Baixar",
+                "nav": "05  Baixar",
+                "title": "Coleta de Mídia",
+                "subtitle": "Baixe conteúdo externo com contexto claro de origem, formato e destino final.",
+            },
+            "lyrics": {
+                "window": "Letras",
+                "nav": "06  Letras",
+                "title": "Pesquisa de Letras",
+                "subtitle": "Busque referências musicais com leitura confortável e status de operação sempre visível.",
+            },
+            "transcribe": {
+                "window": "Transcrição",
+                "nav": "07  Transcrição",
+                "title": "Transcrição Assistida",
+                "subtitle": "Converta áudio em documentos com uma experiência mais séria, técnica e pronta para uso.",
+            },
+        }
 
-        ttk.Label(top, text="Media Suite", style="AppHeader.TLabel").pack(side="left")
-        self.title_label = ttk.Label(top, text="• Conversor", style="AppSubHeader.TLabel")
-        self.title_label.pack(side="left", padx=(8, 0))
+        top = ttk.Frame(self, padding=(24, 18, 24, 14), style="TopBar.TFrame")
+        top.grid(row=0, column=0, sticky="ew")
+        top.grid_columnconfigure(0, weight=1)
 
-        top_right = ttk.Frame(top, style="TopBar.TFrame")
-        top_right.pack(side="right")
-        ttk.Label(top_right, text="Tema", style="SidebarHint.TLabel").pack(side="left", padx=(0, 6))
+        brand = ttk.Frame(top, style="TopBarInner.TFrame")
+        brand.grid(row=0, column=0, sticky="w")
+        ttk.Label(brand, text="CENTRAL DE MIDIA", style="AppKicker.TLabel").pack(anchor="w")
+        ttk.Label(brand, text="Media Suite", style="AppHeader.TLabel").pack(anchor="w", pady=(2, 0))
+        self.title_label = ttk.Label(
+            brand,
+            text="Ambiente central para conversão, edição, busca e entrega de mídia",
+            style="AppSubHeader.TLabel",
+        )
+        self.title_label.pack(anchor="w", pady=(2, 0))
+
+        top_right = ttk.Frame(top, padding=8, style="ToolbarGroup.TFrame")
+        top_right.grid(row=0, column=1, sticky="e")
+        ttk.Label(top_right, text="Tema", style="HeaderMeta.TLabel").pack(side="left", padx=(0, 8))
         self.theme_box = ttk.Combobox(
             top_right,
             textvariable=self.theme_mode,
@@ -120,49 +172,89 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         ttk.Button(
             top_right,
             text="Atualizar",
-            bootstyle="info-outline",
+            style="Chrome.TButton",
             command=lambda: self.check_for_updates(user_initiated=True),
         ).pack(side="left", padx=(8, 0))
         ttk.Button(
             top_right,
             text="Sobre",
-            bootstyle="secondary-outline",
+            style="Chrome.TButton",
             command=self._open_about,
         ).pack(side="left", padx=(8, 0))
 
-        side = ttk.Frame(self, padding=14, style="SideBar.TFrame")
-        side.grid(row=1, column=0, sticky="ns")
-        ttk.Label(side, text="Navegacao", style="SidebarHint.TLabel").pack(anchor="w", pady=(0, 8))
+        main = ttk.Frame(self, padding=(18, 0, 18, 14), style="AppBody.TFrame")
+        main.grid(row=1, column=0, sticky="nsew")
+        main.grid_columnconfigure(1, weight=1)
+        main.grid_rowconfigure(0, weight=1)
 
-        # Side navigation tabs are ordered alphabetically (by label) for consistency.
-        for key, label, emoji in [
-            ("baixar", "Baixar", "⬇️"),
-            ("compressor", "Comprimir", "🗜️"),
-            ("converter", "Conversor", "⚙️"),
-            ("editor", "Editar mídia", "✂️"),
-            ("lyrics", "Letras", "🎵"),
-            ("pdf", "Editar PDF", "📄"),
-            ("transcribe", "Transcrição", "📝"),
-        ]:
+        side = ttk.Frame(main, padding=(0, 0, 16, 0), style="SideBar.TFrame")
+        side.grid(row=0, column=0, sticky="ns")
+
+        side_panel = ttk.Frame(side, padding=18, width=self._sidebar_width, style="SidebarPanel.TFrame")
+        side_panel.pack(fill="y", expand=True)
+        side_panel.pack_propagate(False)
+        self.side_panel = side_panel
+        ttk.Label(side_panel, text="NAVEGAÇÃO", style="SidebarSection.TLabel").pack(anchor="w")
+        ttk.Label(side_panel, text="Áreas do Sistema", style="SidebarTitle.TLabel").pack(anchor="w", pady=(4, 2))
+        self.sidebar_intro = ttk.Label(
+            side_panel,
+            text="Acesso rápido aos fluxos principais do aplicativo.",
+            style="SidebarHint.TLabel",
+            justify="left",
+            wraplength=260,
+        )
+        self.sidebar_intro.pack(anchor="w", pady=(0, 14), fill="x")
+
+        for key in ["converter", "compressor", "editor", "pdf", "baixar", "lyrics", "transcribe"]:
             btn = ttk.Button(
-                side,
-                # Standardize spacing between icon and label.
-                text=f"{emoji} {label}",
+                side_panel,
+                text=self.screen_meta[key]["nav"],
                 style="Nav.TButton",
                 command=lambda k=key: self._show(k),
             )
-            btn.pack(fill="x", pady=5)
+            btn.pack(fill="x", pady=4)
             self.nav_buttons[key] = btn
 
-        self.content = ttk.Frame(self, padding=(8, 16, 16, 16), style="ContentArea.TFrame")
-        self.content.grid(row=1, column=1, sticky="nsew")
+        ttk.Separator(side_panel).pack(fill="x", pady=14)
+        self.sidebar_footer = ttk.Label(
+            side_panel,
+            text="Use a navegação lateral ou os atalhos do rodapé.",
+            style="SidebarHint.TLabel",
+            justify="left",
+            wraplength=260,
+        )
+        self.sidebar_footer.pack(anchor="w", pady=(4, 0), fill="x")
+
+        workspace = ttk.Frame(main, style="ContentArea.TFrame")
+        workspace.grid(row=0, column=1, sticky="nsew")
+        workspace.grid_columnconfigure(0, weight=1)
+        workspace.grid_rowconfigure(1, weight=1)
+
+        hero = ttk.Frame(workspace, padding=(22, 18), style="HeroPanel.TFrame")
+        hero.grid(row=0, column=0, sticky="ew")
+        hero.grid_columnconfigure(0, weight=1)
+        ttk.Label(hero, text="ÁREA ATIVA", style="WorkspaceEyebrow.TLabel").grid(row=0, column=0, sticky="w")
+        self.workspace_title = ttk.Label(hero, text="", style="WorkspaceTitle.TLabel")
+        self.workspace_title.grid(row=1, column=0, sticky="w", pady=(4, 0))
+        self.workspace_subtitle = ttk.Label(hero, text="", style="WorkspaceSubtitle.TLabel", justify="left", wraplength=860)
+        self.workspace_subtitle.grid(row=2, column=0, sticky="w", pady=(4, 0))
+
+        stage = ttk.Frame(workspace, padding=12, style="ContentShell.TFrame")
+        stage.grid(row=1, column=0, sticky="nsew", pady=(14, 0))
+        stage.grid_columnconfigure(0, weight=1)
+        stage.grid_rowconfigure(0, weight=1)
+
+        self.content = ttk.Frame(stage, style="ContentShell.TFrame")
+        self.content.grid(row=0, column=0, sticky="nsew")
         self.content.grid_columnconfigure(0, weight=1)
         self.content.grid_rowconfigure(0, weight=1)
 
-        sb = ttk.Frame(self, padding=(16, 8), style="StatusBar.TFrame")
-        sb.grid(row=2, column=0, columnspan=2, sticky="ew")
+        sb = ttk.Frame(self, padding=(20, 10), style="StatusBar.TFrame")
+        sb.grid(row=2, column=0, sticky="ew")
         self.statusbar_var = tk.StringVar(value="Pronto.")
         ttk.Label(sb, textvariable=self.statusbar_var, style="Status.TLabel", anchor="w").pack(side="left")
+        self.status_meta = ttk.Label(sb, text=f"Versão {APP_VERSION} • Atalhos Ctrl+1 a Ctrl+7", style="Status.TLabel")
+        self.status_meta.pack(side="right")
 
         self.frames = {
             "converter": ConverterFrame(self.content, self._set_status),
@@ -180,13 +272,16 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self._show("converter")
 
         self.bind("<Control-Key-1>", lambda _e: self._show("converter"))
-        self.bind("<Control-Key-2>", lambda _e: self._show("editor"))
-        self.bind("<Control-Key-3>", lambda _e: self._show("baixar"))
-        self.bind("<Control-Key-4>", lambda _e: self._show("compressor"))
-        self.bind("<Control-Key-5>", lambda _e: self._show("pdf"))
-        self.bind("<Control-Key-6>", lambda _e: self._show("transcribe"))
+        self.bind("<Control-Key-2>", lambda _e: self._show("compressor"))
+        self.bind("<Control-Key-3>", lambda _e: self._show("editor"))
+        self.bind("<Control-Key-4>", lambda _e: self._show("pdf"))
+        self.bind("<Control-Key-5>", lambda _e: self._show("baixar"))
+        self.bind("<Control-Key-6>", lambda _e: self._show("lyrics"))
+        self.bind("<Control-Key-7>", lambda _e: self._show("transcribe"))
+        self.bind("<Configure>", self._on_window_resize, add="+")
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(500, self._schedule_startup_update_check)
+        self.after_idle(self._update_responsive_shell)
 
     def _configure_initial_window(self):
         screen_width = max(1, int(self.winfo_screenwidth()))
@@ -218,6 +313,43 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         apply_design_system(self, self.style, mode)
         current = getattr(self, "current_screen", "converter")
         self._update_nav_appearance(current)
+        self._show(current)
+        self._update_responsive_shell()
+
+    def _on_window_resize(self, event=None):
+        if event is not None and event.widget is not self:
+            return
+        self._update_responsive_shell()
+
+    def _update_responsive_shell(self):
+        width = max(1, self.winfo_width())
+
+        if width >= 1700:
+            sidebar_width = 320
+        elif width >= 1450:
+            sidebar_width = 280
+        else:
+            sidebar_width = 240
+
+        self._sidebar_width = sidebar_width
+        if getattr(self, "side_panel", None):
+            self.side_panel.configure(width=sidebar_width)
+
+        sidebar_wrap = max(180, sidebar_width - 36)
+        if getattr(self, "sidebar_intro", None):
+            self.sidebar_intro.configure(wraplength=sidebar_wrap)
+        if getattr(self, "sidebar_footer", None):
+            self.sidebar_footer.configure(wraplength=sidebar_wrap)
+
+        subtitle_wrap = max(420, width - sidebar_width - 220)
+        if getattr(self, "workspace_subtitle", None):
+            self.workspace_subtitle.configure(wraplength=subtitle_wrap)
+
+        if getattr(self, "status_meta", None):
+            compact = width < 1180
+            self.status_meta.configure(
+                text=(f"Versão {APP_VERSION} • Ctrl+1..7" if compact else f"Versão {APP_VERSION} • Atalhos Ctrl+1 a Ctrl+7")
+            )
 
     def _show(self, key):
         frame = self.frames.get(key)
@@ -228,25 +360,22 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.current_screen = key
         self._update_nav_appearance(key)
 
-        mapping = {
-            "converter": "• Conversor",
-            "editor": "• Editar video",
-            "pdf": "• Editar PDF",
-            "compressor": "• Comprimir",
-            "baixar": "• Baixar",
-            "transcribe": "• Transcricao",
-        }
-        self.title_label.config(text=mapping.get(key, ""))
+        meta = self.screen_meta.get(key, self.screen_meta["converter"])
+        self.workspace_title.config(text=meta["title"])
+        self.workspace_subtitle.config(text=meta["subtitle"])
+        self.title_label.config(text=f"Área atual: {meta['window']}")
 
         if key == "baixar":
             try:
                 service = self.frames["baixar"].service.get()
             except Exception:
                 service = "YouTube"
+            self.workspace_subtitle.config(
+                text=f"{meta['subtitle']} Serviço atual configurado: {service}."
+            )
             self.title(f"Media Suite - Baixar - {service}")
         else:
-            window_title = mapping.get(key, "• Conversor").replace("• ", "")
-            self.title(f"Media Suite - {window_title}")
+            self.title(f"Media Suite - {meta['window']}")
 
         self._set_status("Pronto.")
 

@@ -61,7 +61,7 @@ class BaixarFrame(ttk.Frame):
         self._apply_quality_visibility()
 
     def _build_ui(self):
-        card = ttk.Frame(self, padding=18)
+        card = ttk.Frame(self, padding=20, style="Card.TFrame")
         card.pack(fill="both", expand=True)
 
         header = ttk.Frame(card)
@@ -87,7 +87,7 @@ class BaixarFrame(ttk.Frame):
         ttk.Separator(card).pack(fill="x", pady=12)
 
         # --- URL / Serviço ---
-        url_frame = ttk.LabelFrame(card, text="Origem")
+        url_frame = ttk.Labelframe(card, text="Origem", style="Hero.TLabelframe")
         url_frame.pack(fill="x")
         url_inner = ttk.Frame(url_frame, padding=12)
         url_inner.pack(fill="x")
@@ -115,7 +115,7 @@ class BaixarFrame(ttk.Frame):
         url_inner.columnconfigure(2, weight=0)
 
         # --- Destino ---
-        dest_frame = ttk.LabelFrame(card, text="Destino")
+        dest_frame = ttk.Labelframe(card, text="Destino", style="TLabelframe")
         dest_frame.pack(fill="x", pady=(10, 0))
         dest_inner = ttk.Frame(dest_frame, padding=12)
         dest_inner.pack(fill="x")
@@ -130,7 +130,7 @@ class BaixarFrame(ttk.Frame):
         self.dest_label.grid(row=0, column=1, sticky="ew", padx=(10, 0))
 
         # --- Opções ---
-        self.opts_frame = ttk.LabelFrame(card, text="Opções")
+        self.opts_frame = ttk.Labelframe(card, text="Opções")
         self.opts_frame.pack_forget()
         opts_inner = ttk.Frame(self.opts_frame, padding=12)
         opts_inner.pack(fill="x")
