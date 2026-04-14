@@ -305,8 +305,16 @@ def apply_design_system(window, style, mode: str | tk.Variable | None) -> None:
     )
     style.map(
         "Action.TButton",
-        background=[("active", profile["panel_alt_bg"]), ("pressed", profile["panel_alt_bg"])],
-        foreground=[("disabled", profile["muted_fg"])],
+        background=[
+            ("active", profile["panel_alt_bg"]),
+            ("pressed", profile["panel_alt_bg"]),
+            ("disabled", profile["panel_bg"]),
+        ],
+        foreground=[
+            ("active", profile["title_fg"]),
+            ("pressed", profile["title_fg"]),
+            ("disabled", profile["muted_fg"]),
+        ],
         bordercolor=[
             ("active", profile["panel_highlight"]),
             ("pressed", profile["panel_highlight"]),
@@ -337,22 +345,30 @@ def apply_design_system(window, style, mode: str | tk.Variable | None) -> None:
     )
     style.map(
         "PrimaryAction.TButton",
-        background=[("active", profile["input_focus"]), ("pressed", profile["input_focus"])],
-        foreground=[("disabled", profile["muted_fg"])],
+        background=[
+            ("active", profile["input_focus"]),
+            ("pressed", profile["input_focus"]),
+            ("disabled", profile["panel_border"]),
+        ],
+        foreground=[
+            ("active", profile["inverse_fg"]),
+            ("pressed", profile["inverse_fg"]),
+            ("disabled", profile["title_fg"]),
+        ],
         bordercolor=[
             ("active", profile["input_focus"]),
             ("pressed", profile["input_focus"]),
-            ("disabled", profile["panel_border_soft"]),
+            ("disabled", profile["panel_border"]),
         ],
         lightcolor=[
             ("active", profile["input_focus"]),
             ("pressed", profile["input_focus"]),
-            ("disabled", profile["panel_border_soft"]),
+            ("disabled", profile["panel_border"]),
         ],
         darkcolor=[
             ("active", profile["input_focus"]),
             ("pressed", profile["input_focus"]),
-            ("disabled", profile["panel_border_soft"]),
+            ("disabled", profile["panel_border"]),
         ],
     )
     style.configure(
@@ -369,8 +385,16 @@ def apply_design_system(window, style, mode: str | tk.Variable | None) -> None:
     )
     style.map(
         "DangerAction.TButton",
-        background=[("active", "#C84B56"), ("pressed", "#C84B56")],
-        foreground=[("disabled", profile["muted_fg"])],
+        background=[
+            ("active", "#C84B56"),
+            ("pressed", "#C84B56"),
+            ("disabled", profile["panel_bg"]),
+        ],
+        foreground=[
+            ("active", profile["inverse_fg"]),
+            ("pressed", profile["inverse_fg"]),
+            ("disabled", profile["muted_fg"]),
+        ],
         bordercolor=[
             ("active", "#C84B56"),
             ("pressed", "#C84B56"),
