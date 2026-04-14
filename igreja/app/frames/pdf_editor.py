@@ -113,12 +113,11 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         self.scroll_canvas = tk.Canvas(
             self.canvas_frame,
             highlightthickness=0,
-            background=self._theme_color("content_bg"),
+            background=self._theme_color("panel_bg"),
         )
         self.scroll_canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar = ttk.Scrollbar(self.canvas_frame, orient="vertical", command=self.scroll_canvas.yview)
-        self.scrollbar.pack(side="right", fill="y")
-        self.scroll_canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.scroll_canvas.configure(yscrollcommand=None)
         self.scroll_canvas.bind("<Configure>", self._on_scroll_canvas_configure)
         self.scroll_canvas.bind("<Enter>", self._bind_mousewheel_scroll)
         self.scroll_canvas.bind("<Leave>", self._unbind_mousewheel_scroll)
@@ -349,6 +348,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         self._draw_empty_state()
         self._update_editor_visibility()
         self._update_action_state()
+        self._update_scrollbar_visibility()
 
     def _selected_color(self):
         return self.color_map.get(self.color_name_var.get(), COLOR_CHOICES[0][1])
@@ -378,6 +378,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
                 self.open_btn.pack(side="left", padx=(10, 0))
             elif not self.last_output and self.open_btn.winfo_ismapped():
                 self.open_btn.pack_forget()
+            self._update_scrollbar_visibility()
             return
 
         self.clear_btn.grid_remove()
@@ -388,6 +389,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         self.viewer_frame.pack_forget()
         self.output_frame.pack_forget()
         self.actions_frame.pack_forget()
+        self._update_scrollbar_visibility()
 
     def _next_annotation_id(self):
         self.annotation_seq += 1
@@ -1389,6 +1391,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
                 mode = None
         palette = {
             "content_bg": "#EEF3FA" if mode == "Claro" else "#060E1A",
+            "panel_bg": "#FDFEFF" if mode == "Claro" else "#191F29",
             "panel_alt_bg": "#F2F6FC" if mode == "Claro" else "#13253E",
         }
         return palette[key]
@@ -1424,6 +1427,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
             self.scroll_canvas.itemconfigure(self.card_window, height=self.card.winfo_reqheight())
 
         self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all"))
+        self._update_scrollbar_visibility()
 
     def _bind_mousewheel_scroll(self, _event=None):
         if not self._is_active_screen():
@@ -1471,3 +1475,28 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
             self.scroll_canvas.itemconfigure(self.card_window, height=self.card.winfo_reqheight())
 
         self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all"))
+        self._update_scrollbar_visibility()
+
+    def _update_scrollbar_visibility(self):
+        if not getattr(self, "scroll_canvas", None):
+            return
+        try:
+            self.update_idletasks()
+        except Exception:
+            pass
+        bbox = self.scroll_canvas.bbox("all")
+        if not bbox:
+            self.scrollbar.pack_forget()
+            self.scroll_canvas.configure(yscrollcommand=None)
+            return
+        content_height = bbox[3] - bbox[1]
+        visible_height = self.scroll_canvas.winfo_height()
+        has_document = bool(self.pdf_doc and self.page_count > 0)
+        needs_scroll = has_document
+        if needs_scroll:
+            if not self.scrollbar.winfo_ismapped():
+                self.scrollbar.pack(side="right", fill="y")
+            self.scroll_canvas.configure(yscrollcommand=self.scrollbar.set)
+        else:
+            self.scrollbar.pack_forget()
+            self.scroll_canvas.configure(yscrollcommand=None)

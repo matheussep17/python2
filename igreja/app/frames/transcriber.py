@@ -41,6 +41,8 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
         self.progress_var = tk.DoubleVar(value=0)
         self.status_var = tk.StringVar(value="")
         self.output_name_var = tk.StringVar()
+        self.output_name_vars = {}
+        self._output_name_defaults = {}
         self.init_output_folder("Mesma pasta do arquivo original")
 
         self.is_running = False
@@ -67,8 +69,23 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
                 pass
 
     def _build_ui(self):
-        card = ttk.Frame(self, padding=20, style="Card.TFrame")
-        card.pack(fill="both", expand=True)
+        canvas_bg = self.winfo_toplevel().style.lookup("Card.TFrame", "background") or self.winfo_toplevel().style.lookup("TFrame", "background")
+        self.canvas_frame = ttk.Frame(self, style="ContentHost.TFrame")
+        self.canvas_frame.pack(fill="both", expand=True)
+        self.scroll_canvas = tk.Canvas(self.canvas_frame, highlightthickness=0, borderwidth=0, background=canvas_bg)
+        self.scroll_canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar = ttk.Scrollbar(self.canvas_frame, orient="vertical", command=self.scroll_canvas.yview)
+        self.scroll_canvas.configure(yscrollcommand=None)
+        self.scroll_canvas.bind("<Configure>", self._on_scroll_canvas_configure)
+        self.scroll_canvas.bind("<Enter>", self._bind_mousewheel_scroll)
+        self.scroll_canvas.bind("<Leave>", self._unbind_mousewheel_scroll)
+
+        card = ttk.Frame(self.scroll_canvas, padding=20, style="Card.TFrame")
+        self.card = card
+        self.card_window = self.scroll_canvas.create_window((0, 0), window=self.card, anchor="nw")
+        self.card.bind("<Configure>", self._on_card_configure)
+        self.card.bind("<Enter>", self._bind_mousewheel_scroll)
+        self.card.bind("<Leave>", self._unbind_mousewheel_scroll)
 
         header = ttk.Frame(card, style="Card.TFrame")
         header.pack(fill="x")
@@ -106,10 +123,16 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
         ttk.Label(output_inner, text="Nome do arquivo:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
         self.output_name_entry = ttk.Entry(output_inner, textvariable=self.output_name_var, width=32)
         self.output_name_entry.grid(row=0, column=1, sticky="ew", padx=(10, 0))
-        ttk.Label(output_inner, text="Editavel quando houver 1 arquivo selecionado.", style="SurfaceMuted.TLabel").grid(
+        self.output_name_hint = ttk.Label(output_inner, text="Editavel quando houver 1 arquivo selecionado.", style="SurfaceMuted.TLabel")
+        self.output_name_hint.grid(
             row=0, column=2, sticky="w", padx=(10, 0)
         )
         self.output_name_entry.configure(state=DISABLED)
+        self.batch_output_frame = ttk.Labelframe(card, text="Nomes por arquivo")
+        self.batch_output_inner = ttk.Frame(self.batch_output_frame, padding=12, style="SurfaceAlt.TFrame")
+        self.batch_output_inner.pack(fill="x")
+        self.batch_output_inner.columnconfigure(1, weight=1)
+        self.batch_output_frame.pack_forget()
         ttk.Button(output_inner, text="Escolher pasta de destino", command=self.choose_dest_folder, style="Action.TButton").grid(
             row=1, column=0, sticky="w", pady=(10, 0)
         )
@@ -141,6 +164,67 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
         self.btn_open.pack_forget()
         self._update_action_state()
         self._update_visibility()
+        self._update_scrollbar_visibility()
+
+    def _on_scroll_canvas_configure(self, event):
+        self.scroll_canvas.itemconfigure(self.card_window, width=event.width)
+        self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all"))
+        self._update_scrollbar_visibility()
+
+    def _on_card_configure(self, _event=None):
+        self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all"))
+        self._update_scrollbar_visibility()
+
+    def _bind_mousewheel_scroll(self, _event=None):
+        if not self._is_active_screen():
+            return
+        self.bind_all("<MouseWheel>", self._on_outer_mousewheel, add="+")
+
+    def _unbind_mousewheel_scroll(self, _event=None):
+        try:
+            self.unbind_all("<MouseWheel>")
+        except Exception:
+            pass
+
+    def _on_outer_mousewheel(self, event):
+        if not self._is_active_screen():
+            return
+        if self.scroll_canvas.yview() == (0.0, 1.0):
+            return
+        if getattr(event, "delta", 0):
+            direction = -1 if event.delta > 0 else 1
+            self.scroll_canvas.yview_scroll(direction, "units")
+            return "break"
+
+    def _scroll_to_bottom(self):
+        if getattr(self, "scroll_canvas", None) and self.scrollbar.winfo_ismapped():
+            self.after_idle(lambda: self.scroll_canvas.yview_moveto(1.0))
+
+    def _has_scroll_context(self):
+        return bool(self.input_files)
+
+    def _update_scrollbar_visibility(self):
+        if not getattr(self, "scroll_canvas", None):
+            return
+        try:
+            self.update_idletasks()
+        except Exception:
+            pass
+        bbox = self.scroll_canvas.bbox("all")
+        if not bbox:
+            self.scrollbar.pack_forget()
+            self.scroll_canvas.configure(yscrollcommand=None)
+            return
+        content_height = bbox[3] - bbox[1]
+        visible_height = self.scroll_canvas.winfo_height()
+        needs_scroll = self._has_scroll_context() and visible_height > 1 and content_height > visible_height + 10
+        if needs_scroll:
+            if not self.scrollbar.winfo_ismapped():
+                self.scrollbar.pack(side="right", fill="y")
+            self.scroll_canvas.configure(yscrollcommand=self.scrollbar.set)
+        else:
+            self.scrollbar.pack_forget()
+            self.scroll_canvas.configure(yscrollcommand=None)
 
     def selecionar_arquivos(self):
         tipos = [
@@ -180,6 +264,52 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
         if uniq:
             self._set_files(uniq)
 
+    def _default_output_name_for(self, in_path):
+        filename = os.path.splitext(os.path.basename(in_path))[0]
+        return f"{filename}.docx"
+
+    def _sync_output_name_vars(self):
+        active_paths = {os.path.abspath(path) for path in self.input_files}
+        for path in list(self.output_name_vars):
+            if os.path.abspath(path) not in active_paths:
+                self.output_name_vars.pop(path, None)
+                self._output_name_defaults.pop(path, None)
+
+        for path in self.input_files:
+            default_name = self._default_output_name_for(path)
+            var = self.output_name_vars.get(path)
+            previous_default = self._output_name_defaults.get(path)
+            if var is None:
+                var = tk.StringVar(value=default_name)
+                self.output_name_vars[path] = var
+            else:
+                current_value = (var.get() or "").strip()
+                if not current_value or current_value == previous_default:
+                    var.set(default_name)
+            self._output_name_defaults[path] = default_name
+
+    def _rebuild_batch_output_fields(self):
+        if not getattr(self, "batch_output_inner", None):
+            return
+        for child in self.batch_output_inner.winfo_children():
+            child.destroy()
+
+        if len(self.input_files) <= 1:
+            return
+
+        self._sync_output_name_vars()
+        for row_idx, path in enumerate(self.input_files):
+            ttk.Label(
+                self.batch_output_inner,
+                text=os.path.basename(path),
+                style="SurfaceAlt.TLabel",
+            ).grid(row=row_idx, column=0, sticky="w", padx=(0, 10), pady=(0, 8))
+            ttk.Entry(
+                self.batch_output_inner,
+                textvariable=self.output_name_vars[path],
+                width=36,
+            ).grid(row=row_idx, column=1, sticky="ew", pady=(0, 8))
+
     def _set_files(self, paths):
         paths = [p for p in paths if os.path.isfile(p) and _ext(p) in SUPPORTED_EXTS]
         self.input_files = paths
@@ -201,21 +331,33 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
         if not self.input_files:
             self.output_name_var.set("")
             self.output_name_entry.configure(state=DISABLED)
+            self._sync_output_name_vars()
+            self._rebuild_batch_output_fields()
             return
 
         if len(self.input_files) > 1:
             self.output_name_var.set("")
             self.output_name_entry.configure(state=DISABLED)
+            self._sync_output_name_vars()
+            self._rebuild_batch_output_fields()
             return
 
-        filename = os.path.splitext(os.path.basename(self.input_files[0]))[0]
-        self.output_name_var.set(f"{filename}.docx")
+        self._sync_output_name_vars()
+        self.output_name_var.set(self.output_name_vars[self.input_files[0]].get())
         self.output_name_entry.configure(state=NORMAL)
+        self._rebuild_batch_output_fields()
 
     def _build_output_path(self, in_path):
         output_dir = self.resolve_output_dir(in_path)
         if len(self.input_files) == 1:
             custom_name = (self.output_name_var.get() or "").strip()
+            if custom_name:
+                if "." not in os.path.basename(custom_name):
+                    custom_name += ".docx"
+                return os.path.join(output_dir, custom_name)
+        else:
+            custom_var = self.output_name_vars.get(in_path)
+            custom_name = (custom_var.get() if custom_var else "").strip()
             if custom_name:
                 if "." not in os.path.basename(custom_name):
                     custom_name += ".docx"
@@ -264,6 +406,11 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
             self.btn_remove.grid()
             if not self.opts_frame.winfo_ismapped():
                 self.opts_frame.pack(fill="x", pady=(10, 0))
+            if len(self.input_files) > 1:
+                if not self.batch_output_frame.winfo_ismapped():
+                    self.batch_output_frame.pack(fill="x", pady=(10, 0), before=self.controls_frame)
+            else:
+                self.batch_output_frame.pack_forget()
             if not self.controls_frame.winfo_ismapped():
                 self.controls_frame.pack(fill="x", pady=(10, 6))
             if self.is_running:
@@ -278,6 +425,7 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
         else:
             self.btn_remove.grid_remove()
             self.opts_frame.pack_forget()
+            self.batch_output_frame.pack_forget()
             self.controls_frame.pack_forget()
             self.btn_cancel.pack_forget()
             self.btn_open.pack_forget()
@@ -287,6 +435,13 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
             self._show_progress()
         else:
             self._hide_progress()
+        if len(self.input_files) > 1:
+            self.output_name_hint.configure(text="Edite abaixo o nome de saida de cada arquivo.")
+        else:
+            self.output_name_hint.configure(text="Editavel quando houver 1 arquivo selecionado.")
+        self._update_scrollbar_visibility()
+        if self.input_files:
+            self._scroll_to_bottom()
 
     def _show_progress(self):
         if getattr(self, "progress_frame", None) and not self.progress_frame.winfo_ismapped():
@@ -304,6 +459,8 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
         self._hide_progress()
         self.btn_open.config(state=DISABLED)
         self.output_name_var.set("")
+        self.output_name_vars = {}
+        self._output_name_defaults = {}
         self.output_name_entry.configure(state=DISABLED)
         self._update_action_state()
 
@@ -328,6 +485,13 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
             if os.path.abspath(proposed_output).lower() == os.path.abspath(self.input_files[0]).lower():
                 messagebox.showerror("Erro", "Escolha um nome diferente do arquivo original.")
                 return
+        else:
+            for in_path in self.input_files:
+                custom_var = self.output_name_vars.get(in_path)
+                custom_name = (custom_var.get() if custom_var else "").strip()
+                if not custom_name:
+                    messagebox.showerror("Erro", f"Informe um nome de saida para {os.path.basename(in_path)}.")
+                    return
 
         try:
             self.ensure_output_dir(self.input_files[0])

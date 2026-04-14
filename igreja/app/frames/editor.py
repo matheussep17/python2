@@ -174,21 +174,24 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         options_inner.columnconfigure(1, weight=1)
 
         ttk.Label(options_inner, text="Ordem de montagem", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w")
-        ttk.Label(options_inner, text="Nome do arquivo", font=("Segoe UI", 12, "bold")).grid(row=0, column=1, sticky="w")
+        ttk.Label(options_inner, text="Nome do arquivo final", font=("Segoe UI", 12, "bold")).grid(row=0, column=1, sticky="w")
 
         ttk.Label(options_inner, text="Seguir a ordem dos vídeos selecionados", font=("Segoe UI", 11)).grid(
             row=1, column=0, sticky="w", padx=(0, 20)
         )
         ttk.Entry(options_inner, textvariable=self.output_name_var, width=28).grid(row=1, column=1, sticky="ew")
+        ttk.Label(options_inner, text="Define o nome do video ou audio montado ao final.", style="SurfaceMuted.TLabel").grid(
+            row=2, column=1, sticky="w", pady=(6, 0)
+        )
         ttk.Button(options_inner, text="Escolher pasta de destino", command=self.choose_dest_folder, style="Action.TButton").grid(
-            row=2, column=0, sticky="w", pady=(10, 0)
+            row=3, column=0, sticky="w", pady=(10, 0)
         )
         self.dest_label = ttk.Label(
             options_inner,
             text=self.get_destination_label_text(),
             style="Muted.TLabel",
         )
-        self.dest_label.grid(row=2, column=1, sticky="ew", pady=(10, 0))
+        self.dest_label.grid(row=3, column=1, sticky="ew", pady=(10, 0))
 
         self.controls_frame = ttk.Frame(card, style="Card.TFrame")
         self.controls_frame.pack(fill="x", pady=(2, 6))
@@ -228,7 +231,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         ]
         paths = filedialog.askopenfilenames(title="Selecione arquivos de mídia", filetypes=filetypes)
         if paths:
-            self._set_files(list(paths))
+            self._set_files(list(paths), append=True)
 
     def _on_drop_files(self, event):
         items = self.tk.splitlist(event.data)
@@ -237,12 +240,13 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
             if os.path.isfile(item) and is_media_file(item):
                 paths.append(os.path.abspath(item))
         if paths:
-            self._set_files(paths)
+            self._set_files(paths, append=True)
 
-    def _set_files(self, paths):
+    def _set_files(self, paths, append=False):
+        existing_files = list(self.input_files) if append else []
         uniq = []
         seen = set()
-        for path in paths:
+        for path in [*existing_files, *paths]:
             abs_path = os.path.abspath(path)
             if not os.path.isfile(abs_path) or not is_media_file(abs_path):
                 continue
@@ -405,60 +409,54 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         self.canvas.yview_moveto(1.0)
 
     def _on_scrollable_configure(self, event):
-        # Adjust the scroll region to encompass the full content.
-        if getattr(self, "canvas", None):
-            try:
-                canvas_height = self.canvas.winfo_height()
-                target_height = max(event.height, canvas_height)
-                self.canvas.itemconfig(self.scroll_window, height=target_height)
-            except Exception:
-                pass
-            self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-
-    def _on_canvas_configure(self, event):
-        # Keep the inner frame the same width as the canvas.
+        # Recalcula a area rolavel sempre que o conteudo muda.
+        if not getattr(self, "canvas", None):
+            return
         try:
-            self.canvas.itemconfig(
-                self.scroll_window,
-                width=event.width,
-                height=max(self.scrollable_frame.winfo_reqheight(), event.height),
-            )
+            canvas_height = self.canvas.winfo_height()
+            target_height = canvas_height if event.height < canvas_height else event.height
+            self.canvas.itemconfig(self.scroll_window, height=target_height)
         except Exception:
             pass
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        self._update_scrollbar_visibility()
+
+    def _on_canvas_configure(self, event):
+        # Mantem a largura sincronizada e so estica a altura quando faltar conteudo.
+        try:
+            requested_height = self.scrollable_frame.winfo_reqheight()
+            target_height = event.height if requested_height < event.height else requested_height
+            self.canvas.itemconfig(self.scroll_window, width=event.width, height=target_height)
+        except Exception:
+            pass
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         self._update_scrollbar_visibility()
 
     def _on_mousewheel(self, event):
-        # Cross-platform mouse wheel scrolling support.
         if not getattr(self, "canvas", None):
             return
-        # Windows / macOS
+        if self.canvas.yview() == (0.0, 1.0):
+            return
         delta = int(-1 * (event.delta / 120)) if hasattr(event, "delta") else 0
-        self.canvas.yview_scroll(delta, "units")
+        if delta:
+            self.canvas.yview_scroll(delta, "units")
+            return "break"
 
     def _update_scrollbar_visibility(self):
-        # Ensure geometry is updated before measuring.
+        if not getattr(self, "canvas", None):
+            return
         try:
             self.update_idletasks()
         except Exception:
             pass
-
-        if not getattr(self, "canvas", None):
-            return
-
         bbox = self.canvas.bbox("all")
         if not bbox:
             self.scrollbar.pack_forget()
             self.canvas.configure(yscrollcommand=None)
             return
-
         content_height = bbox[3] - bbox[1]
         visible_height = self.canvas.winfo_height()
-
-        # If canvas isn't fully laid out yet, do nothing.
-        if visible_height <= 1:
-            return
-
-        needs_scroll = content_height > visible_height + 10 and bool(self.input_files)
+        needs_scroll = bool(self.input_files)
         if needs_scroll:
             if not self.scrollbar.winfo_ismapped():
                 self.scrollbar.pack(side="right", fill="y")

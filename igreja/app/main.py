@@ -98,11 +98,11 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.grid_rowconfigure(1, weight=1)
 
         self.screen_meta = {
-            "converter": {
-                "window": "Conversor",
-                "nav": "01  Conversor",
-                "title": "Conversor Multiformato",
-                "subtitle": "Transforme vídeo, áudio e imagem com uma estação limpa, previsível e pronta para produção.",
+            "baixar": {
+                "window": "Baixar",
+                "nav": "01  Baixar",
+                "title": "Coleta de Mídia",
+                "subtitle": "Baixe conteúdo externo com contexto claro de origem, formato e destino final.",
             },
             "compressor": {
                 "window": "Comprimir",
@@ -110,23 +110,23 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
                 "title": "Compressão Inteligente",
                 "subtitle": "Reduza tamanho de arquivos preservando qualidade e clareza para entregas reais.",
             },
+            "converter": {
+                "window": "Conversor",
+                "nav": "03  Conversor",
+                "title": "Conversor Multiformato",
+                "subtitle": "Transforme vídeo, áudio e imagem com uma estação limpa, previsível e pronta para produção.",
+            },
             "editor": {
                 "window": "Editar mídia",
-                "nav": "03  Editar mídia",
+                "nav": "04  Editar mídia",
                 "title": "Montagem de Trechos",
                 "subtitle": "Organize segmentos, combine mídias e produza saídas com ritmo e precisão.",
             },
             "pdf": {
                 "window": "Editar PDF",
-                "nav": "04  Editar PDF",
+                "nav": "05  Editar PDF",
                 "title": "Anotação e Revisão de PDF",
                 "subtitle": "Abra, revise, marque e exporte documentos com uma interface mais segura e focada.",
-            },
-            "baixar": {
-                "window": "Baixar",
-                "nav": "05  Baixar",
-                "title": "Coleta de Mídia",
-                "subtitle": "Baixe conteúdo externo com contexto claro de origem, formato e destino final.",
             },
             "lyrics": {
                 "window": "Letras",
@@ -205,7 +205,8 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         )
         self.sidebar_intro.pack(anchor="w", pady=(0, 14), fill="x")
 
-        for key in ["converter", "compressor", "editor", "pdf", "baixar", "lyrics", "transcribe"]:
+        self.nav_order = ["baixar", "compressor", "converter", "editor", "pdf", "lyrics", "transcribe"]
+        for key in self.nav_order:
             btn = ttk.Button(
                 side_panel,
                 text=self.screen_meta[key]["nav"],
@@ -271,11 +272,11 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
         self._show("converter")
 
-        self.bind("<Control-Key-1>", lambda _e: self._show("converter"))
+        self.bind("<Control-Key-1>", lambda _e: self._show("baixar"))
         self.bind("<Control-Key-2>", lambda _e: self._show("compressor"))
-        self.bind("<Control-Key-3>", lambda _e: self._show("editor"))
-        self.bind("<Control-Key-4>", lambda _e: self._show("pdf"))
-        self.bind("<Control-Key-5>", lambda _e: self._show("baixar"))
+        self.bind("<Control-Key-3>", lambda _e: self._show("converter"))
+        self.bind("<Control-Key-4>", lambda _e: self._show("editor"))
+        self.bind("<Control-Key-5>", lambda _e: self._show("pdf"))
         self.bind("<Control-Key-6>", lambda _e: self._show("lyrics"))
         self.bind("<Control-Key-7>", lambda _e: self._show("transcribe"))
         self.bind("<Configure>", self._on_window_resize, add="+")
@@ -291,17 +292,15 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         min_height = min(DEFAULT_WINDOW_HEIGHT, max(MIN_WINDOW_HEIGHT, screen_height - 120))
         self.minsize(min_width, min_height)
 
-        should_zoom = screen_width <= SMALL_SCREEN_WIDTH or screen_height <= SMALL_SCREEN_HEIGHT
         target_width = min(DEFAULT_WINDOW_WIDTH, max(min_width, int(screen_width * 0.92)))
         target_height = min(DEFAULT_WINDOW_HEIGHT, max(min_height, int(screen_height * 0.9)))
 
-        if should_zoom:
-            self.geometry(f"{target_width}x{target_height}+0+0")
-            try:
-                self.state("zoomed")
-                return
-            except tk.TclError:
-                pass
+        self.geometry(f"{target_width}x{target_height}+0+0")
+        try:
+            self.state("zoomed")
+            return
+        except tk.TclError:
+            pass
 
         x = max(0, (screen_width - target_width) // 2)
         y = max(0, (screen_height - target_height) // 2)

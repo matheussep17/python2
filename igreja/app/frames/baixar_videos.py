@@ -61,8 +61,23 @@ class BaixarFrame(ttk.Frame):
         self._apply_quality_visibility()
 
     def _build_ui(self):
-        card = ttk.Frame(self, padding=20, style="Card.TFrame")
-        card.pack(fill="both", expand=True)
+        canvas_bg = self.winfo_toplevel().style.lookup("Card.TFrame", "background") or self.winfo_toplevel().style.lookup("TFrame", "background")
+        self.canvas_frame = ttk.Frame(self, style="ContentHost.TFrame")
+        self.canvas_frame.pack(fill="both", expand=True)
+        self.scroll_canvas = tk.Canvas(self.canvas_frame, highlightthickness=0, borderwidth=0, background=canvas_bg)
+        self.scroll_canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar = ttk.Scrollbar(self.canvas_frame, orient="vertical", command=self.scroll_canvas.yview)
+        self.scroll_canvas.configure(yscrollcommand=None)
+        self.scroll_canvas.bind("<Configure>", self._on_scroll_canvas_configure)
+        self.scroll_canvas.bind("<Enter>", self._bind_mousewheel_scroll)
+        self.scroll_canvas.bind("<Leave>", self._unbind_mousewheel_scroll)
+
+        card = ttk.Frame(self.scroll_canvas, padding=20, style="Card.TFrame")
+        self.card = card
+        self.card_window = self.scroll_canvas.create_window((0, 0), window=self.card, anchor="nw")
+        self.card.bind("<Configure>", self._on_card_configure)
+        self.card.bind("<Enter>", self._bind_mousewheel_scroll)
+        self.card.bind("<Leave>", self._unbind_mousewheel_scroll)
 
         header = ttk.Frame(card, style="Card.TFrame")
         header.pack(fill="x")
@@ -195,6 +210,69 @@ class BaixarFrame(ttk.Frame):
         self.open_folder_button.pack_forget()
         self._update_action_state()
         self._update_visibility()
+        self._update_scrollbar_visibility()
+
+    def _on_scroll_canvas_configure(self, event):
+        self.scroll_canvas.itemconfigure(self.card_window, width=event.width)
+        self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all"))
+        self._update_scrollbar_visibility()
+
+    def _on_card_configure(self, _event=None):
+        self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all"))
+        self._update_scrollbar_visibility()
+
+    def _bind_mousewheel_scroll(self, _event=None):
+        if not self._is_active_screen():
+            return
+        self.bind_all("<MouseWheel>", self._on_outer_mousewheel, add="+")
+
+    def _unbind_mousewheel_scroll(self, _event=None):
+        try:
+            self.unbind_all("<MouseWheel>")
+        except Exception:
+            pass
+
+    def _on_outer_mousewheel(self, event):
+        if not self._is_active_screen():
+            return
+        if self.scroll_canvas.yview() == (0.0, 1.0):
+            return
+        if getattr(event, "delta", 0):
+            direction = -1 if event.delta > 0 else 1
+            self.scroll_canvas.yview_scroll(direction, "units")
+            return "break"
+
+    def _scroll_to_bottom(self):
+        if getattr(self, "scroll_canvas", None) and self.scrollbar.winfo_ismapped():
+            self.after_idle(lambda: self.scroll_canvas.yview_moveto(1.0))
+
+    def _has_scroll_context(self):
+        has_url = self._is_valid_url(self.url_entry.get().strip()) if getattr(self, "url_entry", None) else False
+        has_destination = bool(self.destination_folder)
+        return has_url and has_destination
+
+    def _update_scrollbar_visibility(self):
+        if not getattr(self, "scroll_canvas", None):
+            return
+        try:
+            self.update_idletasks()
+        except Exception:
+            pass
+        bbox = self.scroll_canvas.bbox("all")
+        if not bbox:
+            self.scrollbar.pack_forget()
+            self.scroll_canvas.configure(yscrollcommand=None)
+            return
+        content_height = bbox[3] - bbox[1]
+        visible_height = self.scroll_canvas.winfo_height()
+        needs_scroll = self._has_scroll_context() and visible_height > 1 and content_height > visible_height + 10
+        if needs_scroll:
+            if not self.scrollbar.winfo_ismapped():
+                self.scrollbar.pack(side="right", fill="y")
+            self.scroll_canvas.configure(yscrollcommand=self.scrollbar.set)
+        else:
+            self.scrollbar.pack_forget()
+            self.scroll_canvas.configure(yscrollcommand=None)
 
     def _normalize_path(self, path_value):
         try:
@@ -534,6 +612,9 @@ class BaixarFrame(ttk.Frame):
             self._show_progress()
         else:
             self._hide_progress()
+        self._update_scrollbar_visibility()
+        if has_url and has_destination:
+            self._scroll_to_bottom()
 
     def _show_progress(self):
         if getattr(self, "progress_frame", None) and not self.progress_frame.winfo_ismapped():
