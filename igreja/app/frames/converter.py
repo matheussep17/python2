@@ -70,7 +70,7 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
         card = ttk.Frame(self, padding=20, style="Card.TFrame")
         card.pack(fill="both", expand=True)
 
-        header = ttk.Frame(card)
+        header = ttk.Frame(card, style="Card.TFrame")
         header.pack(fill="x")
         ttk.Label(header, text="Conversor de Video / Audio / Imagem", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
@@ -78,36 +78,36 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
         # --- Arquivos ---
         files_frame = ttk.Labelframe(card, text="Arquivos", style="Hero.TLabelframe")
         files_frame.pack(fill="x")
-        files_inner = ttk.Frame(files_frame, padding=12)
+        files_inner = ttk.Frame(files_frame, padding=12, style="SurfaceAlt.TFrame")
         files_inner.pack(fill="x")
         files_inner.columnconfigure(1, weight=1)
 
-        ttk.Button(files_inner, text="Selecionar Arquivo(s)", command=self.selecionar_arquivos, bootstyle=WARNING).grid(
+        ttk.Button(files_inner, text="Selecionar Arquivo(s)", command=self.selecionar_arquivos, style="PrimaryAction.TButton").grid(
             row=0, column=0, sticky="w"
         )
-        self.remove_btn = ttk.Button(files_inner, text="Remover", command=self.remover_arquivos, bootstyle=DANGER)
+        self.remove_btn = ttk.Button(files_inner, text="Remover", command=self.remover_arquivos, style="DangerAction.TButton")
         self.remove_btn.grid(row=0, column=1, sticky="w", padx=(10, 0))
 
-        self.label_video = ttk.Label(files_inner, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
+        self.label_video = ttk.Label(files_inner, text="Nenhum arquivo selecionado", font=("Helvetica", 12), style="SurfaceAlt.TLabel")
         self.label_video.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
-        self.label_formato = ttk.Label(files_inner, text="", font=("Helvetica", 12))
+        self.label_formato = ttk.Label(files_inner, text="", font=("Helvetica", 12), style="SurfaceMuted.TLabel")
         self.label_formato.grid(row=2, column=0, columnspan=2, sticky="w", pady=(2, 0))
 
         if HAS_DND:
             ttk.Label(
                 files_inner,
                 text="Arraste e solte videos/audios (mp4, mkv, mp3...) ou imagens (jpg, png, cr2...)",
-                style="Muted.TLabel",
+                style="SurfaceMuted.TLabel",
             ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(6, 4))
 
         # --- Configuracao de saida ---
         self.opts_frame = ttk.Labelframe(card, text="Opções")
         self.opts_frame.pack(fill="x", pady=(10, 0))
-        opts_inner = ttk.Frame(self.opts_frame, padding=12)
+        opts_inner = ttk.Frame(self.opts_frame, padding=12, style="SurfaceAlt.TFrame")
         opts_inner.pack(fill="x")
         opts_inner.columnconfigure(1, weight=1)
 
-        self.fmt_row = ttk.Frame(opts_inner)
+        self.fmt_row = ttk.Frame(opts_inner, style="SurfaceAlt.TFrame")
         self.fmt_row_visible = False
         self.fmt_row.columnconfigure(1, weight=1)
         ttk.Label(self.fmt_row, text="Converter para:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
@@ -115,7 +115,7 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
         self.format_menu.grid(row=0, column=1, sticky="w", padx=(10, 0))
         self.format_menu.bind("<<ComboboxSelected>>", lambda _e: self._refresh_output_name())
 
-        self.quality_row = ttk.Frame(opts_inner)
+        self.quality_row = ttk.Frame(opts_inner, style="SurfaceAlt.TFrame")
         self.quality_row.columnconfigure(1, weight=1)
         ttk.Label(self.quality_row, text="Qualidade:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
         self.quality_menu = ttk.Combobox(
@@ -127,7 +127,7 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
         )
         self.quality_menu.grid(row=0, column=1, sticky="w", padx=(10, 0))
 
-        self.audio_row = ttk.Frame(self.opts_frame)
+        self.audio_row = ttk.Frame(self.opts_frame, style="SurfaceAlt.TFrame")
         self.audio_row_visible = False
         self.audio_row.columnconfigure(1, weight=1)
         self.remove_audio_check = ttk.Checkbutton(
@@ -141,53 +141,53 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
         ttk.Label(
             self.audio_row,
             text="Mantem o video e remove a trilha sonora no arquivo final.",
-            style="Muted.TLabel",
+            style="SurfaceMuted.TLabel",
         ).grid(row=0, column=1, sticky="w", padx=(10, 0))
 
-        self.output_row = ttk.Frame(self.opts_frame)
+        self.output_row = ttk.Frame(self.opts_frame, style="SurfaceAlt.TFrame")
         self.output_row.columnconfigure(1, weight=1)
         ttk.Label(self.output_row, text="Nome do arquivo:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
         self.output_name_entry = ttk.Entry(self.output_row, textvariable=self.output_name_var, width=32)
         self.output_name_entry.grid(row=0, column=1, sticky="ew", padx=(10, 0))
-        ttk.Label(self.output_row, text="Editavel quando houver 1 arquivo selecionado.", style="Muted.TLabel").grid(
+        ttk.Label(self.output_row, text="Editavel quando houver 1 arquivo selecionado.", style="SurfaceMuted.TLabel").grid(
             row=0, column=2, sticky="w", padx=(10, 0)
         )
         self.output_name_entry.configure(state=DISABLED)
         self.output_row.pack(fill="x", pady=(10, 0))
 
-        self.dest_row = ttk.Frame(self.opts_frame)
+        self.dest_row = ttk.Frame(self.opts_frame, style="SurfaceAlt.TFrame")
         self.dest_row.columnconfigure(1, weight=1)
-        ttk.Button(self.dest_row, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS).grid(
+        ttk.Button(self.dest_row, text="Escolher pasta de destino", command=self.choose_dest_folder, style="Action.TButton").grid(
             row=0, column=0, sticky="w"
         )
         self.dest_label = ttk.Label(
             self.dest_row,
             text=self.get_destination_label_text(),
-            style="Muted.TLabel",
+            style="SurfaceMuted.TLabel",
         )
         self.dest_label.grid(row=0, column=1, sticky="ew", padx=(10, 0))
         self.dest_row.pack(fill="x", pady=(10, 0))
 
         # --- Acoes ---
-        self.controls_frame = ttk.Frame(card)
+        self.controls_frame = ttk.Frame(card, style="Card.TFrame")
         self.controls_frame.pack(fill="x", pady=(10, 6))
-        self.convert_btn = ttk.Button(self.controls_frame, text="Converter", command=self.start_conversion, bootstyle=SUCCESS, state=DISABLED)
+        self.convert_btn = ttk.Button(self.controls_frame, text="Converter", command=self.start_conversion, style="PrimaryAction.TButton", state=DISABLED)
         self.convert_btn.pack(side="left")
-        self.cancel_btn = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_conversion, bootstyle=SECONDARY, state=DISABLED)
+        self.cancel_btn = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_conversion, style="Action.TButton", state=DISABLED)
         self.cancel_btn.pack(side="left", padx=(10, 0))
         self.cancel_btn.pack_forget()
         self.controls_frame.pack_forget()
 
-        self.progress_frame = ttk.Frame(card, padding=10)
+        self.progress_frame = ttk.Frame(card, padding=10, style="SurfaceAlt.TFrame")
         self.progress = ttk.Progressbar(self.progress_frame, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
         self.progress.pack(fill="x")
-        self.status_label = ttk.Label(self.progress_frame, textvariable=self.status_var, font=("Helvetica", 11))
+        self.status_label = ttk.Label(self.progress_frame, textvariable=self.status_var, font=("Helvetica", 11), style="SurfaceAlt.TLabel")
         self.status_label.pack(anchor="w", pady=(6, 0))
 
         # Hide the progress UI until a conversion is started.
         self._hide_progress()
 
-        self.open_btn = ttk.Button(card, text="Abrir pasta do arquivo convertido", command=self.abrir_pasta, bootstyle=INFO, state=DISABLED)
+        self.open_btn = ttk.Button(card, text="Abrir pasta do arquivo convertido", command=self.abrir_pasta, style="Action.TButton", state=DISABLED)
         self.open_btn.pack(pady=8)
         self.open_btn.pack_forget()
         self._update_action_state()

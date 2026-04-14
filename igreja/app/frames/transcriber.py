@@ -70,74 +70,74 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
         card = ttk.Frame(self, padding=20, style="Card.TFrame")
         card.pack(fill="both", expand=True)
 
-        header = ttk.Frame(card)
+        header = ttk.Frame(card, style="Card.TFrame")
         header.pack(fill="x")
         ttk.Label(header, text="Transcritor de Audio (Word)", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
 
         files_frame = ttk.Labelframe(card, text="Arquivos", style="Hero.TLabelframe")
         files_frame.pack(fill="x")
-        files_inner = ttk.Frame(files_frame, padding=12)
+        files_inner = ttk.Frame(files_frame, padding=12, style="SurfaceAlt.TFrame")
         files_inner.pack(fill="x")
         files_inner.columnconfigure(1, weight=1)
 
-        ttk.Button(files_inner, text="Selecionar Arquivo(s)", command=self.selecionar_arquivos, bootstyle=WARNING).grid(
+        ttk.Button(files_inner, text="Selecionar Arquivo(s)", command=self.selecionar_arquivos, style="PrimaryAction.TButton").grid(
             row=0, column=0, sticky="w"
         )
-        self.btn_remove = ttk.Button(files_inner, text="Remover", command=self.remover_arquivos, bootstyle=DANGER)
+        self.btn_remove = ttk.Button(files_inner, text="Remover", command=self.remover_arquivos, style="DangerAction.TButton")
         self.btn_remove.grid(row=0, column=1, sticky="w", padx=(10, 0))
 
-        self.label_sel = ttk.Label(files_inner, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
+        self.label_sel = ttk.Label(files_inner, text="Nenhum arquivo selecionado", font=("Helvetica", 12), style="SurfaceAlt.TLabel")
         self.label_sel.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
 
         if HAS_DND:
             ttk.Label(
                 files_inner,
                 text="Arraste e solte audio/video aqui para selecionar.",
-                style="Muted.TLabel",
+                style="SurfaceMuted.TLabel",
             ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(6, 4))
 
         self.opts_frame = ttk.Labelframe(card, text="Saída")
         self.opts_frame.pack_forget()
-        output_inner = ttk.Frame(self.opts_frame, padding=12)
+        output_inner = ttk.Frame(self.opts_frame, padding=12, style="SurfaceAlt.TFrame")
         output_inner.pack(fill="x")
         output_inner.columnconfigure(1, weight=1)
 
         ttk.Label(output_inner, text="Nome do arquivo:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
         self.output_name_entry = ttk.Entry(output_inner, textvariable=self.output_name_var, width=32)
         self.output_name_entry.grid(row=0, column=1, sticky="ew", padx=(10, 0))
-        ttk.Label(output_inner, text="Editavel quando houver 1 arquivo selecionado.", style="Muted.TLabel").grid(
+        ttk.Label(output_inner, text="Editavel quando houver 1 arquivo selecionado.", style="SurfaceMuted.TLabel").grid(
             row=0, column=2, sticky="w", padx=(10, 0)
         )
         self.output_name_entry.configure(state=DISABLED)
-        ttk.Button(output_inner, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS).grid(
+        ttk.Button(output_inner, text="Escolher pasta de destino", command=self.choose_dest_folder, style="Action.TButton").grid(
             row=1, column=0, sticky="w", pady=(10, 0)
         )
         self.dest_label = ttk.Label(
             output_inner,
             text=self.get_destination_label_text(),
-            style="Muted.TLabel",
+            style="SurfaceMuted.TLabel",
         )
         self.dest_label.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(10, 0), pady=(10, 0))
 
-        self.controls_frame = ttk.Frame(card)
+        self.controls_frame = ttk.Frame(card, style="Card.TFrame")
         self.controls_frame.pack_forget()
-        self.btn_run = ttk.Button(self.controls_frame, text="Transcrever (mais completo)", command=self.start_transcription, bootstyle=SUCCESS, state=DISABLED)
+        self.btn_run = ttk.Button(self.controls_frame, text="Transcrever (mais completo)", command=self.start_transcription, style="PrimaryAction.TButton", state=DISABLED)
         self.btn_run.pack(side="left")
-        self.btn_cancel = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_transcription, bootstyle=SECONDARY, state=DISABLED)
+        self.btn_cancel = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_transcription, style="Action.TButton", state=DISABLED)
         self.btn_cancel.pack(side="left", padx=(10, 0))
         self.btn_cancel.pack_forget()
 
-        self.progress_frame = ttk.Frame(card, padding=10)
+        self.progress_frame = ttk.Frame(card, padding=10, style="SurfaceAlt.TFrame")
         self.progress = ttk.Progressbar(self.progress_frame, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
         self.progress.pack(fill="x")
-        self.status_lbl = ttk.Label(self.progress_frame, textvariable=self.status_var, font=("Helvetica", 11))
+        self.status_lbl = ttk.Label(self.progress_frame, textvariable=self.status_var, font=("Helvetica", 11), style="SurfaceAlt.TLabel")
         self.status_lbl.pack(anchor="w", pady=(6, 0))
 
         # Hide progress UI until transcription starts
         self._hide_progress()
 
-        self.btn_open = ttk.Button(card, text="Abrir pasta do ultimo .docx", command=self.abrir_pasta, bootstyle=INFO, state=DISABLED)
+        self.btn_open = ttk.Button(card, text="Abrir pasta do ultimo .docx", command=self.abrir_pasta, style="Action.TButton", state=DISABLED)
         self.btn_open.pack_forget()
         self._update_action_state()
         self._update_visibility()

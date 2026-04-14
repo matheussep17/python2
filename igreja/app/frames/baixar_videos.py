@@ -64,14 +64,14 @@ class BaixarFrame(ttk.Frame):
         card = ttk.Frame(self, padding=20, style="Card.TFrame")
         card.pack(fill="both", expand=True)
 
-        header = ttk.Frame(card)
+        header = ttk.Frame(card, style="Card.TFrame")
         header.pack(fill="x")
 
         self.service = ttk.StringVar(value="YouTube")
         self.header_label = ttk.Label(header, text="Downloader de midia - YouTube", style="SectionTitle.TLabel")
         self.header_label.pack(side="left")
 
-        svc_frame = ttk.Frame(header)
+        svc_frame = ttk.Frame(header, style="Card.TFrame")
         svc_frame.pack(side="right")
         ttk.Label(svc_frame, text="Servico:", font=("Helvetica", 12)).pack(side="left")
         self.service_menu = ttk.Combobox(
@@ -89,7 +89,7 @@ class BaixarFrame(ttk.Frame):
         # --- URL / Serviço ---
         url_frame = ttk.Labelframe(card, text="Origem", style="Hero.TLabelframe")
         url_frame.pack(fill="x")
-        url_inner = ttk.Frame(url_frame, padding=12)
+        url_inner = ttk.Frame(url_frame, padding=12, style="SurfaceAlt.TFrame")
         url_inner.pack(fill="x")
         url_inner.columnconfigure(1, weight=1)
 
@@ -102,11 +102,11 @@ class BaixarFrame(ttk.Frame):
         self.url_entry.bind("<<Paste>>", lambda _e: self.after(10, self._on_url_changed))
         self.url_entry.bind("<<Cut>>", lambda _e: self.after(10, self._on_url_changed))
 
-        self.url_status_label = ttk.Label(url_inner, text="Cole um link para começar.", style="Muted.TLabel")
+        self.url_status_label = ttk.Label(url_inner, text="Cole um link para começar.", style="SurfaceMuted.TLabel")
         self.url_status_label.grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
         self.url_title_var = tk.StringVar(value="")
-        self.url_title_label = ttk.Label(url_inner, textvariable=self.url_title_var, style="Muted.TLabel")
+        self.url_title_label = ttk.Label(url_inner, textvariable=self.url_title_var, style="SurfaceMuted.TLabel")
         self.url_title_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(2, 0))
 
         # Thumbnail preview (carrega ao colar URL válida)
@@ -117,22 +117,22 @@ class BaixarFrame(ttk.Frame):
         # --- Destino ---
         dest_frame = ttk.Labelframe(card, text="Destino", style="TLabelframe")
         dest_frame.pack(fill="x", pady=(10, 0))
-        dest_inner = ttk.Frame(dest_frame, padding=12)
+        dest_inner = ttk.Frame(dest_frame, padding=12, style="SurfaceAlt.TFrame")
         dest_inner.pack(fill="x")
         dest_inner.columnconfigure(1, weight=1)
 
-        ttk.Button(dest_inner, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS).grid(
+        ttk.Button(dest_inner, text="Escolher pasta de destino", command=self.choose_dest_folder, style="Action.TButton").grid(
             row=0, column=0, sticky="w"
         )
         self.dest_label = ttk.Label(
-            dest_inner, text=self.destination_folder or "Nenhuma pasta selecionada", anchor="w", font=("Helvetica", 12)
+            dest_inner, text=self.destination_folder or "Nenhuma pasta selecionada", anchor="w", font=("Helvetica", 12), style="SurfaceAlt.TLabel"
         )
         self.dest_label.grid(row=0, column=1, sticky="ew", padx=(10, 0))
 
         # --- Opções ---
         self.opts_frame = ttk.Labelframe(card, text="Opções")
         self.opts_frame.pack_forget()
-        opts_inner = ttk.Frame(self.opts_frame, padding=12)
+        opts_inner = ttk.Frame(self.opts_frame, padding=12, style="SurfaceAlt.TFrame")
         opts_inner.pack(fill="x")
         opts_inner.columnconfigure(1, weight=1)
         opts_inner.columnconfigure(3, weight=1)
@@ -172,25 +172,25 @@ class BaixarFrame(ttk.Frame):
         self._profile_pack_options = {w: w.grid_info() for w in self._profile_widgets}
 
         # --- Ações ---
-        self.controls_frame = ttk.Frame(card)
+        self.controls_frame = ttk.Frame(card, style="Card.TFrame")
         self.controls_frame.pack_forget()
-        self.download_btn = ttk.Button(self.controls_frame, text="Baixar agora", command=self.start_download, bootstyle=PRIMARY, state=DISABLED)
+        self.download_btn = ttk.Button(self.controls_frame, text="Baixar agora", command=self.start_download, style="PrimaryAction.TButton", state=DISABLED)
         self.download_btn.pack(side="left")
-        self.cancel_btn = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_download, bootstyle=SECONDARY, state=DISABLED)
+        self.cancel_btn = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_download, style="Action.TButton", state=DISABLED)
         self.cancel_btn.pack(side="left", padx=(10, 0))
         self.cancel_btn.pack_forget()
 
-        self.progress_frame = ttk.Frame(card, padding=10)
+        self.progress_frame = ttk.Frame(card, padding=10, style="SurfaceAlt.TFrame")
         self.progress = ttk.Progressbar(self.progress_frame, orient="horizontal", mode="determinate")
         self.progress.pack(fill="x")
-        self.status = ttk.Label(self.progress_frame, text="", font=("Helvetica", 11))
+        self.status = ttk.Label(self.progress_frame, text="", font=("Helvetica", 11), style="SurfaceAlt.TLabel")
         self.status.pack(anchor="w", pady=(6, 0))
 
         # Progress is only shown while an operation is running.
         self._hide_progress()
 
         self.open_folder_button = ttk.Button(
-            card, text="Abrir pasta do arquivo", command=self.open_file_location, bootstyle=INFO, state=DISABLED
+            card, text="Abrir pasta do arquivo", command=self.open_file_location, style="Action.TButton", state=DISABLED
         )
         self.open_folder_button.pack_forget()
         self._update_action_state()

@@ -42,7 +42,7 @@ def hex_to_rgb(color: str):
 
 class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
     def __init__(self, master, on_status):
-        super().__init__(master)
+        super().__init__(master, style="ContentHost.TFrame")
         self.on_status = on_status
 
         self.pdf_path = ""
@@ -108,9 +108,13 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
 
     def _build_ui(self):
         # Create a canvas with scrollbar for scrolling content
-        self.canvas_frame = ttk.Frame(self)
+        self.canvas_frame = ttk.Frame(self, style="ContentHost.TFrame")
         self.canvas_frame.pack(fill="both", expand=True)
-        self.scroll_canvas = tk.Canvas(self.canvas_frame, highlightthickness=0)
+        self.scroll_canvas = tk.Canvas(
+            self.canvas_frame,
+            highlightthickness=0,
+            background=self._theme_color("content_bg"),
+        )
         self.scroll_canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar = ttk.Scrollbar(self.canvas_frame, orient="vertical", command=self.scroll_canvas.yview)
         self.scrollbar.pack(side="right", fill="y")
@@ -125,35 +129,35 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         self.card.bind("<Enter>", self._bind_mousewheel_scroll)
         self.card.bind("<Leave>", self._unbind_mousewheel_scroll)
 
-        header = ttk.Frame(self.card)
+        header = ttk.Frame(self.card, style="Card.TFrame")
         header.pack(fill="x")
         ttk.Label(header, text="Editor de PDF", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(self.card).pack(fill="x", pady=12)
 
         intro = ttk.Labelframe(self.card, text="Arquivo", style="Hero.TLabelframe")
         intro.pack(fill="x")
-        intro_inner = ttk.Frame(intro, padding=12)
+        intro_inner = ttk.Frame(intro, padding=12, style="SurfaceAlt.TFrame")
         intro_inner.pack(fill="x")
         intro_inner.columnconfigure(2, weight=1)
 
-        self.select_btn = ttk.Button(intro_inner, text="Abrir PDF", command=self.select_file, bootstyle=WARNING)
+        self.select_btn = ttk.Button(intro_inner, text="Abrir PDF", command=self.select_file, style="PrimaryAction.TButton")
         self.select_btn.grid(row=0, column=0, sticky="w")
-        self.clear_btn = ttk.Button(intro_inner, text="Limpar", command=self.clear_file, bootstyle=DANGER)
+        self.clear_btn = ttk.Button(intro_inner, text="Limpar", command=self.clear_file, style="DangerAction.TButton")
         self.clear_btn.grid(row=0, column=1, sticky="w", padx=(10, 0))
         self.clear_btn.grid_remove()
-        self.selection_label = ttk.Label(intro_inner, text="Nenhum PDF aberto", font=("Helvetica", 12))
+        self.selection_label = ttk.Label(intro_inner, text="Nenhum PDF aberto", font=("Helvetica", 12), style="SurfaceAlt.TLabel")
         self.selection_label.grid(row=1, column=0, columnspan=3, sticky="w", pady=(8, 4))
         ttk.Label(
             intro_inner,
             text="Abra um PDF para visualizar as paginas, desenhar, criar caixas de texto e ajustar as anotacoes.",
-            style="Muted.TLabel",
+            style="SurfaceMuted.TLabel",
         ).grid(row=2, column=0, columnspan=3, sticky="w")
 
         if HAS_DND:
             ttk.Label(
                 intro_inner,
                 text="Arraste e solte um PDF aqui para abrir rapidamente.",
-                style="Muted.TLabel",
+                style="SurfaceMuted.TLabel",
             ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 0))
 
         if not HAS_PYMUPDF or not HAS_PIL:
@@ -172,7 +176,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
 
         self.tools_frame = ttk.Labelframe(self.card, text="Ferramentas")
         self.tools_frame.pack(fill="x", pady=(10, 6))
-        tools_inner = ttk.Frame(self.tools_frame, padding=12)
+        tools_inner = ttk.Frame(self.tools_frame, padding=12, style="SurfaceAlt.TFrame")
         tools_inner.pack(fill="x")
 
         ttk.Radiobutton(tools_inner, text="Selecionar", value="select", variable=self.tool_var, bootstyle="toolbutton").pack(
@@ -206,7 +210,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         self.font_spin.bind("<KeyRelease>", self._on_text_style_control_changed)
         self.font_spin.bind("<FocusOut>", self._on_text_style_control_changed)
 
-        self.text_row = ttk.Frame(self.card)
+        self.text_row = ttk.Frame(self.card, style="Card.TFrame")
         self.text_row.pack(fill="x", pady=(0, 6))
         ttk.Label(
             self.text_row,
@@ -218,7 +222,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         )
         self.delete_btn.pack(side="left")
 
-        self.adjust_row = ttk.Frame(self.card)
+        self.adjust_row = ttk.Frame(self.card, style="Card.TFrame")
         self.adjust_row.pack(fill="x", pady=(0, 6))
         self.font_minus_btn = ttk.Button(
             self.adjust_row, text="Fonte -", command=lambda: self._adjust_selected_text_font(-2), bootstyle="info-outline"
@@ -242,7 +246,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
             style="CardMuted.TLabel",
         ).pack(side="left", padx=(18, 0))
 
-        self.nav_frame = ttk.Frame(self.card)
+        self.nav_frame = ttk.Frame(self.card, style="Card.TFrame")
         self.nav_frame.pack(fill="x", pady=(0, 8))
         self.prev_btn = ttk.Button(self.nav_frame, text="Pagina anterior", command=lambda: self._change_page(-1), bootstyle=SECONDARY)
         self.prev_btn.pack(side="left")
@@ -263,7 +267,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
             side="right", padx=(0, 8)
         )
 
-        self.viewer_frame = ttk.Frame(self.card)
+        self.viewer_frame = ttk.Frame(self.card, style="Card.TFrame")
         self.viewer_frame.pack(fill="both", expand=True)
         self.viewer_frame.columnconfigure(0, weight=0, minsize=160)
         self.viewer_frame.columnconfigure(1, weight=1)
@@ -272,14 +276,14 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
 
         thumbs_wrap = ttk.Labelframe(self.viewer_frame, text="Paginas")
         thumbs_wrap.grid(row=0, column=0, sticky="nsw", padx=(0, 8), pady=(0, 0))
-        thumbs_inner = ttk.Frame(thumbs_wrap, padding=8)
+        thumbs_inner = ttk.Frame(thumbs_wrap, padding=8, style="SurfaceAlt.TFrame")
         thumbs_inner.pack(fill="both", expand=True)
-        self.thumbs_canvas = tk.Canvas(thumbs_inner, width=170, highlightthickness=0, bg="#162033")
+        self.thumbs_canvas = tk.Canvas(thumbs_inner, width=170, highlightthickness=0, bg=self._theme_color("panel_alt_bg"))
         self.thumbs_canvas.pack(side="left", fill="both", expand=True)
         self.thumbs_scroll = ttk.Scrollbar(thumbs_inner, orient="vertical", command=self.thumbs_canvas.yview)
         self.thumbs_scroll.pack(side="left", fill="y")
         self.thumbs_canvas.configure(yscrollcommand=self.thumbs_scroll.set)
-        self.thumbs_frame = ttk.Frame(self.thumbs_canvas)
+        self.thumbs_frame = ttk.Frame(self.thumbs_canvas, style="SurfaceAlt.TFrame")
         self.thumbs_window = self.thumbs_canvas.create_window((0, 0), window=self.thumbs_frame, anchor="nw")
         self.thumbs_frame.bind("<Configure>", self._on_thumbs_configure)
         self.thumbs_canvas.bind("<Configure>", self._on_thumbs_canvas_configure)
@@ -288,12 +292,12 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         canvas_wrap.grid(row=0, column=1, sticky="nsew")
         canvas_wrap.columnconfigure(0, weight=1)
         canvas_wrap.rowconfigure(0, weight=1)
-        canvas_inner = ttk.Frame(canvas_wrap, padding=10)
+        canvas_inner = ttk.Frame(canvas_wrap, padding=10, style="SurfaceAlt.TFrame")
         canvas_inner.pack(fill="both", expand=True)
         canvas_inner.rowconfigure(0, weight=1)
         canvas_inner.columnconfigure(0, weight=1)
 
-        self.canvas = tk.Canvas(canvas_inner, bg="#20242c", highlightthickness=0, cursor="cross")
+        self.canvas = tk.Canvas(canvas_inner, bg=self._theme_color("panel_alt_bg"), highlightthickness=0, cursor="cross")
         self.canvas.grid(row=0, column=0, sticky="nsew")
         self.canvas.bind("<Configure>", self._on_canvas_configure)
         self.v_scroll = ttk.Scrollbar(canvas_inner, orient="vertical", command=self.canvas.yview)
@@ -308,38 +312,38 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
 
         self.output_frame = ttk.Labelframe(self.card, text="Saida")
         self.output_frame.pack(fill="x", pady=(10, 0))
-        output_inner = ttk.Frame(self.output_frame, padding=12)
+        output_inner = ttk.Frame(self.output_frame, padding=12, style="SurfaceAlt.TFrame")
         output_inner.pack(fill="x")
         output_inner.columnconfigure(1, weight=1)
 
         ttk.Label(output_inner, text="Nome do arquivo", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w")
         self.output_entry = ttk.Entry(output_inner, textvariable=self.output_name_var, width=32)
         self.output_entry.grid(row=0, column=1, sticky="ew", padx=(10, 0))
-        ttk.Button(output_inner, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS).grid(
+        ttk.Button(output_inner, text="Escolher pasta de destino", command=self.choose_dest_folder, style="Action.TButton").grid(
             row=1, column=0, sticky="w", pady=(8, 0)
         )
         self.dest_label = ttk.Label(
             output_inner,
             text=self.get_destination_label_text(),
-            style="Muted.TLabel",
+            style="SurfaceMuted.TLabel",
         )
         self.dest_label.grid(row=1, column=1, sticky="ew", padx=(10, 0), pady=(8, 0))
 
-        self.actions_frame = ttk.Frame(self.card)
+        self.actions_frame = ttk.Frame(self.card, style="Card.TFrame")
         self.actions_frame.pack(fill="x", pady=(8, 4))
-        self.save_btn = ttk.Button(self.actions_frame, text="Salvar PDF anotado", command=self.start_export, bootstyle=SUCCESS)
+        self.save_btn = ttk.Button(self.actions_frame, text="Salvar PDF anotado", command=self.start_export, style="PrimaryAction.TButton")
         self.save_btn.pack(side="left")
         self.open_btn = ttk.Button(
-            self.actions_frame, text="Abrir pasta do PDF", command=self.open_folder, bootstyle=INFO, state=DISABLED
+            self.actions_frame, text="Abrir pasta do PDF", command=self.open_folder, style="Action.TButton", state=DISABLED
         )
         self.open_btn.pack(side="left", padx=(10, 0))
 
-        self.progress_frame = ttk.Frame(self.card, padding=(10, 6))
+        self.progress_frame = ttk.Frame(self.card, padding=(10, 6), style="SurfaceAlt.TFrame")
         self.progress = ttk.Progressbar(
             self.progress_frame, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100
         )
         self.progress.pack(fill="x")
-        ttk.Label(self.progress_frame, textvariable=self.status_var, font=("Helvetica", 11)).pack(anchor="w", pady=(6, 0))
+        ttk.Label(self.progress_frame, textvariable=self.status_var, font=("Helvetica", 11), style="SurfaceAlt.TLabel").pack(anchor="w", pady=(6, 0))
 
         self._hide_progress()
         self._draw_empty_state()
@@ -1374,6 +1378,20 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         self._update_action_state()
         self.on_status("Erro ao salvar PDF")
         messagebox.showerror("Erro", message)
+
+    def _theme_color(self, key):
+        top = self.winfo_toplevel()
+        mode = getattr(top, "theme_var", None)
+        if hasattr(mode, "get"):
+            try:
+                mode = mode.get()
+            except Exception:
+                mode = None
+        palette = {
+            "content_bg": "#EEF3FA" if mode == "Claro" else "#060E1A",
+            "panel_alt_bg": "#F2F6FC" if mode == "Claro" else "#13253E",
+        }
+        return palette[key]
 
     def open_folder(self):
         if not self.last_output or not os.path.exists(self.last_output):

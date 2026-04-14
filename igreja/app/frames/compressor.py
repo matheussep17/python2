@@ -81,7 +81,7 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
         card = ttk.Frame(self, padding=20, style="Card.TFrame")
         card.pack(fill="both", expand=True)
 
-        header = ttk.Frame(card)
+        header = ttk.Frame(card, style="Card.TFrame")
         header.pack(fill="x")
         ttk.Label(header, text="Compressor de Video / Audio / Foto", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
@@ -89,36 +89,36 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
         # --- Arquivos ---
         files_frame = ttk.Labelframe(card, text="Arquivos", style="Hero.TLabelframe")
         files_frame.pack(fill="x")
-        files_inner = ttk.Frame(files_frame, padding=12)
+        files_inner = ttk.Frame(files_frame, padding=12, style="SurfaceAlt.TFrame")
         files_inner.pack(fill="x")
         files_inner.columnconfigure(1, weight=1)
 
-        ttk.Button(files_inner, text="Selecionar Arquivo(s)", command=self.select_files, bootstyle=WARNING).grid(
+        ttk.Button(files_inner, text="Selecionar Arquivo(s)", command=self.select_files, style="PrimaryAction.TButton").grid(
             row=0, column=0, sticky="w"
         )
-        self.btn_remove = ttk.Button(files_inner, text="Remover", command=self.clear_files, bootstyle=DANGER)
+        self.btn_remove = ttk.Button(files_inner, text="Remover", command=self.clear_files, style="DangerAction.TButton")
         self.btn_remove.grid(row=0, column=1, sticky="w", padx=(10, 0))
 
-        self.label_selected = ttk.Label(files_inner, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
+        self.label_selected = ttk.Label(files_inner, text="Nenhum arquivo selecionado", font=("Helvetica", 12), style="SurfaceAlt.TLabel")
         self.label_selected.grid(row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
-        self.label_mode = ttk.Label(files_inner, text="", font=("Helvetica", 12))
+        self.label_mode = ttk.Label(files_inner, text="", font=("Helvetica", 12), style="SurfaceMuted.TLabel")
         self.label_mode.grid(row=2, column=0, columnspan=2, sticky="w", pady=(2, 0))
 
         if HAS_DND:
             ttk.Label(
                 files_inner,
                 text="Arraste e solte videos, audios ou imagens aqui para selecionar.",
-                style="Muted.TLabel",
+                style="SurfaceMuted.TLabel",
             ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(6, 4))
 
         # --- Opções ---
         self.opts_frame = ttk.Labelframe(card, text="Opções")
         self.opts_frame.pack(fill="x", pady=(10, 0))
-        opts_inner = ttk.Frame(self.opts_frame, padding=12)
+        opts_inner = ttk.Frame(self.opts_frame, padding=12, style="SurfaceAlt.TFrame")
         opts_inner.pack(fill="x")
         opts_inner.columnconfigure(1, weight=1)
 
-        self.video_opts = ttk.Frame(opts_inner)
+        self.video_opts = ttk.Frame(opts_inner, style="SurfaceAlt.TFrame")
         self.video_opts.columnconfigure(1, weight=1)
         ttk.Label(self.video_opts, text="Compressao de video:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
         self.video_menu = ttk.Combobox(
@@ -130,7 +130,7 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
         )
         self.video_menu.grid(row=0, column=1, sticky="w", padx=(10, 0))
 
-        self.audio_opts = ttk.Frame(opts_inner)
+        self.audio_opts = ttk.Frame(opts_inner, style="SurfaceAlt.TFrame")
         self.audio_opts.columnconfigure(1, weight=1)
         ttk.Label(self.audio_opts, text="Bitrate do audio:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
         self.audio_menu = ttk.Combobox(
@@ -142,7 +142,7 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
         )
         self.audio_menu.grid(row=0, column=1, sticky="w", padx=(10, 0))
 
-        self.image_opts = ttk.Frame(opts_inner)
+        self.image_opts = ttk.Frame(opts_inner, style="SurfaceAlt.TFrame")
         self.image_opts.columnconfigure(1, weight=1)
         ttk.Label(self.image_opts, text="Qualidade da foto:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
         self.image_menu = ttk.Combobox(
@@ -154,50 +154,50 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
         )
         self.image_menu.grid(row=0, column=1, sticky="w", padx=(10, 0))
 
-        self.output_row = ttk.Frame(self.opts_frame)
+        self.output_row = ttk.Frame(self.opts_frame, style="SurfaceAlt.TFrame")
         self.output_row.columnconfigure(1, weight=1)
         self.output_row.pack(fill="x", pady=(10, 0))
         ttk.Label(self.output_row, text="Nome do arquivo:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
         self.output_name_entry = ttk.Entry(self.output_row, textvariable=self.output_name_var, width=32)
         self.output_name_entry.grid(row=0, column=1, sticky="ew", padx=(10, 0))
-        ttk.Label(self.output_row, text="Editavel quando houver 1 arquivo selecionado.", style="Muted.TLabel").grid(
+        ttk.Label(self.output_row, text="Editavel quando houver 1 arquivo selecionado.", style="SurfaceMuted.TLabel").grid(
             row=0, column=2, sticky="w", padx=(10, 0)
         )
         self.output_name_entry.configure(state=DISABLED)
 
-        self.dest_row = ttk.Frame(self.opts_frame)
+        self.dest_row = ttk.Frame(self.opts_frame, style="SurfaceAlt.TFrame")
         self.dest_row.columnconfigure(1, weight=1)
         self.dest_row.pack(fill="x", pady=(10, 0))
-        ttk.Button(self.dest_row, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS).grid(
+        ttk.Button(self.dest_row, text="Escolher pasta de destino", command=self.choose_dest_folder, style="Action.TButton").grid(
             row=0, column=0, sticky="w"
         )
         self.dest_label = ttk.Label(
             self.dest_row,
             text=self.get_destination_label_text(),
-            style="Muted.TLabel",
+            style="SurfaceMuted.TLabel",
         )
         self.dest_label.grid(row=0, column=1, sticky="ew", padx=(10, 0))
 
         # --- Acoes ---
-        self.controls_frame = ttk.Frame(card)
+        self.controls_frame = ttk.Frame(card, style="Card.TFrame")
         self.controls_frame.pack(fill="x", pady=(12, 6))
-        self.btn_run = ttk.Button(self.controls_frame, text="Comprimir", command=self.start_compression, bootstyle=SUCCESS, state=DISABLED)
+        self.btn_run = ttk.Button(self.controls_frame, text="Comprimir", command=self.start_compression, style="PrimaryAction.TButton", state=DISABLED)
         self.btn_run.pack(side="left")
-        self.btn_cancel = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel, bootstyle=SECONDARY, state=DISABLED)
+        self.btn_cancel = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel, style="Action.TButton", state=DISABLED)
         self.btn_cancel.pack(side="left", padx=(10, 0))
         self.btn_cancel.pack_forget()
         self.controls_frame.pack_forget()
 
-        self.progress_frame = ttk.Frame(card, padding=10)
+        self.progress_frame = ttk.Frame(card, padding=10, style="SurfaceAlt.TFrame")
         self.progress = ttk.Progressbar(self.progress_frame, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
         self.progress.pack(fill="x")
-        self.status_lbl = ttk.Label(self.progress_frame, textvariable=self.status_var, font=("Helvetica", 11))
+        self.status_lbl = ttk.Label(self.progress_frame, textvariable=self.status_var, font=("Helvetica", 11), style="SurfaceAlt.TLabel")
         self.status_lbl.pack(anchor="w", pady=(6, 0))
 
         # Hide progress UI until compression starts
         self._hide_progress()
 
-        self.btn_open = ttk.Button(card, text="Abrir pasta do arquivo", command=self.open_folder, bootstyle=INFO, state=DISABLED)
+        self.btn_open = ttk.Button(card, text="Abrir pasta do arquivo", command=self.open_folder, style="Action.TButton", state=DISABLED)
         self.btn_open.pack(pady=8)
         self.btn_open.pack_forget()
         self._update_action_state()

@@ -12,6 +12,7 @@ from tkinter import filedialog, messagebox
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
+from app.ui.theme import get_theme_profile
 from app.ui.output_folder import OutputFolderMixin
 from app.utils import (
     HAS_DND, DND_FILES, create_no_window_flags, ffmpeg_cmd, ffprobe_cmd, seconds_to_hms, _ext,
@@ -57,7 +58,7 @@ def parse_time_to_seconds(value: str):
 
 class EditorFrame(OutputFolderMixin, ttk.Frame):
     def __init__(self, master, on_status):
-        super().__init__(master)
+        super().__init__(master, style="ContentHost.TFrame")
         self.on_status = on_status
 
         self.input_files = []
@@ -92,14 +93,19 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
     def _build_ui(self):
         # Use a scrollable canvas so the UI fits in smaller windows and the user can reach
         # the bottom controls when the content grows.
-        self.canvas = tk.Canvas(self, borderwidth=0, highlightthickness=0)
+        self.canvas = tk.Canvas(
+            self,
+            borderwidth=0,
+            highlightthickness=0,
+            background=self._theme_color("panel_bg"),
+        )
         self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
 
         self.canvas.pack(side="left", fill="both", expand=True)
         # Scrollbar is shown only when needed (e.g. after a file is selected).
 
-        self.scrollable_frame = ttk.Frame(self.canvas)
+        self.scrollable_frame = ttk.Frame(self.canvas, style="Card.TFrame")
         self.scroll_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
 
         self.scrollable_frame.bind("<Configure>", self._on_scrollable_configure)
@@ -119,21 +125,21 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         card = ttk.Frame(self.scrollable_frame, padding=20, style="Card.TFrame")
         card.pack(fill="both", expand=True)
 
-        header = ttk.Frame(card)
+        header = ttk.Frame(card, style="Card.TFrame")
         header.pack(fill="x")
         ttk.Label(header, text="Editor de Mídia", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
 
         files_frame = ttk.Labelframe(card, text="Arquivos", style="Hero.TLabelframe")
         files_frame.pack(fill="x")
-        files_inner = ttk.Frame(files_frame, padding=12)
+        files_inner = ttk.Frame(files_frame, padding=12, style="SurfaceAlt.TFrame")
         files_inner.pack(fill="x")
         files_inner.columnconfigure(1, weight=1)
 
-        ttk.Button(files_inner, text="Selecionar mídia", command=self.select_files, bootstyle=WARNING).grid(
+        ttk.Button(files_inner, text="Selecionar mídia", command=self.select_files, style="PrimaryAction.TButton").grid(
             row=0, column=0, sticky="w"
         )
-        self.clear_btn = ttk.Button(files_inner, text="Limpar", command=self.clear_files, bootstyle=DANGER)
+        self.clear_btn = ttk.Button(files_inner, text="Limpar", command=self.clear_files, style="DangerAction.TButton")
         self.clear_btn.grid(row=0, column=1, sticky="w", padx=(10, 0))
         ttk.Label(
             files_inner,
@@ -141,18 +147,18 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
             style="Muted.TLabel",
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 6))
 
-        self.selection_label = ttk.Label(files_inner, text="Nenhum arquivo selecionado", font=("Helvetica", 12))
+        self.selection_label = ttk.Label(files_inner, text="Nenhum arquivo selecionado", font=("Helvetica", 12), style="SurfaceAlt.TLabel")
         self.selection_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(2, 6))
 
         if HAS_DND:
             ttk.Label(
                 files_inner,
                 text="Arraste e solte arquivos de mídia aqui para selecionar.",
-                style="Muted.TLabel",
+                style="SurfaceMuted.TLabel",
             ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(0, 6))
 
         # Container for the list of selected videos (Trecho 1, Trecho 2, ...).
-        self.videos_container = ttk.Frame(card)
+        self.videos_container = ttk.Frame(card, style="Card.TFrame")
         self.videos_container.pack(fill="x", pady=(2, 6))
 
         # Build initial empty list (no videos selected yet).
@@ -160,7 +166,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
 
         options = ttk.Labelframe(card, text="Opções")
         options.pack(fill="x", pady=(2, 6))
-        options_inner = ttk.Frame(options, padding=12)
+        options_inner = ttk.Frame(options, padding=12, style="SurfaceAlt.TFrame")
         options_inner.pack(fill="x")
         options.pack_forget()
         self.options_frame = options
@@ -174,7 +180,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
             row=1, column=0, sticky="w", padx=(0, 20)
         )
         ttk.Entry(options_inner, textvariable=self.output_name_var, width=28).grid(row=1, column=1, sticky="ew")
-        ttk.Button(options_inner, text="Escolher pasta de destino", command=self.choose_dest_folder, bootstyle=SUCCESS).grid(
+        ttk.Button(options_inner, text="Escolher pasta de destino", command=self.choose_dest_folder, style="Action.TButton").grid(
             row=2, column=0, sticky="w", pady=(10, 0)
         )
         self.dest_label = ttk.Label(
@@ -184,14 +190,14 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         )
         self.dest_label.grid(row=2, column=1, sticky="ew", pady=(10, 0))
 
-        self.controls_frame = ttk.Frame(card)
+        self.controls_frame = ttk.Frame(card, style="Card.TFrame")
         self.controls_frame.pack(fill="x", pady=(2, 6))
-        self.run_btn = ttk.Button(self.controls_frame, text="Processar mídia", command=self.start_processing, bootstyle=SUCCESS, state=DISABLED)
+        self.run_btn = ttk.Button(self.controls_frame, text="Processar mídia", command=self.start_processing, style="PrimaryAction.TButton", state=DISABLED)
         self.run_btn.pack(side="left")
-        self.cancel_btn = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_processing, bootstyle=SECONDARY, state=DISABLED)
+        self.cancel_btn = ttk.Button(self.controls_frame, text="Cancelar", command=self.cancel_processing, style="Action.TButton", state=DISABLED)
         self.cancel_btn.pack(side="left", padx=(10, 0))
         self.cancel_btn.pack_forget()
-        self.open_btn = ttk.Button(self.controls_frame, text="Abrir pasta do arquivo", command=self.open_folder, bootstyle=INFO, state=DISABLED)
+        self.open_btn = ttk.Button(self.controls_frame, text="Abrir pasta do arquivo", command=self.open_folder, style="Action.TButton", state=DISABLED)
         self.open_btn.pack(side="left", padx=(10, 0))
         self.controls_frame.pack_forget()
 
@@ -202,7 +208,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         )
         hint.pack(anchor="w", pady=(0, 6))
 
-        self.progress_frame = ttk.Frame(card, padding=(10, 6))
+        self.progress_frame = ttk.Frame(card, padding=(10, 6), style="SurfaceAlt.TFrame")
         self.progress = ttk.Progressbar(self.progress_frame, orient=tk.HORIZONTAL, mode="determinate", variable=self.progress_var, maximum=100)
         self.progress.pack(fill="x")
         ttk.Label(self.progress_frame, textvariable=self.status_var, font=("Helvetica", 11)).pack(anchor="w", pady=(6, 0))
@@ -314,7 +320,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
             remove_btn = ttk.Button(
                 row_frame,
                 text="Remover",
-                bootstyle="danger",
+                style="DangerAction.TButton",
                 command=lambda p=path: self._remove_file(p),
             )
             remove_btn.grid(row=3, column=3, sticky="e", padx=(10, 0))
@@ -401,12 +407,22 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
     def _on_scrollable_configure(self, event):
         # Adjust the scroll region to encompass the full content.
         if getattr(self, "canvas", None):
+            try:
+                canvas_height = self.canvas.winfo_height()
+                target_height = max(event.height, canvas_height)
+                self.canvas.itemconfig(self.scroll_window, height=target_height)
+            except Exception:
+                pass
             self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
     def _on_canvas_configure(self, event):
         # Keep the inner frame the same width as the canvas.
         try:
-            self.canvas.itemconfig(self.scroll_window, width=event.width)
+            self.canvas.itemconfig(
+                self.scroll_window,
+                width=event.width,
+                height=max(self.scrollable_frame.winfo_reqheight(), event.height),
+            )
         except Exception:
             pass
         self._update_scrollbar_visibility()
@@ -808,6 +824,12 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         if duration is None:
             return "Duração não encontrada"
         return f"Duração: {seconds_to_hms(duration)}"
+
+    def _theme_color(self, key):
+        top = self.winfo_toplevel()
+        mode = getattr(top, "theme_var", None)
+        profile = get_theme_profile(mode)
+        return profile[key]
 
     def _drain_ui_queue(self):
         try:

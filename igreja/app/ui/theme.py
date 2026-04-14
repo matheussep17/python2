@@ -6,37 +6,37 @@ import tkinter as tk
 THEME_PROFILES = {
     "Escuro": {
         "ttk_theme": "darkly",
-        "window_bg": "#040A14",
-        "top_bg": "#07111F",
-        "top_border": "#15314F",
-        "side_bg": "#09101B",
-        "side_panel_bg": "#0C1625",
-        "content_bg": "#060E1A",
-        "hero_bg": "#0A1728",
-        "hero_alt_bg": "#10213A",
-        "status_bg": "#07111F",
-        "panel_bg": "#0F1C2E",
-        "panel_alt_bg": "#13253E",
-        "panel_border": "#223858",
-        "panel_border_soft": "#162941",
-        "panel_highlight": "#7DB8FF",
-        "panel_shadow": "#050B14",
-        "input_bg": "#081321",
-        "input_border": "#35547A",
-        "input_focus": "#8FC5FF",
+        "window_bg": "#0A0C10",
+        "top_bg": "#11141A",
+        "top_border": "#2A313B",
+        "side_bg": "#0D1015",
+        "side_panel_bg": "#141922",
+        "content_bg": "#0D1015",
+        "hero_bg": "#171D27",
+        "hero_alt_bg": "#202733",
+        "status_bg": "#11141A",
+        "panel_bg": "#191F29",
+        "panel_alt_bg": "#202833",
+        "panel_border": "#36414E",
+        "panel_border_soft": "#29323D",
+        "panel_highlight": "#7EA7D8",
+        "panel_shadow": "#07090D",
+        "input_bg": "#131922",
+        "input_border": "#4C6078",
+        "input_focus": "#A2C0E3",
         "title_fg": "#F4F8FF",
-        "subtitle_fg": "#B4C3D9",
-        "muted_fg": "#7E91AE",
+        "subtitle_fg": "#C5CCD6",
+        "muted_fg": "#98A3B2",
         "field_fg": "#F7FBFF",
         "inverse_fg": "#07111F",
         "nav_accents": {
-            "baixar": "#5ED4FF",
-            "compressor": "#FFBE5C",
-            "converter": "#7DB8FF",
+            "baixar": "#68C0D8",
+            "compressor": "#D9B16A",
+            "converter": "#88A9D2",
             "editor": "#FF7B9D",
-            "lyrics": "#C187FF",
-            "pdf": "#19E28F",
-            "transcribe": "#7EE081",
+            "lyrics": "#B28AD9",
+            "pdf": "#4BCB93",
+            "transcribe": "#86C989",
         },
     },
     "Claro": {
@@ -135,6 +135,10 @@ def apply_design_system(window, style, mode: str | tk.Variable | None) -> None:
     style.configure("Surface.TFrame", background=profile["panel_bg"])
     style.configure("SurfaceAlt.TFrame", background=profile["panel_alt_bg"])
     style.configure(
+        "ContentHost.TFrame",
+        background=profile["content_bg"],
+    )
+    style.configure(
         "Inset.TFrame",
         background=profile["panel_alt_bg"],
         bordercolor=profile["panel_border_soft"],
@@ -211,6 +215,24 @@ def apply_design_system(window, style, mode: str | tk.Variable | None) -> None:
         background=profile["panel_alt_bg"],
     )
     style.configure(
+        "Surface.TLabel",
+        font=("Segoe UI", 10),
+        foreground=profile["field_fg"],
+        background=profile["panel_bg"],
+    )
+    style.configure(
+        "SurfaceAlt.TLabel",
+        font=("Segoe UI", 10),
+        foreground=profile["field_fg"],
+        background=profile["panel_alt_bg"],
+    )
+    style.configure(
+        "SurfaceMuted.TLabel",
+        font=("Segoe UI", 10),
+        foreground=profile["muted_fg"],
+        background=profile["panel_alt_bg"],
+    )
+    style.configure(
         "SidebarHint.TLabel",
         font=("Segoe UI", 10),
         foreground=profile["muted_fg"],
@@ -270,11 +292,107 @@ def apply_design_system(window, style, mode: str | tk.Variable | None) -> None:
         bordercolor=[("active", profile["panel_highlight"]), ("pressed", profile["panel_highlight"])],
     )
     style.configure(
+        "Action.TButton",
+        font=("Segoe UI Semibold", 10),
+        padding=(16, 10),
+        background=profile["hero_bg"],
+        foreground=profile["title_fg"],
+        bordercolor=profile["panel_highlight"],
+        borderwidth=2,
+        relief="flat",
+        lightcolor=profile["panel_highlight"],
+        darkcolor=profile["panel_highlight"],
+    )
+    style.map(
+        "Action.TButton",
+        background=[("active", profile["panel_alt_bg"]), ("pressed", profile["panel_alt_bg"])],
+        foreground=[("disabled", profile["muted_fg"])],
+        bordercolor=[
+            ("active", profile["panel_highlight"]),
+            ("pressed", profile["panel_highlight"]),
+            ("disabled", profile["panel_border_soft"]),
+        ],
+        lightcolor=[
+            ("active", profile["panel_highlight"]),
+            ("pressed", profile["panel_highlight"]),
+            ("disabled", profile["panel_border_soft"]),
+        ],
+        darkcolor=[
+            ("active", profile["panel_highlight"]),
+            ("pressed", profile["panel_highlight"]),
+            ("disabled", profile["panel_border_soft"]),
+        ],
+    )
+    style.configure(
+        "PrimaryAction.TButton",
+        font=("Segoe UI Semibold", 10),
+        padding=(18, 10),
+        background=profile["panel_highlight"],
+        foreground=profile["inverse_fg"],
+        bordercolor=profile["panel_highlight"],
+        borderwidth=1,
+        relief="flat",
+        lightcolor=profile["panel_highlight"],
+        darkcolor=profile["panel_highlight"],
+    )
+    style.map(
+        "PrimaryAction.TButton",
+        background=[("active", profile["input_focus"]), ("pressed", profile["input_focus"])],
+        foreground=[("disabled", profile["muted_fg"])],
+        bordercolor=[
+            ("active", profile["input_focus"]),
+            ("pressed", profile["input_focus"]),
+            ("disabled", profile["panel_border_soft"]),
+        ],
+        lightcolor=[
+            ("active", profile["input_focus"]),
+            ("pressed", profile["input_focus"]),
+            ("disabled", profile["panel_border_soft"]),
+        ],
+        darkcolor=[
+            ("active", profile["input_focus"]),
+            ("pressed", profile["input_focus"]),
+            ("disabled", profile["panel_border_soft"]),
+        ],
+    )
+    style.configure(
+        "DangerAction.TButton",
+        font=("Segoe UI Semibold", 10),
+        padding=(16, 10),
+        background="#D95C66" if profile["inverse_fg"] == "#07111F" else "#D64545",
+        foreground=profile["inverse_fg"],
+        bordercolor="#D95C66" if profile["inverse_fg"] == "#07111F" else "#D64545",
+        borderwidth=1,
+        relief="flat",
+        lightcolor="#D95C66" if profile["inverse_fg"] == "#07111F" else "#D64545",
+        darkcolor="#D95C66" if profile["inverse_fg"] == "#07111F" else "#D64545",
+    )
+    style.map(
+        "DangerAction.TButton",
+        background=[("active", "#C84B56"), ("pressed", "#C84B56")],
+        foreground=[("disabled", profile["muted_fg"])],
+        bordercolor=[
+            ("active", "#C84B56"),
+            ("pressed", "#C84B56"),
+            ("disabled", profile["panel_border_soft"]),
+        ],
+        lightcolor=[
+            ("active", "#C84B56"),
+            ("pressed", "#C84B56"),
+            ("disabled", profile["panel_border_soft"]),
+        ],
+        darkcolor=[
+            ("active", "#C84B56"),
+            ("pressed", "#C84B56"),
+            ("disabled", profile["panel_border_soft"]),
+        ],
+    )
+    style.configure(
         "Nav.TButton",
         font=("Segoe UI Semibold", 10),
         padding=(16, 12),
         anchor="w",
-        borderwidth=1,
+        borderwidth=2,
         relief="flat",
     )
 
@@ -286,18 +404,20 @@ def apply_design_system(window, style, mode: str | tk.Variable | None) -> None:
             padding=(16, 12),
             anchor="w",
             foreground=accent,
-            background=profile["side_panel_bg"],
-            bordercolor=accent,
-            borderwidth=1,
+            background=profile["panel_bg"],
+            bordercolor=profile["panel_border"],
+            borderwidth=2,
             relief="flat",
-            lightcolor=accent,
-            darkcolor=accent,
+            lightcolor=profile["panel_border"],
+            darkcolor=profile["panel_border"],
         )
         style.map(
             f"{key}.Nav.TButton",
             foreground=[("active", profile["title_fg"]), ("pressed", profile["title_fg"])],
-            background=[("active", profile["hero_bg"]), ("pressed", profile["hero_bg"])],
+            background=[("active", accent), ("pressed", accent)],
             bordercolor=[("active", accent), ("pressed", accent)],
+            lightcolor=[("active", accent), ("pressed", accent)],
+            darkcolor=[("active", accent), ("pressed", accent)],
         )
         style.configure(
             f"{key}.Active.Nav.TButton",
@@ -307,7 +427,7 @@ def apply_design_system(window, style, mode: str | tk.Variable | None) -> None:
             foreground=profile["inverse_fg"],
             background=accent,
             bordercolor=accent,
-            borderwidth=1,
+            borderwidth=2,
             relief="flat",
             lightcolor=accent,
             darkcolor=accent,

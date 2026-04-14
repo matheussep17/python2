@@ -14,13 +14,14 @@ from app.ui.theme import get_theme_profile
 
 class LyricsSearchFrame(ttk.Frame):
     def __init__(self, master, on_status):
-        super().__init__(master)
+        super().__init__(master, style="ContentHost.TFrame")
         self.on_status = on_status
         self.is_searching = False
         self.cancel_requested = False
         self.ui_queue = queue.Queue()
         self.current_artist = ""
         self.current_song = ""
+        self.has_loaded_lyrics = False
 
         self._build_ui()
         self.after(100, self._drain_ui_queue)
@@ -30,7 +31,7 @@ class LyricsSearchFrame(ttk.Frame):
         profile = get_theme_profile(getattr(self.winfo_toplevel(), "theme_mode", None))
 
         card = ttk.Frame(self, padding=20, style="Card.TFrame")
-        card.pack(fill="both", expand=True)
+        card.pack(fill="x", anchor="n")
 
         header = ttk.Frame(card, style="Card.TFrame")
         header.pack(fill="x")
@@ -58,7 +59,7 @@ class LyricsSearchFrame(ttk.Frame):
         self.song_entry = ttk.Entry(inner_frame, textvariable=self.song_var)
         self.song_entry.grid(row=1, column=1, sticky="ew", padx=(8, 0))
 
-        button_frame = ttk.Frame(inner_frame)
+        button_frame = ttk.Frame(inner_frame, style="Surface.TFrame")
         button_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(10, 0))
 
         self.search_button = ttk.Button(
@@ -80,6 +81,8 @@ class LyricsSearchFrame(ttk.Frame):
 
         result_frame = ttk.Labelframe(card, text="Letra da Musica", style="TLabelframe")
         result_frame.pack(fill="both", expand=True, pady=(12, 0))
+        result_frame.pack_forget()
+        self.result_frame = result_frame
 
         result_inner = ttk.Frame(result_frame, padding=14, style="Surface.TFrame")
         result_inner.pack(fill="both", expand=True)
@@ -90,7 +93,7 @@ class LyricsSearchFrame(ttk.Frame):
         header_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         header_frame.grid_columnconfigure(0, weight=1)
 
-        self.song_title_var = tk.StringVar(value="Nenhuma musica carregada")
+        self.song_title_var = tk.StringVar(value="")
         ttk.Label(
             header_frame,
             textvariable=self.song_title_var,
@@ -485,11 +488,14 @@ class LyricsSearchFrame(ttk.Frame):
 
     def _display_lyrics(self, lyrics: str, title: str = ""):
         """Exibe a letra no campo de texto."""
+        self.has_loaded_lyrics = True
         self.lyrics_text.delete("1.0", "end")
         self.song_title_var.set(self.current_song or title or "Musica sem titulo")
         self.artist_name_var.set(self.current_artist or "")
         self.lyrics_text.insert("1.0", lyrics)
         self.lyrics_text.see("1.0")
+        if not self.result_frame.winfo_ismapped():
+            self.result_frame.pack(fill="both", expand=True, pady=(12, 0))
 
     def _reset_buttons(self):
         """Reseta os botoes apos a busca."""
