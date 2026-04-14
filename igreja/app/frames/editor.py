@@ -68,6 +68,8 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         # Dynamically generated UI rows for each selected video (Trecho 1, 2, 3...)
         self.video_rows = []
         self.output_name_var = tk.StringVar()
+        self.processing_mode_var = tk.StringVar(value="merge")
+        self.separate_naming_var = tk.StringVar(value="Nome original + sufixo")
         self.init_output_folder("Mesma pasta do primeiro arquivo selecionado")
 
         self.progress_var = tk.DoubleVar(value=0)
@@ -173,25 +175,67 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         options_inner.columnconfigure(0, weight=1)
         options_inner.columnconfigure(1, weight=1)
 
-        ttk.Label(options_inner, text="Ordem de montagem", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w")
-        ttk.Label(options_inner, text="Nome do arquivo final", font=("Segoe UI", 12, "bold")).grid(row=0, column=1, sticky="w")
+        self.processing_mode_frame = ttk.Frame(options_inner, style="SurfaceAlt.TFrame")
+        self.processing_mode_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        self.processing_mode_frame.columnconfigure(0, weight=1)
+        self.processing_mode_frame.columnconfigure(1, weight=1)
+        ttk.Label(self.processing_mode_frame, text="Modo de processamento", font=("Segoe UI", 12, "bold")).grid(
+            row=0, column=0, columnspan=2, sticky="w"
+        )
+        ttk.Radiobutton(
+            self.processing_mode_frame,
+            text="Juntar tudo em um arquivo",
+            value="merge",
+            variable=self.processing_mode_var,
+            command=self._on_processing_mode_change,
+        ).grid(row=1, column=0, sticky="w", pady=(6, 0), padx=(0, 20))
+        ttk.Radiobutton(
+            self.processing_mode_frame,
+            text="Salvar cada trecho separado",
+            value="separate",
+            variable=self.processing_mode_var,
+            command=self._on_processing_mode_change,
+        ).grid(row=1, column=1, sticky="w", pady=(6, 0))
+        self.processing_mode_hint = ttk.Label(self.processing_mode_frame, style="SurfaceMuted.TLabel")
+        self.processing_mode_hint.grid(row=2, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
-        ttk.Label(options_inner, text="Seguir a ordem dos vídeos selecionados", font=("Segoe UI", 11)).grid(
-            row=1, column=0, sticky="w", padx=(0, 20)
+        self.order_title_label = ttk.Label(options_inner, text="Ordem de montagem", font=("Segoe UI", 12, "bold"))
+        self.order_title_label.grid(row=3, column=0, sticky="w")
+        self.output_title_label = ttk.Label(options_inner, text="Nome do arquivo final", font=("Segoe UI", 12, "bold"))
+        self.output_title_label.grid(row=3, column=1, sticky="w")
+
+        self.order_hint_label = ttk.Label(options_inner, text="Seguir a ordem dos vídeos selecionados", font=("Segoe UI", 11))
+        self.order_hint_label.grid(row=4, column=0, sticky="w", padx=(0, 20))
+        self.separate_name_mode_label = ttk.Label(options_inner, text="Como salvar cada arquivo", font=("Segoe UI", 11))
+        self.separate_name_mode_label.grid(row=4, column=1, sticky="w")
+        self.separate_name_mode_combo = ttk.Combobox(
+            options_inner,
+            textvariable=self.separate_naming_var,
+            state="readonly",
+            values=[
+                "Nome base + numeração",
+                "Nome original + sufixo",
+            ],
         )
-        ttk.Entry(options_inner, textvariable=self.output_name_var, width=28).grid(row=1, column=1, sticky="ew")
-        ttk.Label(options_inner, text="Define o nome do video ou audio montado ao final.", style="SurfaceMuted.TLabel").grid(
-            row=2, column=1, sticky="w", pady=(6, 0)
+        self.separate_name_mode_combo.grid(row=5, column=1, sticky="ew")
+        self.separate_name_mode_combo.bind("<<ComboboxSelected>>", lambda _event: self._on_separate_naming_change())
+        self.output_name_entry = ttk.Entry(options_inner, textvariable=self.output_name_var, width=28)
+        self.output_name_entry.grid(row=6, column=1, sticky="ew")
+        self.output_hint_label = ttk.Label(
+            options_inner,
+            text="Define o nome do video ou audio montado ao final.",
+            style="SurfaceMuted.TLabel",
         )
+        self.output_hint_label.grid(row=7, column=1, sticky="w", pady=(6, 0))
         ttk.Button(options_inner, text="Escolher pasta de destino", command=self.choose_dest_folder, style="Action.TButton").grid(
-            row=3, column=0, sticky="w", pady=(10, 0)
+            row=8, column=0, sticky="w", pady=(10, 0)
         )
         self.dest_label = ttk.Label(
             options_inner,
             text=self.get_destination_label_text(),
             style="Muted.TLabel",
         )
-        self.dest_label.grid(row=3, column=1, sticky="ew", pady=(10, 0))
+        self.dest_label.grid(row=8, column=1, sticky="ew", pady=(10, 0))
 
         self.controls_frame = ttk.Frame(card, style="Card.TFrame")
         self.controls_frame.pack(fill="x", pady=(2, 6))
@@ -268,6 +312,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
 
         self._refresh_file_info()
         self._refresh_output_name()
+        self._update_processing_mode_ui()
         self._update_action_state()
         self._update_visibility()
         self._update_scrollbar_visibility()
@@ -276,6 +321,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         if not self.input_files:
             self.selection_label.config(text="Nenhum arquivo selecionado")
             self._rebuild_video_rows()
+            self._update_processing_mode_ui()
             self._update_visibility()
             return
 
@@ -288,6 +334,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
             )
 
         self._rebuild_video_rows()
+        self._update_processing_mode_ui()
         self._update_visibility()
         # Ensure the action buttons are visible after selecting a file in smaller windows.
         self._scroll_to_bottom()
@@ -342,11 +389,11 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         if not self.input_files:
             self.output_name_var.set("")
             return
-        
+
         # Determina se é áudio ou vídeo pelo primeiro arquivo
         first_file = self.input_files[0]
         is_audio = is_audio_file(first_file)
-        
+
         if len(self.input_files) == 1:
             base = os.path.splitext(os.path.basename(first_file))[0]
             if is_audio:
@@ -354,11 +401,74 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
             else:
                 self.output_name_var.set(f"{base}_editado.mp4")
             return
-        
+
+        if self._should_merge_segments():
+            if is_audio:
+                self.output_name_var.set("audio_montado.mp3")
+            else:
+                self.output_name_var.set("video_montado.mp4")
+            return
+
+        if self._uses_original_name_in_separate_mode():
+            self.output_name_var.set("_cortado")
+            return
+
         if is_audio:
-            self.output_name_var.set("audio_montado.mp3")
+            self.output_name_var.set("audio_cortado.mp3")
         else:
-            self.output_name_var.set("video_montado.mp4")
+            self.output_name_var.set("video_cortado.mp4")
+
+    def _should_merge_segments(self):
+        return len(self.input_files) > 1 and self.processing_mode_var.get() != "separate"
+
+    def _uses_original_name_in_separate_mode(self):
+        return self.separate_naming_var.get() == "Nome original + sufixo"
+
+    def _on_processing_mode_change(self):
+        self._refresh_output_name()
+        self._update_processing_mode_ui()
+
+    def _on_separate_naming_change(self):
+        self._refresh_output_name()
+        self._update_processing_mode_ui()
+
+    def _update_processing_mode_ui(self):
+        has_multiple_files = len(self.input_files) > 1
+        if has_multiple_files:
+            self.processing_mode_frame.grid()
+        else:
+            self.processing_mode_var.set("merge")
+            self.processing_mode_frame.grid_remove()
+
+        is_merge = self._should_merge_segments()
+        if is_merge:
+            self.separate_name_mode_label.grid_remove()
+            self.separate_name_mode_combo.grid_remove()
+            self.order_title_label.config(text="Ordem de montagem")
+            self.order_hint_label.config(text="Seguir a ordem dos vídeos selecionados")
+            self.output_title_label.config(text="Nome do arquivo final")
+            self.output_hint_label.config(text="Define o nome do video ou audio montado ao final.")
+            self.processing_mode_hint.config(
+                text="Use este modo para juntar os trechos na ordem em que aparecem na lista."
+            )
+        else:
+            self.separate_name_mode_label.grid()
+            self.separate_name_mode_combo.grid()
+            self.order_title_label.config(text="Ordem dos arquivos")
+            self.order_hint_label.config(text="Cada trecho será salvo separado, seguindo a ordem selecionada")
+            if self._uses_original_name_in_separate_mode():
+                self.output_title_label.config(text="Sufixo dos arquivos")
+                self.output_hint_label.config(
+                    text="Cada arquivo mantém o nome original e recebe este sufixo. Exemplo: musica_cortado.mp3."
+                )
+            else:
+                self.output_title_label.config(text="Nome base dos arquivos")
+                self.output_hint_label.config(
+                    text="O nome informado vira a base. Exemplo: audio_cortado_01.mp3, audio_cortado_02.mp3."
+                )
+            self.processing_mode_hint.config(
+                text="Use este modo para cortar cada arquivo separadamente, sem juntar os resultados."
+            )
 
     def _update_visibility(self):
         """Show/hide the editor sections depending on whether any file is selected."""
@@ -501,6 +611,8 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         self.file_durations = {}
         self.video_rows = []
         self.output_name_var.set("")
+        self.processing_mode_var.set("merge")
+        self.separate_naming_var.set("Nome original + sufixo")
         self.progress_var.set(0)
         self.status_var.set("")
         self._hide_progress()
@@ -531,26 +643,21 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         if not output_name:
             messagebox.showerror("Erro", "Informe um nome para o arquivo de saída.")
             return
-        
-        # Determina extensão esperada baseado no tipo de mídia
-        first_file = self.input_files[0]
-        is_audio = is_audio_file(first_file)
-        expected_ext = ".mp3" if is_audio else ".mp4"
-        
-        if not output_name.lower().endswith(expected_ext):
-            output_name += expected_ext
 
         output_dir = self.resolve_output_dir(self.input_files[0])
-        output_path = os.path.join(output_dir, output_name)
         try:
             self.ensure_output_dir(self.input_files[0])
         except Exception as exc:
             messagebox.showerror("Erro", f"Nao foi possivel preparar a pasta de destino:\n{exc}")
             return
-        normalized_output = os.path.abspath(output_path).lower()
-        if normalized_output in {os.path.abspath(path).lower() for path in self.input_files}:
-            messagebox.showerror("Erro", "Escolha um nome diferente do arquivo original para evitar sobrescrita.")
+        output_paths = self._build_output_paths(segments, output_dir, output_name)
+        if output_paths is None:
             return
+        normalized_inputs = {os.path.abspath(path).lower() for path in self.input_files}
+        for candidate in output_paths:
+            if os.path.abspath(candidate).lower() in normalized_inputs:
+                messagebox.showerror("Erro", "Escolha um nome diferente do arquivo original para evitar sobrescrita.")
+                return
 
         self.is_running = True
         self.cancel_requested = False
@@ -564,7 +671,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         self._update_action_state()
         self._update_visibility()
 
-        threading.Thread(target=self._worker, args=(segments, output_path), daemon=True).start()
+        threading.Thread(target=self._worker, args=(segments, output_paths), daemon=True).start()
 
     def cancel_processing(self):
         if not self.is_running:
@@ -645,17 +752,71 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
             "duration": clip_duration,
         }
 
-    def _worker(self, segments, output_path):
+    def _build_output_paths(self, segments, output_dir, output_name):
+        first_file = self.input_files[0]
+        is_audio = is_audio_file(first_file)
+        expected_ext = ".mp3" if is_audio else ".mp4"
+
+        if len(segments) == 1 or self._should_merge_segments():
+            base_name, provided_ext = os.path.splitext(output_name)
+            if not provided_ext:
+                provided_ext = expected_ext
+            if provided_ext.lower() != expected_ext:
+                messagebox.showerror("Erro", f"Use a extensão {expected_ext} para este tipo de mídia.")
+                return None
+
+            normalized_name = f"{base_name}{provided_ext}"
+            return [os.path.join(output_dir, normalized_name)]
+
+        if self._uses_original_name_in_separate_mode():
+            suffix = (output_name or "").strip()
+            if not suffix:
+                messagebox.showerror("Erro", "Informe um sufixo para os arquivos separados.")
+                return None
+            return [
+                os.path.join(
+                    output_dir,
+                    f"{os.path.splitext(os.path.basename(segment['path']))[0]}{suffix}{expected_ext}",
+                )
+                for segment in segments
+            ]
+
+        base_name, provided_ext = os.path.splitext(output_name)
+        if not provided_ext:
+            provided_ext = expected_ext
+        if provided_ext.lower() != expected_ext:
+            messagebox.showerror("Erro", f"Use a extensão {expected_ext} para este tipo de mídia.")
+            return None
+        if not base_name:
+            messagebox.showerror("Erro", "Informe um nome base para os arquivos separados.")
+            return None
+
+        total = len(segments)
+        digits = max(2, len(str(total)))
+        return [
+            os.path.join(output_dir, f"{base_name}_{index:0{digits}d}{provided_ext}")
+            for index in range(1, total + 1)
+        ]
+
+    def _worker(self, segments, output_paths):
         temp_dir = None
         try:
             temp_dir = tempfile.mkdtemp(prefix="media_suite_edit_")
 
             if len(segments) == 1:
-                ok = self._export_segment(segments[0], output_path, step_index=0, total_steps=1)
+                ok = self._export_segment(segments[0], output_paths[0], step_index=0, total_steps=1)
                 if not ok:
                     if self.cancel_requested:
                         self.ui_queue.put(("canceled", "Processamento cancelado."))
                     return
+            elif not self._should_merge_segments():
+                total_steps = len(segments)
+                for index, (segment, output_path) in enumerate(zip(segments, output_paths), start=1):
+                    ok = self._export_segment(segment, output_path, step_index=index - 1, total_steps=total_steps)
+                    if not ok:
+                        if self.cancel_requested:
+                            self.ui_queue.put(("canceled", "Processamento cancelado."))
+                        return
             else:
                 temp_segments = []
                 total_steps = len(segments) + 1
@@ -689,14 +850,20 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
                     list_path,
                     "-c",
                     "copy",
-                    output_path,
+                    output_paths[0],
                 )
                 if not self._run_ffmpeg_command(cmd):
                     if self.cancel_requested:
                         self.ui_queue.put(("canceled", "Processamento cancelado."))
                     return
 
-            self.ui_queue.put(("done", {"message": "Arquivo processado com sucesso.", "last_output": output_path}))
+            if len(output_paths) == 1:
+                message = "Arquivo processado com sucesso."
+                last_output = output_paths[0]
+            else:
+                message = f"{len(output_paths)} arquivos processados com sucesso."
+                last_output = output_paths[0]
+            self.ui_queue.put(("done", {"message": message, "last_output": last_output}))
         except FileNotFoundError:
             self.ui_queue.put(("error", "Não encontrei ffmpeg/ffprobe no executável nem no PATH."))
         except Exception as exc:
