@@ -51,6 +51,7 @@ class LyricsSearchFrame(ttk.Frame):
         self.artist_var = tk.StringVar()
         self.artist_entry = ttk.Entry(inner_frame, textvariable=self.artist_var)
         self.artist_entry.grid(row=0, column=1, sticky="ew", padx=(8, 0))
+        self.artist_entry.bind("<Return>", self._handle_enter_search)
 
         ttk.Label(inner_frame, text="Musica:", style="SectionLabel.TLabel").grid(
             row=1, column=0, sticky="w", pady=5
@@ -58,6 +59,7 @@ class LyricsSearchFrame(ttk.Frame):
         self.song_var = tk.StringVar()
         self.song_entry = ttk.Entry(inner_frame, textvariable=self.song_var)
         self.song_entry.grid(row=1, column=1, sticky="ew", padx=(8, 0))
+        self.song_entry.bind("<Return>", self._handle_enter_search)
 
         button_frame = ttk.Frame(inner_frame, style="Surface.TFrame")
         button_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(10, 0))
@@ -78,6 +80,14 @@ class LyricsSearchFrame(ttk.Frame):
             state="disabled",
         )
         self.cancel_button.pack(side="left", padx=5)
+
+        self.clear_button = ttk.Button(
+            button_frame,
+            text="Limpar",
+            bootstyle="secondary-outline",
+            command=self._clear_form,
+        )
+        self.clear_button.pack(side="left", padx=5)
 
         result_frame = ttk.Labelframe(card, text="Letra da Musica", style="TLabelframe")
         result_frame.pack(fill="both", expand=True, pady=(12, 0))
@@ -177,6 +187,12 @@ class LyricsSearchFrame(ttk.Frame):
 
         thread = threading.Thread(target=self._search_lyrics, args=(artist, song), daemon=True)
         thread.start()
+
+    def _handle_enter_search(self, _event=None):
+        """Dispara a busca ao pressionar Enter nos campos."""
+        if not self.is_searching:
+            self._start_search()
+        return "break"
 
     def _cancel_search(self):
         """Cancela a busca."""
@@ -496,6 +512,22 @@ class LyricsSearchFrame(ttk.Frame):
         self.lyrics_text.see("1.0")
         if not self.result_frame.winfo_ismapped():
             self.result_frame.pack(fill="both", expand=True, pady=(12, 0))
+
+    def _clear_form(self):
+        """Limpa campos, letra carregada e oculta o resultado atual."""
+        self.cancel_requested = False
+        self.current_artist = ""
+        self.current_song = ""
+        self.has_loaded_lyrics = False
+        self.artist_var.set("")
+        self.song_var.set("")
+        self.song_title_var.set("")
+        self.artist_name_var.set("")
+        self.lyrics_text.delete("1.0", "end")
+        if self.result_frame.winfo_ismapped():
+            self.result_frame.pack_forget()
+        self._reset_buttons()
+        self._set_status("Pronto para pesquisar")
 
     def _reset_buttons(self):
         """Reseta os botoes apos a busca."""
