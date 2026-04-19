@@ -26,6 +26,10 @@ jobs:
         shell: pwsh
         run: python -m venv .buildvenv
 
+      - name: Validate tag version
+        shell: pwsh
+        run: python .\scripts\validate_tag_version.py
+
       - name: Build executable
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\build.ps1

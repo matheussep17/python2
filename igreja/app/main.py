@@ -8,6 +8,7 @@ from tkinter import messagebox
 
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
+from ttkbootstrap import localization as ttk_localization
 
 # Permite executar este arquivo diretamente: `python app/main.py`
 # sem quebrar os imports absolutos `from app...`.
@@ -46,6 +47,20 @@ from app.utils import (
     runtime_requirement_message,
 )
 from app.version import APP_VERSION
+
+
+_original_initialize_localities = ttk_localization.initialize_localities
+
+
+def _safe_initialize_localities():
+    """Evita que falhas opcionais do msgcat derrubem a abertura do app."""
+    try:
+        _original_initialize_localities()
+    except tk.TclError:
+        return
+
+
+ttk_localization.initialize_localities = _safe_initialize_localities
 
 
 DEFAULT_WINDOW_WIDTH = 1680
