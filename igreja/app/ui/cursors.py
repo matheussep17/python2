@@ -14,6 +14,8 @@ BUTTON_CLASSES = {
 
 
 def _choose_cursor(widget) -> str | None:
+    if not hasattr(widget, "winfo_class"):
+        return None
     widget_class = widget.winfo_class()
     if widget_class in BUTTON_CLASSES:
         return "hand2"
@@ -54,7 +56,7 @@ def install_cursor_profile(root) -> None:
 
     def _handle_map(event):
         widget = getattr(event, "widget", None)
-        if widget is not None:
+        if widget is not None and hasattr(widget, "winfo_class"):
             _apply_widget_cursor(widget)
 
     root.bind_all("<Map>", _handle_map, add="+")

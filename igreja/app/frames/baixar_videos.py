@@ -9,6 +9,8 @@ import urllib.request
 import base64
 import io
 import time
+import tempfile
+import subprocess
 from pathlib import Path
 from tkinter import filedialog, messagebox
 import tkinter as tk
@@ -17,7 +19,13 @@ import requests
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
-from app.utils import format_bytes, get_ffmpeg_bin_dir, get_output_folder, save_output_folder
+from app.utils import (
+    format_bytes,
+    get_available_js_runtimes,
+    get_ffmpeg_bin_dir,
+    get_output_folder,
+    save_output_folder,
+)
 
 
 def app_base_dir() -> Path:
@@ -37,13 +45,15 @@ class BaixarFrame(ttk.Frame):
 
         self.destination_folder = self.load_config()
         self.selected_format = ttk.StringVar(value="Música")
-        self.selected_quality = ttk.StringVar(value="best")
+        self.selected_quality = ttk.StringVar(value="1080p")
         self.video_profile = ttk.StringVar(value="Compatível com Holyrics")
 
         self.downloaded_file = None
+        self._reserved_output_file = None
         self.cancel_requested = False
         self._last_tmp_file = None
         self._yt_dlp = None
+        self._pytubefix = None
         self._quality_pack_options = {}
         self.is_running = False
         self._last_action_key_ts = 0.0
@@ -165,7 +175,7 @@ class BaixarFrame(ttk.Frame):
         self.quality_menu = ttk.Combobox(
             opts_inner,
             textvariable=self.selected_quality,
-            values=["best", "144p", "240p", "360p", "480p", "720p", "1080p", "1440p", "2160p"],
+            values=["144p", "240p", "360p", "480p", "720p", "1080p", "1440p", "2160p"],
             state="readonly",
             width=12,
         )
@@ -308,14 +318,31 @@ class BaixarFrame(ttk.Frame):
 
         if is_video and quality_choice and quality_choice != "best":
             stem = f"{stem} [{quality_choice}]"
-        if is_video and not is_holyrics:
+        elif is_video and not is_holyrics:
             stem = f"{stem} [max]"
 
         reserved_path = self._next_available_path(self.destination_folder, stem, final_ext)
         return f"{os.path.splitext(reserved_path)[0]}.%(ext)s", reserved_path
 
     def _iter_ydl_attempts(self, base_opts):
+        format_attempts = base_opts.pop("_format_attempts", None)
+        attempts = []
+
+        if format_attempts:
+            for fmt in format_attempts:
+                attempt = dict(base_opts)
+                attempt["format"] = fmt
+                attempts.append(attempt)
+            return attempts
+
         return [dict(base_opts)]
+
+    def _build_youtube_extractor_args(self):
+        return {
+            "youtube": {
+                "player_client": ["web"],
+            }
+        }
 
     def _fetch_youtube_oembed_title(self, url: str):
         if not (getattr(self, "service", None) and self.service.get() == "YouTube"):
@@ -337,6 +364,8 @@ class BaixarFrame(ttk.Frame):
 
     def _probe_media_info(self, url):
         y = self._yt_dlp
+        extractor_args = self._build_youtube_extractor_args()
+        js_runtimes = get_available_js_runtimes()
         attempts = self._iter_ydl_attempts(
             {
                 "quiet": True,
@@ -347,12 +376,9 @@ class BaixarFrame(ttk.Frame):
                 "retries": 5,
                 "fragment_retries": 5,
                 "skip_unavailable_fragments": True,
-                "extractor_args": {
-                    "youtube": {
-                        "js_runtimes": ["node", "deno"],
-                        "player_client": ["android", "web"],
-                    }
-                },
+                "js_runtimes": js_runtimes,
+                "remote_components": {"ejs:github"},
+                "extractor_args": extractor_args,
                 "extractor_sleep_json": {"youtube": 2},
             }
         )
@@ -478,7 +504,6 @@ class BaixarFrame(ttk.Frame):
             )
             self._queue_event("preview_title", title)
 
-            # também tenta obter thumbnail
             thumb = (info or {}).get("thumbnail")
             if not thumb:
                 thumbs = (info or {}).get("thumbnails") or []
@@ -495,13 +520,12 @@ class BaixarFrame(ttk.Frame):
         except Exception:
             fallback_title = self._fetch_youtube_oembed_title(url)
             self._queue_event("preview_title", fallback_title or "(não foi possível obter o título)")
-    
+
     def _fetch_thumbnail(self, url: str):
         try:
             with urllib.request.urlopen(url, timeout=10) as resp:
                 data = resp.read()
 
-            # tenta carregar com PIL para redimensionar adequadamente
             try:
                 from PIL import Image
             except Exception:
@@ -519,11 +543,21 @@ class BaixarFrame(ttk.Frame):
 
             self._queue_event("preview_thumb", data)
         except Exception:
-            # falha silenciosa (não trava a UI)
             pass
 
     def _is_video(self):
         return self.selected_format.get() == "Vídeo"
+
+    def _is_youtube_service(self):
+        return bool(getattr(self, "service", None) and self.service.get() == "YouTube")
+
+    def _is_music_mode(self, fmt_mode=None):
+        value = str(fmt_mode if fmt_mode is not None else self.selected_format.get() or "").lower()
+        return "mús" in value or "mus" in value
+
+    def _is_holyrics_profile(self, profile=None):
+        value = str(profile if profile is not None else self.video_profile.get() or "")
+        return "Holyrics" in value
 
     def _apply_quality_visibility(self):
         if getattr(self, "service", None) and self.service.get() == "YouTube" and self._is_video():
@@ -582,7 +616,6 @@ class BaixarFrame(ttk.Frame):
         self._update_visibility()
 
     def _update_visibility(self):
-        """Show/hide options and controls depending on URL + destination state."""
         has_url = self._is_valid_url(self.url_entry.get().strip())
         has_destination = bool(self.destination_folder)
 
@@ -601,13 +634,12 @@ class BaixarFrame(ttk.Frame):
             self.controls_frame.pack_forget()
             self.cancel_btn.pack_forget()
 
-        if self.downloaded_file:
+        if self.downloaded_file and not self.is_running:
             if not self.open_folder_button.winfo_ismapped():
                 self.open_folder_button.pack(pady=8)
         else:
             self.open_folder_button.pack_forget()
 
-        # Only show the progress bar while an operation is running.
         if self.is_running:
             self._show_progress()
         else:
@@ -673,13 +705,10 @@ class BaixarFrame(ttk.Frame):
         try:
             if not data:
                 return
-
-            # Evita que a referência seja descartada pelo GC
             img = tk.PhotoImage(data=base64.b64encode(data))
             self._thumb_photo = img
             self.thumbnail_label.config(image=img)
         except Exception:
-            # fallback silencioso (não impede o uso)
             pass
 
     def _drain_ui_queue(self):
@@ -703,6 +732,9 @@ class BaixarFrame(ttk.Frame):
                     self.downloaded_file = payload
                     self._update_visibility()
 
+                elif kind == "reserved_output_file":
+                    self._reserved_output_file = payload
+
                 elif kind == "preview_title":
                     self.url_title_var.set(str(payload or ""))
 
@@ -724,22 +756,19 @@ class BaixarFrame(ttk.Frame):
             if self.winfo_exists():
                 self.after(100, self._drain_ui_queue)
 
-    # --------- seleção de qualidade (EXATO e depois <= alvo) ---------
+    def _quality_height(self, quality_choice):
+        if quality_choice == "best":
+            return None
+        return "".join(ch for ch in str(quality_choice or "") if ch.isdigit()) or "1080"
+
+    def _is_quality_strict(self, quality_choice):
+        return bool(quality_choice and str(quality_choice).lower() != "best")
+
     def _build_yt_format(self, quality_choice):
-        """
-        Garante MP4 com H.264 (avc1) + áudio AAC (mp4a), com fallback seguro.
-        Mantém sua lógica:
-          1) tenta altura EXATA,
-          2) depois altura <= alvo,
-          3) junta com melhor áudio,
-          4) fallback final.
-        """
-        # filtros de codec para Holyrics: H.264 + AAC
         vfilter = "[vcodec^=avc1]"
         afilter = "[acodec^=mp4a]"
 
         if quality_choice == "best":
-            # Prioriza H.264 MP4 + AAC (m4a). Se não der, cai pra melhor vídeo H.264 e depois qualquer áudio.
             return (
                 f"(bv*{vfilter}[ext=mp4]/bv*{vfilter})"
                 f"+(ba{afilter}[ext=m4a]/ba{afilter}/ba)"
@@ -747,24 +776,470 @@ class BaixarFrame(ttk.Frame):
                 f"/b[ext=mp4]/b"
             )
 
-        h = "".join(ch for ch in quality_choice if ch.isdigit()) or "1080"
+        h = self._quality_height(quality_choice)
 
-        # EXATO -> <= alvo, sempre forçando avc1 no vídeo; áudio tenta AAC primeiro.
-        fmt = (
-            f"((bv*{vfilter}[ext=mp4][height={h}]/bv*{vfilter}[height={h}])"
-            f"/(bv*{vfilter}[ext=mp4][height<={h}]/bv*{vfilter}[height<={h}]))"
+        return (
+            f"(bv*{vfilter}[ext=mp4][height={h}]/bv*{vfilter}[height={h}])"
             f"+(ba{afilter}[ext=m4a]/ba{afilter}/ba)"
-            f"/b{vfilter}[ext=mp4]/b{vfilter}"
-            f"/b[ext=mp4]/b"
+            f"/b{vfilter}[ext=mp4][height={h}]/b{vfilter}[height={h}]"
+            f"/b[ext=mp4][height={h}]/b[height={h}]"
         )
-        return fmt
+
+    def _build_yt_format_attempts(self, quality_choice):
+        if quality_choice == "best":
+            return [self._build_yt_format(quality_choice)]
+
+        h = self._quality_height(quality_choice)
+        vfilter = "[vcodec^=avc1]"
+
+        return [
+            self._build_yt_format(quality_choice),
+            f"(bv*{vfilter}[height={h}]+ba/b{vfilter}[height={h}])"
+            f"/b[ext=mp4][height={h}]"
+            f"/b[height={h}]",
+        ]
+
+    def _build_yt_holyrics_relaxed_attempts(self, quality_choice):
+        if quality_choice == "best":
+            return [
+                "(bv*+ba/b)",
+                "(bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b)",
+            ]
+
+        h = self._quality_height(quality_choice)
+        return [
+            f"(bv*[ext=mp4][height={h}]/bv*[height={h}])"
+            f"+(ba[ext=m4a]/ba)"
+            f"/b[ext=mp4][height={h}]/b[height={h}]",
+        ]
 
     def _build_best_quality_format(self, quality_choice):
         if quality_choice == "best":
             return "bv*+ba/b"
 
-        h = "".join(ch for ch in quality_choice if ch.isdigit()) or "1080"
-        return f"(bv*[height={h}]/bv*[height<={h}])+ba/b[height<={h}]/b"
+        h = self._quality_height(quality_choice)
+        return f"(bv*[height={h}]+ba/b[height={h}])"
+
+    def _build_best_quality_attempts(self, quality_choice):
+        if quality_choice == "best":
+            return [self._build_best_quality_format(quality_choice)]
+
+        h = self._quality_height(quality_choice)
+        return [
+            self._build_best_quality_format(quality_choice),
+            f"b[height={h}]",
+        ]
+
+    def _build_video_attempts(self, quality_choice):
+        if quality_choice == "best":
+            return [
+                "bestvideo*+bestaudio/bestvideo+bestaudio/best",
+                "bv*+ba/b",
+            ]
+
+        h = self._quality_height(quality_choice)
+        return [
+            f"(bestvideo*[height={h}]+bestaudio/bv*[height={h}]+ba/b[height={h}])",
+            f"b[height={h}]",
+        ]
+
+    def _youtube_common_args(self, outtmpl, final_ext):
+        return {
+            "noprogress": True,
+            "nocolor": True,
+            "quiet": True,
+            "progress_hooks": [self.ydl_hook],
+            "outtmpl": outtmpl,
+            "windowsfilenames": True,
+            "noplaylist": True,
+            "socket_timeout": 60,
+            "retries": 5,
+            "fragment_retries": 5,
+            "skip_unavailable_fragments": True,
+            "ffmpeg_location": get_ffmpeg_bin_dir() or None,
+            "js_runtimes": get_available_js_runtimes(),
+            "remote_components": {"ejs:github"},
+            "extractor_args": self._build_youtube_extractor_args(),
+            "extractor_sleep_json": {"youtube": 2},
+            "merge_output_format": final_ext,
+            "prefer_free_formats": False,
+            "allow_unplayable_formats": False,
+        }
+
+    def _get_ffmpeg_executable(self):
+        ffmpeg_dir = get_ffmpeg_bin_dir()
+        if not ffmpeg_dir:
+            return None
+        binary = "ffmpeg.exe" if sys.platform.startswith("win") else "ffmpeg"
+        return os.path.join(ffmpeg_dir, binary)
+
+    def _run_ffmpeg(self, args, error_message):
+        ffmpeg_exe = self._get_ffmpeg_executable()
+        if not ffmpeg_exe or not os.path.exists(ffmpeg_exe):
+            raise RuntimeError("FFmpeg não encontrado para finalizar o download.")
+
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform.startswith("win") else 0
+        completed = subprocess.run(
+            [ffmpeg_exe, *args],
+            capture_output=True,
+            text=True,
+            creationflags=creationflags,
+        )
+        if completed.returncode != 0:
+            stderr = (completed.stderr or "").strip()
+            raise RuntimeError(stderr or error_message)
+
+    def _transcode_to_holyrics(self, source_path, target_path):
+        self._queue_event("status", "Convertendo para MP4 compatível com Holyrics...")
+        self._run_ffmpeg(
+            [
+                "-y",
+                "-i", source_path,
+                "-c:v", "libx264",
+                "-preset", "medium",
+                "-crf", "23",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-movflags", "+faststart",
+                target_path,
+            ],
+            "Falha ao converter o vídeo para o padrão do Holyrics.",
+        )
+
+    def _extract_audio_to_mp3(self, source_path, target_path):
+        self._queue_event("status", "Convertendo áudio para MP3...")
+        self._run_ffmpeg(
+            [
+                "-y",
+                "-i", source_path,
+                "-vn",
+                "-codec:a", "libmp3lame",
+                "-q:a", "2",
+                target_path,
+            ],
+            "Falha ao converter o áudio para MP3.",
+        )
+
+    def _merge_video_and_audio(self, video_path, audio_path, target_path, holyrics_mode):
+        if holyrics_mode:
+            self._queue_event("status", "Unindo vídeo e áudio no padrão do Holyrics...")
+            args = [
+                "-y",
+                "-i", video_path,
+                "-i", audio_path,
+                "-c:v", "libx264",
+                "-preset", "medium",
+                "-crf", "23",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-movflags", "+faststart",
+                "-map", "0:v:0",
+                "-map", "1:a:0",
+                target_path,
+            ]
+        else:
+            self._queue_event("status", "Unindo vídeo e áudio...")
+            args = [
+                "-y",
+                "-i", video_path,
+                "-i", audio_path,
+                "-c:v", "copy",
+                "-c:a", "copy",
+                "-map", "0:v:0",
+                "-map", "1:a:0",
+                target_path,
+            ]
+        self._run_ffmpeg(args, "Falha ao unir vídeo e áudio.")
+
+    def _downloaded_bytes_for_stream(self, stream):
+        for attr in ("filesize", "filesize_approx"):
+            try:
+                value = getattr(stream, attr, None)
+                if callable(value):
+                    value = value()
+                if value:
+                    return int(value)
+            except Exception:
+                continue
+        return 0
+
+    def _parse_resolution_value(self, stream):
+        value = str(getattr(stream, "resolution", "") or "")
+        match = re.search(r"(\d+)\s*p", value, re.IGNORECASE)
+        if match:
+            try:
+                return int(match.group(1))
+            except Exception:
+                return 0
+
+        match = re.search(r"(\d+)", value)
+        if match:
+            try:
+                return int(match.group(1))
+            except Exception:
+                return 0
+        return 0
+
+    def _parse_abr_value(self, stream):
+        value = str(getattr(stream, "abr", "") or "")
+        digits = "".join(ch for ch in value if ch.isdigit())
+        return int(digits) if digits else 0
+
+    def _pick_pytubefix_audio_stream(self, streams):
+        audio_streams = [stream for stream in streams if getattr(stream, "includes_audio_track", False)]
+        audio_streams.sort(key=lambda stream: self._parse_abr_value(stream), reverse=True)
+        return audio_streams[0] if audio_streams else None
+
+    def _video_stream_rank(self, stream):
+        return (
+            self._parse_resolution_value(stream),
+            1 if not getattr(stream, "is_progressive", False) else 0,
+            int(getattr(stream, "fps", 0) or 0),
+            self._parse_abr_value(stream),
+        )
+
+    def _pick_pytubefix_video_stream(self, streams, quality_choice):
+        target_height = None if quality_choice == "best" else int(self._quality_height(quality_choice) or "0")
+        ranked = []
+        for stream in streams:
+            if not getattr(stream, "includes_video_track", False):
+                continue
+            height = self._parse_resolution_value(stream)
+            ranked.append((height, self._video_stream_rank(stream), stream))
+
+        if target_height:
+            exact = [item for item in ranked if item[0] == target_height]
+            if exact:
+                exact.sort(key=lambda item: item[1], reverse=True)
+                return exact[0][2]
+            return None
+
+        ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        return ranked[0][2] if ranked else None
+
+    def _download_stream_with_pytubefix(self, stream, output_path, filename, label):
+        self._queue_event("progress", 0)
+        self._queue_event("status", f"{label}...")
+        return stream.download(
+            output_path=output_path,
+            filename=filename,
+            skip_existing=False,
+            max_retries=2,
+            timeout=30,
+            interrupt_checker=lambda: self.cancel_requested,
+        )
+
+    def _pytubefix_progress_callback(self, stream, _chunk, bytes_remaining):
+        try:
+            total = self._downloaded_bytes_for_stream(stream)
+            if total <= 0:
+                return
+            downloaded = max(0, total - int(bytes_remaining or 0))
+            pct = max(0.0, min(100.0, (downloaded / total) * 100.0))
+            self._queue_event("progress", pct)
+            self._queue_event(
+                "status",
+                f"Baixando... {pct:.1f}% ({format_bytes(downloaded)} de {format_bytes(total)})",
+            )
+        except Exception:
+            pass
+
+    def _pytubefix_complete_callback(self, _stream, _filepath):
+        self._queue_event("progress", 100)
+
+    def _download_with_pytubefix(self, url, fmt_mode, quality_choice, reserved_path):
+        pytubefix = self._pytubefix
+        if pytubefix is None:
+            raise RuntimeError("pytubefix não está disponível para fallback.")
+
+        self._queue_event("status", "Preparando streams do YouTube...")
+        clients = ("ANDROID_VR", "ANDROID", "MWEB", "WEB")
+        selected_streams = None
+        selected_client = None
+        last_error = None
+
+        for client_name in clients:
+            try:
+                self._queue_event("status", f"Consultando streams do YouTube ({client_name})...")
+                yt = pytubefix.YouTube(
+                    url,
+                    client=client_name,
+                    on_progress_callback=self._pytubefix_progress_callback,
+                    on_complete_callback=self._pytubefix_complete_callback,
+                )
+                streams = list(yt.streams)
+
+                if self._is_music_mode(fmt_mode):
+                    audio_stream = self._pick_pytubefix_audio_stream(streams)
+                    if audio_stream:
+                        selected_streams = (streams, None, audio_stream)
+                        selected_client = client_name
+                        break
+                    continue
+
+                video_stream = self._pick_pytubefix_video_stream(streams, quality_choice)
+                if not video_stream:
+                    continue
+                audio_stream = None if getattr(video_stream, "is_progressive", False) else self._pick_pytubefix_audio_stream(streams)
+                selected_streams = (streams, video_stream, audio_stream)
+                selected_client = client_name
+
+                break
+            except Exception as exc:
+                last_error = exc
+
+        if not selected_streams:
+            if not self._is_music_mode(fmt_mode) and self._is_quality_strict(quality_choice):
+                raise RuntimeError(f"A qualidade selecionada ({quality_choice}) não está disponível para este vídeo.")
+            if last_error:
+                raise last_error
+            raise RuntimeError("O pytubefix não encontrou streams compatíveis para este vídeo.")
+
+        self._queue_event("status", f"Streams carregadas. Cliente selecionado: {selected_client}.")
+        streams, video_stream, audio_stream = selected_streams
+
+        if self._is_music_mode(fmt_mode):
+            if not audio_stream:
+                raise RuntimeError("O fallback não encontrou faixa de áudio para este vídeo.")
+
+            temp_dir = tempfile.mkdtemp(prefix="igreja-pytubefix-")
+            temp_path = None
+            try:
+                downloaded = self._download_stream_with_pytubefix(
+                    audio_stream,
+                    temp_dir,
+                    f"audio_temp.{getattr(audio_stream, 'subtype', 'mp4')}",
+                    "Baixando áudio",
+                )
+                temp_path = downloaded or self._resolve_completed_output_path(
+                    os.path.join(temp_dir, "audio_temp.mp4")
+                )
+                self._extract_audio_to_mp3(temp_path, reserved_path)
+            finally:
+                if temp_path and os.path.exists(temp_path):
+                    try:
+                        os.remove(temp_path)
+                    except Exception:
+                        pass
+                try:
+                    os.rmdir(temp_dir)
+                except Exception:
+                    pass
+
+            return reserved_path
+
+        holyrics_mode = self._is_holyrics_profile()
+        if not video_stream:
+            if self._is_quality_strict(quality_choice):
+                raise RuntimeError(f"A qualidade selecionada ({quality_choice}) não está disponível para este vídeo.")
+            raise RuntimeError("O fallback não encontrou stream de vídeo compatível.")
+
+        if getattr(video_stream, "is_progressive", False):
+            temp_dir = tempfile.mkdtemp(prefix="igreja-pytubefix-")
+            temp_video = None
+            try:
+                download_name = f"video_temp.{getattr(video_stream, 'subtype', 'mp4')}"
+                downloaded = self._download_stream_with_pytubefix(
+                    video_stream,
+                    temp_dir,
+                    download_name,
+                    "Baixando vídeo",
+                )
+                temp_video = downloaded or self._resolve_completed_output_path(os.path.join(temp_dir, download_name))
+                if holyrics_mode:
+                    self._transcode_to_holyrics(temp_video, reserved_path)
+                    return reserved_path
+
+                final_ext = getattr(video_stream, "subtype", "mp4") or "mp4"
+                final_path = f"{os.path.splitext(reserved_path)[0]}.{final_ext}"
+                if os.path.abspath(temp_video) != os.path.abspath(final_path):
+                    os.replace(temp_video, final_path)
+                    temp_video = None
+                return final_path
+            finally:
+                if temp_video and os.path.exists(temp_video):
+                    try:
+                        os.remove(temp_video)
+                    except Exception:
+                        pass
+                try:
+                    os.rmdir(temp_dir)
+                except Exception:
+                    pass
+
+        if not audio_stream:
+            raise RuntimeError("O fallback encontrou vídeo, mas não encontrou áudio compatível.")
+
+        temp_dir = tempfile.mkdtemp(prefix="igreja-pytubefix-")
+        temp_video = None
+        temp_audio = None
+        try:
+            video_name = f"video_only.{getattr(video_stream, 'subtype', 'mp4')}"
+            audio_name = f"audio_only.{getattr(audio_stream, 'subtype', 'mp4')}"
+            temp_video = self._download_stream_with_pytubefix(
+                video_stream,
+                temp_dir,
+                video_name,
+                "Baixando vídeo",
+            ) or self._resolve_completed_output_path(os.path.join(temp_dir, video_name))
+            temp_audio = self._download_stream_with_pytubefix(
+                audio_stream,
+                temp_dir,
+                audio_name,
+                "Baixando áudio",
+            ) or self._resolve_completed_output_path(os.path.join(temp_dir, audio_name))
+
+            if holyrics_mode:
+                self._merge_video_and_audio(temp_video, temp_audio, reserved_path, holyrics_mode=True)
+                return reserved_path
+
+            self._merge_video_and_audio(temp_video, temp_audio, reserved_path, holyrics_mode=False)
+            return reserved_path
+        finally:
+            for path in (temp_video, temp_audio):
+                if path and os.path.exists(path):
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
+            try:
+                os.rmdir(temp_dir)
+            except Exception:
+                pass
+
+    def _resolve_completed_output_path(self, reserved_path, expected_ext=None):
+        if reserved_path and os.path.exists(reserved_path):
+            return reserved_path
+
+        stem = os.path.splitext(reserved_path or "")[0]
+        folder = os.path.dirname(reserved_path or "") or self.destination_folder
+        base_name = os.path.basename(stem)
+
+        try:
+            entries = os.listdir(folder)
+        except Exception:
+            entries = []
+
+        candidates = []
+        for entry in entries:
+            full_path = os.path.join(folder, entry)
+            if not os.path.isfile(full_path):
+                continue
+            if os.path.splitext(entry)[0] != base_name:
+                continue
+            if entry.endswith((".part", ".ytdl")):
+                continue
+            candidates.append(full_path)
+
+        if expected_ext:
+            normalized_ext = f".{str(expected_ext).lstrip('.').lower()}"
+            for candidate in candidates:
+                if os.path.splitext(candidate)[1].lower() == normalized_ext:
+                    return candidate
+
+        return candidates[0] if candidates else reserved_path
 
     def start_download(self):
         url = self.url_entry.get().strip()
@@ -802,7 +1277,16 @@ class BaixarFrame(ttk.Frame):
             import yt_dlp
             self._yt_dlp = yt_dlp
         except Exception:
-            messagebox.showerror("Dependências", "Instale: pip install yt-dlp")
+            self._yt_dlp = None
+
+        try:
+            import pytubefix
+            self._pytubefix = pytubefix
+        except Exception:
+            self._pytubefix = None
+
+        if not self._yt_dlp and not (self._is_youtube_service() and self._pytubefix):
+            messagebox.showerror("Dependências", "Instale: pip install yt-dlp pytubefix")
             return
 
         self.progress["value"] = 0
@@ -810,6 +1294,7 @@ class BaixarFrame(ttk.Frame):
         self.open_folder_button.config(state=DISABLED)
 
         self.downloaded_file = None
+        self._reserved_output_file = None
         self.cancel_requested = False
         self._last_tmp_file = None
 
@@ -820,8 +1305,11 @@ class BaixarFrame(ttk.Frame):
 
         fmt_mode = self.selected_format.get()
         qual = self.selected_quality.get()
+        if str(qual).lower() == "best":
+            qual = "1080p"
+            self.selected_quality.set(qual)
 
-        threading.Thread(target=self.download_media, args=(url, fmt_mode, qual), daemon=True).start()
+        threading.Thread(target=self.download_media_v2, args=(url, fmt_mode, qual), daemon=True).start()
 
     def cancel_download(self):
         if self.cancel_requested:
@@ -849,13 +1337,14 @@ class BaixarFrame(ttk.Frame):
     def download_media(self, url, fmt_mode, quality_choice):
         try:
             outtmpl, reserved_path = self._resolve_download_target(url, fmt_mode, quality_choice)
-            self._queue_event("downloaded_file", reserved_path)
-            # Pós-processo para GARANTIR AAC no resultado final (sem mudar sua lógica de fluxo)
-            # Se já vier AAC, o ffmpeg costuma "copiar" rápido quando possível.
+            self._queue_event("reserved_output_file", reserved_path)
+
             ensure_aac_pp = {
                 "key": "FFmpegVideoConvertor",
                 "preferedformat": "mp4",
             }
+            extractor_args = self._build_youtube_extractor_args()
+            js_runtimes = get_available_js_runtimes()
 
             common_args = {
                 "noprogress": True,
@@ -868,17 +1357,12 @@ class BaixarFrame(ttk.Frame):
                 "allow_unplayable_formats": False,
                 "windowsfilenames": True,
                 "ffmpeg_location": get_ffmpeg_bin_dir() or None,
-                # Configurações para resolver erros do YouTube
                 "socket_timeout": 60,
                 "retries": 5,
                 "fragment_retries": 5,
                 "skip_unavailable_fragments": True,
-                "extractor_args": {
-                    "youtube": {
-                        "js_runtimes": ["node", "deno"],
-                        "player_client": ["android", "web"],
-                    }
-                },
+                "js_runtimes": js_runtimes,
+                "extractor_args": extractor_args,
                 "extractor_sleep_json": {"youtube": 2},
             }
 
@@ -889,36 +1373,46 @@ class BaixarFrame(ttk.Frame):
                     "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}],
                 }
             else:
-                if self.video_profile.get() == "Compatível com Holyrics":
-                    fmt = self._build_yt_format(quality_choice)
+                holyrics_mode = self.video_profile.get() == "Compatível com Holyrics"
+                if holyrics_mode:
+                    format_attempts = self._build_yt_holyrics_relaxed_attempts(quality_choice)
                 else:
-                    fmt = self._build_best_quality_format(quality_choice)
+                    format_attempts = self._build_best_quality_attempts(quality_choice)
 
-                # Além de selecionar H.264/AAC, garante que o final seja MP4 "normalizado"
-                # (útil quando o áudio vem Opus e precisa virar AAC).
                 ydl_opts = {
                     **common_args,
-                    "format": fmt,
+                    "format": format_attempts[0],
+                    "_format_attempts": format_attempts,
                     "postprocessors": [
                         ensure_aac_pp,
-                        # recodifica/normaliza áudio para AAC se necessário
                         {
                             "key": "FFmpegMetadata",
                         },
                     ],
-                    # Força recode apenas quando necessário: usa ffmpeg e parâmetros seguros.
-                    "postprocessor_args": [
-                        "-c:v", "copy",        # mantém H.264 selecionado (rápido)
-                        "-c:a", "aac",         # garante AAC (Holyrics)
-                        "-b:a", "192k",
-                        "-movflags", "+faststart",
-                    ],
+                    "postprocessor_args": (
+                        [
+                            "-c:v", "libx264",
+                            "-preset", "medium",
+                            "-crf", "23",
+                            "-c:a", "aac",
+                            "-b:a", "192k",
+                            "-movflags", "+faststart",
+                        ]
+                        if holyrics_mode
+                        else [
+                            "-c:v", "copy",
+                            "-c:a", "copy",
+                            "-movflags", "+faststart",
+                        ]
+                    ),
                 }
 
                 if "Holyrics" not in self.video_profile.get():
+                    format_attempts = self._build_best_quality_attempts(quality_choice)
                     ydl_opts = {
                         **common_args,
-                        "format": self._build_best_quality_format(quality_choice),
+                        "format": format_attempts[0],
+                        "_format_attempts": format_attempts,
                         "merge_output_format": "mkv",
                     }
 
@@ -940,17 +1434,28 @@ class BaixarFrame(ttk.Frame):
 
             if last_error is not None:
                 raise last_error
-            
+
             self._queue_event("done")
 
         except Exception as e:
             error_msg = str(e).lower()
-            
-            # Mensagens de erro mais específicas
+
             if "no supported javascript runtime" in error_msg or "js_runtimes" in error_msg:
                 msg = (
                     "Node.js não encontrado. Instale Node.js (https://nodejs.org) "
                     "e adicione ao PATH do sistema."
+                )
+            elif "signature solving failed" in error_msg or "n challenge solving failed" in error_msg:
+                msg = (
+                    "O yt-dlp não conseguiu resolver a proteção atual do YouTube. "
+                    "Feche e abra o app novamente. Se persistir, atualize o yt-dlp "
+                    "e confirme que o Node.js está instalado e acessível."
+                )
+            elif "only images are available" in error_msg:
+                msg = (
+                    "O YouTube foi lido de forma incompleta e só miniaturas ficaram disponíveis. "
+                    "Isso normalmente acontece quando o runtime JavaScript do yt-dlp falha. "
+                    "Tente novamente após reiniciar o app."
                 )
             elif "http error 429" in error_msg or "too many requests" in error_msg:
                 msg = (
@@ -964,7 +1469,146 @@ class BaixarFrame(ttk.Frame):
                 )
             else:
                 msg = str(e)
-            
+
+            if self.cancel_requested:
+                self._cleanup_partial()
+                self._queue_event("canceled")
+                return
+            self._queue_event("error", msg)
+
+    def download_media_v2(self, url, fmt_mode, quality_choice):
+        try:
+            outtmpl, reserved_path = self._resolve_download_target(url, fmt_mode, quality_choice)
+            self._queue_event("reserved_output_file", reserved_path)
+
+            if self._is_music_mode(fmt_mode):
+                attempt_opts_list = [{
+                    **self._youtube_common_args(outtmpl, "mp3"),
+                    "format": "bestaudio[ext=m4a]/bestaudio/best",
+                    "keepvideo": False,
+                    "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}],
+                }]
+                final_path = reserved_path
+            else:
+                holyrics_mode = self._is_holyrics_profile()
+                if holyrics_mode:
+                    format_attempts = self._build_yt_holyrics_relaxed_attempts(quality_choice)
+                else:
+                    format_attempts = self._build_best_quality_attempts(quality_choice)
+
+                source_outtmpl = outtmpl
+                final_path = reserved_path
+
+                if holyrics_mode:
+                    source_outtmpl = f"{os.path.splitext(reserved_path)[0]}.__source__.%(ext)s"
+
+                base_video_opts = self._youtube_common_args(
+                    source_outtmpl,
+                    "mp4" if holyrics_mode else "mkv",
+                )
+                attempt_opts_list = self._iter_ydl_attempts({
+                    **base_video_opts,
+                    "format": format_attempts[0],
+                    "_format_attempts": format_attempts,
+                })
+
+            yt_dlp_error = None
+            used_yt_dlp = False
+
+            if self._yt_dlp is not None:
+                y = self._yt_dlp
+                last_error = None
+                for attempt_opts in attempt_opts_list:
+                    try:
+                        with y.YoutubeDL(attempt_opts) as ydl:
+                            ydl.download([url])
+                        last_error = None
+                        used_yt_dlp = True
+                        break
+                    except y.utils.DownloadCancelled:
+                        self._cleanup_partial()
+                        self._queue_event("canceled")
+                        return
+                    except Exception as exc:
+                        last_error = exc
+
+                if last_error is not None:
+                    yt_dlp_error = last_error
+            else:
+                yt_dlp_error = RuntimeError("yt-dlp não está disponível.")
+
+            used_pytubefix = False
+            pytubefix_error = None
+
+            if not used_yt_dlp and self._is_youtube_service() and self._pytubefix is not None:
+                try:
+                    final_path = self._download_with_pytubefix(url, fmt_mode, quality_choice, reserved_path)
+                    used_pytubefix = True
+                except Exception as exc:
+                    pytubefix_error = exc
+
+            if not used_yt_dlp and not used_pytubefix:
+                if yt_dlp_error is not None and "requested format is not available" in str(yt_dlp_error).lower():
+                    raise RuntimeError(f"A qualidade selecionada ({quality_choice}) não está disponível para este vídeo.")
+
+                if pytubefix_error is not None and self._is_youtube_service():
+                    raise RuntimeError(
+                        f"Falha no yt-dlp: {yt_dlp_error}\nFalha no pytubefix: {pytubefix_error}"
+                    )
+
+                raise yt_dlp_error or pytubefix_error or RuntimeError("Falha ao baixar mídia.")
+
+            if used_yt_dlp and not self._is_music_mode(fmt_mode) and self._is_holyrics_profile():
+                source_final_path = None
+                stem = os.path.splitext(reserved_path)[0]
+                for ext in ("mp4", "mkv", "webm"):
+                    candidate = f"{stem}.__source__.{ext}"
+                    if os.path.exists(candidate):
+                        source_final_path = candidate
+                        break
+                if not source_final_path:
+                    raise RuntimeError("O vídeo foi baixado, mas o arquivo intermediário para conversão não foi encontrado.")
+
+                self._transcode_to_holyrics(source_final_path, reserved_path)
+                try:
+                    if os.path.exists(source_final_path):
+                        os.remove(source_final_path)
+                except Exception:
+                    pass
+
+                final_path = reserved_path
+            elif used_yt_dlp:
+                expected_ext = "mp3" if self._is_music_mode(fmt_mode) else "mkv"
+                final_path = self._resolve_completed_output_path(reserved_path, expected_ext=expected_ext)
+
+            self.downloaded_file = final_path
+            self._queue_event("downloaded_file", final_path)
+            self._queue_event("done")
+        except Exception as e:
+            error_msg = str(e).lower()
+            if "no supported javascript runtime" in error_msg or "js_runtimes" in error_msg:
+                msg = (
+                    "Node.js não encontrado. Instale Node.js (https://nodejs.org) "
+                    "e adicione ao PATH do sistema."
+                )
+            elif "signature solving failed" in error_msg or "n challenge solving failed" in error_msg:
+                msg = (
+                    "O yt-dlp não conseguiu resolver a proteção atual do YouTube. "
+                    "Atualize o yt-dlp e tente novamente."
+                )
+            elif "only images are available" in error_msg:
+                msg = (
+                    "O YouTube retornou apenas miniaturas para este vídeo. "
+                    "Atualize o yt-dlp e tente novamente."
+                )
+            elif "requested format is not available" in error_msg:
+                msg = (
+                    f"A qualidade selecionada ({quality_choice}) não está disponível para este vídeo."
+                )
+            else:
+                msg = str(e)
+
+            self.downloaded_file = None
             if self.cancel_requested:
                 self._cleanup_partial()
                 self._queue_event("canceled")
@@ -989,7 +1633,6 @@ class BaixarFrame(ttk.Frame):
             self._queue_event("progress", 100)
             self._queue_event("status", text)
             self._queue_event("notify", "Download finalizado")
-            self._queue_event("downloaded_file", d.get("filename") or info.get("_filename"))
             return
 
         if st == "downloading":
@@ -1049,7 +1692,6 @@ class BaixarFrame(ttk.Frame):
 
             if sys.platform == "win32":
                 try:
-                    import subprocess
                     if file_path and os.path.exists(file_path):
                         subprocess.run(["explorer", "/select,", file_path])
                         return
@@ -1064,7 +1706,6 @@ class BaixarFrame(ttk.Frame):
                     return
 
             try:
-                import subprocess
                 if sys.platform == "darwin":
                     subprocess.run(["open", folder])
                 else:
@@ -1089,6 +1730,7 @@ class BaixarFrame(ttk.Frame):
         self.status.config(text="Download cancelado.")
         self.progress["value"] = 0
         self.downloaded_file = None
+        self._reserved_output_file = None
         self.open_folder_button.config(state=DISABLED)
         self.download_btn.config(state=NORMAL, text="Baixar agora")
         self.cancel_btn.config(state=DISABLED)
@@ -1121,6 +1763,7 @@ class BaixarFrame(ttk.Frame):
         self._hide_progress()
         self.status.config(text=msg or "Erro no download.")
         self.downloaded_file = None
+        self._reserved_output_file = None
         self.open_folder_button.config(state=DISABLED)
         self._update_action_state()
         self._update_visibility()

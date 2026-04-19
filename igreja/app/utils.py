@@ -177,6 +177,20 @@ def resolve_tool_path(tool_name: str):
     return None
 
 
+def get_available_js_runtimes() -> dict[str, dict[str, str]]:
+    runtimes: dict[str, dict[str, str]] = {}
+
+    node_path = resolve_tool_path("node")
+    if node_path:
+        runtimes["node"] = {"path": node_path}
+
+    deno_path = resolve_tool_path("deno")
+    if deno_path:
+        runtimes["deno"] = {"path": deno_path}
+
+    return runtimes
+
+
 def get_ffmpeg_bin_dir():
     ffmpeg_path = resolve_tool_path("ffmpeg")
     if not ffmpeg_path:

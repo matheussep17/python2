@@ -340,8 +340,21 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         self._scroll_to_bottom()
         self._update_scrollbar_visibility()
 
+    def _capture_row_values(self):
+        values = {}
+        for row in self.video_rows:
+            path = row.get("path")
+            if not path:
+                continue
+            values[path] = {
+                "start": row["start_var"].get(),
+                "end": row["end_var"].get(),
+            }
+        return values
+
     def _rebuild_video_rows(self):
         """Rebuild the per-media segment editors (Trecho 1, Trecho 2, ...)."""
+        previous_values = self._capture_row_values()
         # Clear existing rows
         for row in self.video_rows:
             try:
@@ -363,8 +376,9 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
             ttk.Label(row_frame, text="Início").grid(row=2, column=0, sticky="w", padx=(10, 6))
             ttk.Label(row_frame, text="Fim").grid(row=2, column=2, sticky="w", padx=(12, 6))
 
-            start_var = tk.StringVar()
-            end_var = tk.StringVar()
+            previous = previous_values.get(path, {})
+            start_var = tk.StringVar(value=previous.get("start", ""))
+            end_var = tk.StringVar(value=previous.get("end", ""))
             ttk.Entry(row_frame, textvariable=start_var, width=18).grid(row=3, column=0, sticky="w", pady=(2, 8))
             ttk.Entry(row_frame, textvariable=end_var, width=18).grid(row=3, column=2, sticky="w", pady=(2, 8))
 
@@ -825,33 +839,72 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
                     is_audio = is_audio_file(segment["path"])
                     ext = "mp3" if is_audio else "mp4"
                     temp_path = os.path.join(temp_dir, f"segmento_{index}.{ext}")
-                    ok = self._export_segment(segment, temp_path, step_index=index - 1, total_steps=total_steps)
+                    ok = self._export_segment(
+                        segment,
+                        temp_path,
+                        step_index=index - 1,
+                        total_steps=total_steps,
+                        normalize_for_merge=not is_audio,
+                    )
                     if not ok:
                         if self.cancel_requested:
                             self.ui_queue.put(("canceled", "Processamento cancelado."))
                         return
                     temp_segments.append(temp_path)
 
-                list_path = os.path.join(temp_dir, "concat.txt")
-                with open(list_path, "w", encoding="utf-8") as concat_file:
-                    for temp_path in temp_segments:
-                        normalized_path = temp_path.replace("\\", "/")
-                        concat_file.write(f"file '{normalized_path}'\n")
-
                 self.ui_queue.put(("status", "Juntando trechos..."))
                 self.ui_queue.put(("progress", 92))
-                cmd = ffmpeg_cmd(
-                    "-y",
-                    "-f",
-                    "concat",
-                    "-safe",
-                    "0",
-                    "-i",
-                    list_path,
-                    "-c",
-                    "copy",
-                    output_paths[0],
-                )
+                is_audio_output = is_audio_file(segments[0]["path"])
+                if is_audio_output:
+                    cmd = ffmpeg_cmd("-y")
+                    for temp_path in temp_segments:
+                        cmd.extend(["-i", temp_path])
+                    filter_parts = "".join(f"[{index}:a:0]" for index in range(len(temp_segments)))
+                    filter_parts += f"concat=n={len(temp_segments)}:v=0:a=1[outa]"
+                    cmd.extend(
+                        [
+                            "-filter_complex",
+                            filter_parts,
+                            "-map",
+                            "[outa]",
+                            "-c:a",
+                            "libmp3lame",
+                            "-q:a",
+                            "3",
+                            output_paths[0],
+                        ]
+                    )
+                else:
+                    cmd = ffmpeg_cmd("-y")
+                    for temp_path in temp_segments:
+                        cmd.extend(["-i", temp_path])
+                    filter_parts = "".join(
+                        f"[{index}:v:0][{index}:a:0]" for index in range(len(temp_segments))
+                    )
+                    filter_parts += f"concat=n={len(temp_segments)}:v=1:a=1[outv][outa]"
+                    cmd.extend(
+                        [
+                            "-filter_complex",
+                            filter_parts,
+                            "-map",
+                            "[outv]",
+                            "-map",
+                            "[outa]",
+                            "-c:v",
+                            "libx264",
+                            "-preset",
+                            "veryfast",
+                            "-crf",
+                            "20",
+                            "-c:a",
+                            "aac",
+                            "-b:a",
+                            "128k",
+                            "-movflags",
+                            "+faststart",
+                            output_paths[0],
+                        ]
+                    )
                 if not self._run_ffmpeg_command(cmd):
                     if self.cancel_requested:
                         self.ui_queue.put(("canceled", "Processamento cancelado."))
@@ -874,7 +927,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
             self.proc = None
             self.is_running = False
 
-    def _export_segment(self, segment, output_path, step_index, total_steps):
+    def _export_segment(self, segment, output_path, step_index, total_steps, normalize_for_merge=False):
         source = segment["path"]
         start = segment["start"]
         end = segment["end"]
@@ -906,24 +959,85 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
                 ]
             )
         else:
-            # Configuração para vídeo MP4
-            cmd.extend(
-                [
-                    "-c:v",
-                    "libx264",
-                    "-preset",
-                    "veryfast",
-                    "-crf",
-                    "20",
-                    "-c:a",
-                    "aac",
-                    "-b:a",
-                    "128k",
-                    "-movflags",
-                    "+faststart",
-                    output_path,
-                ]
-            )
+            if normalize_for_merge:
+                video_filter = (
+                    "scale=1920:1080:force_original_aspect_ratio=decrease,"
+                    "pad=1920:1080:(ow-iw)/2:(oh-ih)/2,"
+                    "setsar=1,fps=30,format=yuv420p"
+                )
+                has_audio = self._probe_has_audio(source)
+                if has_audio:
+                    cmd.extend(
+                        [
+                            "-vf",
+                            video_filter,
+                            "-c:v",
+                            "libx264",
+                            "-preset",
+                            "veryfast",
+                            "-crf",
+                            "20",
+                            "-c:a",
+                            "aac",
+                            "-b:a",
+                            "128k",
+                            "-ar",
+                            "48000",
+                            "-ac",
+                            "2",
+                            "-movflags",
+                            "+faststart",
+                            output_path,
+                        ]
+                    )
+                else:
+                    cmd.extend(
+                        [
+                            "-f",
+                            "lavfi",
+                            "-i",
+                            "anullsrc=r=48000:cl=stereo",
+                            "-vf",
+                            video_filter,
+                            "-shortest",
+                            "-c:v",
+                            "libx264",
+                            "-preset",
+                            "veryfast",
+                            "-crf",
+                            "20",
+                            "-c:a",
+                            "aac",
+                            "-b:a",
+                            "128k",
+                            "-ar",
+                            "48000",
+                            "-ac",
+                            "2",
+                            "-movflags",
+                            "+faststart",
+                            output_path,
+                        ]
+                    )
+            else:
+                # Configuração para vídeo MP4
+                cmd.extend(
+                    [
+                        "-c:v",
+                        "libx264",
+                        "-preset",
+                        "veryfast",
+                        "-crf",
+                        "20",
+                        "-c:a",
+                        "aac",
+                        "-b:a",
+                        "128k",
+                        "-movflags",
+                        "+faststart",
+                        output_path,
+                    ]
+                )
         
         return self._run_ffmpeg_command(cmd, step_index=step_index, total_steps=total_steps, expected_duration=clip_duration)
 
@@ -983,6 +1097,30 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
             return float(output.strip())
         except Exception:
             return None
+
+    def _probe_has_audio(self, path):
+        try:
+            output = subprocess.check_output(
+                ffprobe_cmd(
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    "a",
+                    "-show_entries",
+                    "stream=index",
+                    "-of",
+                    "csv=p=0",
+                    path,
+                ),
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                creationflags=create_no_window_flags(),
+                stderr=subprocess.DEVNULL,
+            )
+            return bool((output or "").strip())
+        except Exception:
+            return False
 
     def _duration_text(self, path):
         duration = self.file_durations.get(path)

@@ -1,5 +1,6 @@
 ttkbootstrap
 yt-dlp
+pytubefix
 python-docx
 faster-whisper
 pillow

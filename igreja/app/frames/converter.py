@@ -1102,6 +1102,7 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
                     last_out = info.get("last_output")
                     self.ultimo_arquivo_convertido = last_out or ""
                     self.open_btn.config(state=NORMAL if last_out else DISABLED)
+                    self._update_visibility()
 
                     if failures:
                         messagebox.showwarning("Aviso", message)
@@ -1114,12 +1115,17 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
                     self.status_var.set(payload)
                     self.on_status(payload)
                     self.progress_var.set(0)
+                    self.ultimo_arquivo_convertido = ""
                     self._update_action_state()
                     self.open_btn.config(state=DISABLED)
                     self._current_output_path = None
+                    self._update_visibility()
 
                 elif kind == "error":
                     self.on_status("Erro no conversor")
+                    self.ultimo_arquivo_convertido = ""
+                    self.open_btn.config(state=DISABLED)
+                    self._update_visibility()
                     messagebox.showerror("Erro", str(payload))
 
         except queue.Empty:

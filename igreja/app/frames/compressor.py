@@ -879,16 +879,22 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
                     self.on_status(msg)
                     self._update_action_state()
                     self.btn_open.config(state=NORMAL if self.last_output else DISABLED)
+                    self._update_visibility()
                     messagebox.showinfo("Conclusao", msg)
                 elif kind == "canceled":
                     self._hide_progress()
                     self.status_var.set(str(payload))
                     self.progress_var.set(0)
                     self.on_status(str(payload))
+                    self.last_output = ""
                     self._update_action_state()
                     self.btn_open.config(state=DISABLED)
+                    self._update_visibility()
                 elif kind == "error":
                     self.on_status("Erro na compressao")
+                    self.last_output = ""
+                    self.btn_open.config(state=DISABLED)
+                    self._update_visibility()
                     messagebox.showerror("Erro", str(payload))
         except queue.Empty:
             pass
