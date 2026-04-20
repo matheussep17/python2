@@ -86,7 +86,7 @@ Configuração no `config.json`:
   "license_enforced": true,
   "license_api_url": "https://seu-servidor/api/v1",
   "license_request_timeout_seconds": 10,
-  "license_offline_grace_hours": 72,
+  "license_offline_grace_hours": 175200,
   "license_bypass_device_fingerprints": [
     "fingerprint-do-pc-autorizado"
   ]
@@ -95,6 +95,7 @@ Configuração no `config.json`:
 
 Se `license_enforced` estiver `false`, o app abre normalmente como hoje.
 Se quiser manter apenas o seu computador liberado e exigir licença nos demais, deixe `license_enforced=true` e adicione só o fingerprint da sua máquina em `license_bypass_device_fingerprints`.
+Com `license_offline_grace_hours` em `175200`, a máquina ativada continua funcionando por cerca de 20 anos mesmo sem falar com o servidor novamente.
 
 ### Servidor de licenças
 

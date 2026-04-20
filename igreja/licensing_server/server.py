@@ -38,7 +38,7 @@ def parse_iso(value: str | None):
         return None
 
 
-OFFLINE_GRACE_HOURS = max(1, int(os.environ.get("IGREJA_OFFLINE_GRACE_HOURS", "72")))
+OFFLINE_GRACE_HOURS = max(1, int(os.environ.get("IGREJA_OFFLINE_GRACE_HOURS", str(24 * 365 * 20))))
 ADMIN_TOKEN = str(os.environ.get("IGREJA_ADMIN_TOKEN", "") or "").strip()
 
 app = FastAPI(title="Igreja Licensing API", version="1.0.0")
