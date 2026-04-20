@@ -22,8 +22,8 @@ from app.ui.theme import apply_design_system, resolve_ttk_theme
 class LicenseActivationWindow(ttk.Window):
     def __init__(self, settings: dict, initial_message: str = ""):
         super().__init__(title="Ativação do aplicativo", themename=resolve_ttk_theme("Escuro"), size=(700, 500))
-        self.style = ttk.Style()
-        apply_design_system(self, self.style, "Escuro")
+        style = ttk.Style()
+        apply_design_system(self, style, "Escuro")
         self.settings = settings
         self.result = False
 
