@@ -101,6 +101,8 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.update_check_in_progress = False
         self._is_closing = False
         self._sidebar_width = 320
+        self._active_layout_refresh_job = None
+        self._active_layout_refresh_followup_job = None
 
         self._apply_window_icon()
         install_messagebox_hooks(self)
@@ -298,6 +300,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(500, self._schedule_startup_update_check)
         self.after_idle(self._update_responsive_shell)
+        self._schedule_active_frame_layout_refresh()
 
     def _configure_initial_window(self):
         screen_width = max(1, int(self.winfo_screenwidth()))
@@ -329,11 +332,13 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self._update_nav_appearance(current)
         self._show(current)
         self._update_responsive_shell()
+        self._schedule_active_frame_layout_refresh()
 
     def _on_window_resize(self, event=None):
         if event is not None and event.widget is not self:
             return
         self._update_responsive_shell()
+        self._schedule_active_frame_layout_refresh()
 
     def _update_responsive_shell(self):
         width = max(1, self.winfo_width())
@@ -392,6 +397,75 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             self.title(f"Media Suite - {meta['window']}")
 
         self._set_status("Pronto.")
+        self._schedule_active_frame_layout_refresh()
+
+    def _schedule_active_frame_layout_refresh(self):
+        for job_attr in ("_active_layout_refresh_job", "_active_layout_refresh_followup_job"):
+            job_id = getattr(self, job_attr, None)
+            if job_id:
+                try:
+                    self.after_cancel(job_id)
+                except tk.TclError:
+                    pass
+                setattr(self, job_attr, None)
+
+        self._active_layout_refresh_job = self.after_idle(self._run_active_frame_layout_refresh)
+        self._active_layout_refresh_followup_job = self.after(140, self._run_active_frame_layout_refresh_followup)
+
+    def _run_active_frame_layout_refresh(self):
+        self._active_layout_refresh_job = None
+        self._refresh_active_frame_layout()
+
+    def _run_active_frame_layout_refresh_followup(self):
+        self._active_layout_refresh_followup_job = None
+        self._refresh_active_frame_layout()
+
+    def _refresh_active_frame_layout(self):
+        key = getattr(self, "current_screen", None)
+        frame = self.frames.get(key) if getattr(self, "frames", None) else None
+        if not frame or not frame.winfo_exists():
+            return
+
+        try:
+            frame.update_idletasks()
+        except Exception:
+            pass
+
+        scroll_canvas = getattr(frame, "scroll_canvas", None)
+        card_window = getattr(frame, "card_window", None)
+        if scroll_canvas is not None and card_window is not None:
+            try:
+                canvas_width = scroll_canvas.winfo_width()
+                if canvas_width > 1:
+                    scroll_canvas.itemconfigure(card_window, width=canvas_width)
+                scroll_canvas.configure(scrollregion=scroll_canvas.bbox("all"))
+            except Exception:
+                pass
+
+        editor_canvas = getattr(frame, "canvas", None)
+        scroll_window = getattr(frame, "scroll_window", None)
+        scrollable_frame = getattr(frame, "scrollable_frame", None)
+        if editor_canvas is not None and scroll_window is not None and scrollable_frame is not None:
+            try:
+                canvas_width = editor_canvas.winfo_width()
+                canvas_height = editor_canvas.winfo_height()
+                requested_height = scrollable_frame.winfo_reqheight()
+                if canvas_width > 1:
+                    editor_canvas.itemconfigure(
+                        scroll_window,
+                        width=canvas_width,
+                        height=max(canvas_height, requested_height),
+                    )
+                editor_canvas.configure(scrollregion=editor_canvas.bbox("all"))
+            except Exception:
+                pass
+
+        refresh_scrollbar = getattr(frame, "_update_scrollbar_visibility", None)
+        if callable(refresh_scrollbar):
+            try:
+                refresh_scrollbar()
+            except Exception:
+                pass
 
     def _update_nav_appearance(self, active_key):
         for key, btn in self.nav_buttons.items():
