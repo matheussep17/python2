@@ -35,6 +35,7 @@ from app.updater import (
 )
 from app.ui.alerts import install_messagebox_hooks, show_info
 from app.ui.cursors import install_cursor_profile
+from app.ui.license_dialog import ensure_application_license
 from app.ui.theme import apply_design_system, resolve_ttk_theme
 from app.utils import (
     HAS_DND,
@@ -769,6 +770,9 @@ def main():
             sys.exit(1)
 
     _lock = single_instance_or_exit()
+    if not ensure_application_license():
+        sys.exit(1)
+
     app = SuperApp()
     try:
         app.mainloop()

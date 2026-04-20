@@ -79,17 +79,34 @@ def app_config_path() -> Path:
     return app_base_dir() / "config.json"
 
 
+def bundled_app_config_path() -> Path:
+    return _runtime_bundle_dir() / "config.json"
+
+
 def load_app_config() -> dict:
+    config_data = {}
+    bundled_config_path = bundled_app_config_path()
+    if bundled_config_path.exists():
+        try:
+            with bundled_config_path.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+                if isinstance(data, dict):
+                    config_data.update(data)
+        except Exception:
+            pass
+
     config_path = app_config_path()
     if not config_path.exists():
-        return {}
+        return config_data
 
     try:
         with config_path.open("r", encoding="utf-8") as file:
             data = json.load(file)
-            return data if isinstance(data, dict) else {}
+            if isinstance(data, dict):
+                config_data.update(data)
+            return config_data
     except Exception:
-        return {}
+        return config_data
 
 
 def save_app_config(data: dict) -> None:

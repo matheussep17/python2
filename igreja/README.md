@@ -66,3 +66,80 @@ git push origin v1.0.1
 ```
 
 Ao receber a tag, o GitHub executa `.github/workflows/release.yml`, gera `dist/Igreja.exe` e anexa o arquivo na release.
+
+## Licenciamento por computador
+
+Foi adicionada uma camada opcional de licenciamento sem mexer nas funcionalidades internas do executável.
+
+Como funciona:
+
+1. O `exe` continua com as mesmas telas e fluxos.
+2. Quando `license_enforced=true` no `config.json`, o app exige ativação antes de abrir a interface principal.
+3. O servidor vincula o `login` ao primeiro computador que ativar.
+4. Se copiarem o `exe` para outro PC, a validação falha.
+5. Licenças podem ser permanentes ou com validade.
+
+Configuração no `config.json`:
+
+```json
+{
+  "license_enforced": true,
+  "license_api_url": "https://seu-servidor/api/v1",
+  "license_request_timeout_seconds": 10,
+  "license_offline_grace_hours": 72,
+  "license_bypass_device_fingerprints": [
+    "fingerprint-do-pc-autorizado"
+  ]
+}
+```
+
+Se `license_enforced` estiver `false`, o app abre normalmente como hoje.
+Se quiser manter apenas o seu computador liberado e exigir licença nos demais, deixe `license_enforced=true` e adicione só o fingerprint da sua máquina em `license_bypass_device_fingerprints`.
+
+### Servidor de licenças
+
+Arquivos:
+
+- `licensing_server/server.py`: API FastAPI para ativar e validar licenças.
+- `licensing_server/db.py`: banco SQLite e regras de vínculo do dispositivo.
+- `licensing_server/requirements.txt`: dependências do servidor.
+
+Para subir localmente:
+
+```powershell
+pip install -r licensing_server/requirements.txt
+$env:IGREJA_ADMIN_TOKEN="troque-por-um-token-forte"
+uvicorn licensing_server.server:app --host 0.0.0.0 --port 8787
+```
+
+Se quiser forçar a pasta onde o arquivo local da licença será salvo, use a variável de ambiente:
+
+```powershell
+$env:IGREJA_LICENSE_STORAGE_DIR="D:\\Licencas\\Igreja"
+```
+
+Painel web:
+
+- Abra `http://SEU-SERVIDOR:8787/admin`
+- Informe o token definido em `IGREJA_ADMIN_TOKEN`
+- O painel permite criar, listar, revogar, reativar, resetar dispositivo, alterar validade e excluir licenças
+
+### Gerador / administrador de licenças
+
+O gerador foi implementado como CLI:
+
+```powershell
+python scripts/license_admin.py create --days 365 --notes "Notebook sala 1"
+python scripts/license_admin.py create
+python scripts/license_admin.py list
+python scripts/license_admin.py revoke IGREJA-ABC123
+python scripts/license_admin.py reactivate IGREJA-ABC123
+python scripts/license_admin.py reset-device IGREJA-ABC123
+python scripts/license_admin.py extend IGREJA-ABC123 --days 30
+```
+
+Recomendação prática:
+
+- Use licença permanente para a maioria dos casos.
+- Use validade quando quiser controle de renovação.
+- Use `reset-device` quando o usuário trocar de computador.

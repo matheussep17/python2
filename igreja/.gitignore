@@ -4,6 +4,7 @@ dist/
 build_release/
 dist_release/
 .tmp/
+licensing_server/data/
 app/__pycache__/
 app/frames/__pycache__/
 app/ui/__pycache__/

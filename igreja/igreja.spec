@@ -45,7 +45,7 @@ a = Analysis(
     ['run.py'],
     pathex=[],
     binaries=ffmpeg_binaries + tk_binaries,
-    datas=tkdnd_datas + ttkbootstrap_datas + faster_whisper_datas + tk_datas,
+    datas=tkdnd_datas + ttkbootstrap_datas + faster_whisper_datas + tk_datas + [('config.json', '.')],
     hiddenimports=[
         'tkinter',
         '_tkinter',
