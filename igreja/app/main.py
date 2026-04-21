@@ -73,6 +73,12 @@ SMALL_SCREEN_HEIGHT = 768
 
 
 class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
+    @property
+    def style(self):
+        if hasattr(self, "_app_style"):
+            return self._app_style
+        return getattr(self, "_style", None)
+
     def __init__(self):
         import traceback
 
@@ -88,14 +94,14 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
         if HAS_DND:
             super().__init__()
-            self.style = ttk.Style(theme=initial_theme)
+            self._app_style = ttk.Style(theme=initial_theme)
         else:
             super().__init__(
                 title="Media Suite - Conversor",
                 themename=initial_theme,
                 size=(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT),
             )
-            self.style = ttk.Style()
+            self._app_style = getattr(self, "_style", None) or ttk.Style()
 
         self.theme_mode = tk.StringVar(value=initial_mode)
         self.nav_buttons = {}
