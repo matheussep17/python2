@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+.buildvenv
+build
+build_bypass_igreja
+build_release
+dist
+dist_bypass_igreja
+dist_release
+__pycache__
+.tmp
+vendor
+*.pyc
+*.pyo
+*.pyd
