@@ -79,12 +79,16 @@ def load_license_settings() -> dict:
     bypass_devices = config.get("license_bypass_device_fingerprints", [])
     if not isinstance(bypass_devices, list):
         bypass_devices = []
+    bypass_machine_names = config.get("license_bypass_machine_names", [])
+    if not isinstance(bypass_machine_names, list):
+        bypass_machine_names = []
     return {
         "enforced": bool(config.get("license_enforced", False)),
         "api_url": str(config.get("license_api_url", "") or "").strip().rstrip("/"),
         "timeout_seconds": max(3, int(config.get("license_request_timeout_seconds", DEFAULT_TIMEOUT_SECONDS) or DEFAULT_TIMEOUT_SECONDS)),
         "offline_grace_hours": max(1, int(config.get("license_offline_grace_hours", DEFAULT_OFFLINE_GRACE_HOURS) or DEFAULT_OFFLINE_GRACE_HOURS)),
         "bypass_device_fingerprints": [str(item).strip().lower() for item in bypass_devices if str(item).strip()],
+        "bypass_machine_names": [str(item).strip().lower() for item in bypass_machine_names if str(item).strip()],
     }
 
 
@@ -95,7 +99,10 @@ def license_is_enforced(settings: dict | None = None) -> bool:
 def device_has_bypass(settings: dict | None = None) -> bool:
     active_settings = settings or load_license_settings()
     current_fingerprint = device_fingerprint().lower()
-    return current_fingerprint in set(active_settings.get("bypass_device_fingerprints", []))
+    if current_fingerprint in set(active_settings.get("bypass_device_fingerprints", [])):
+        return True
+    current_machine_name = machine_name().strip().lower()
+    return current_machine_name in set(active_settings.get("bypass_machine_names", []))
 
 
 def load_local_license_state() -> dict:

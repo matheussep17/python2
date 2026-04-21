@@ -3,6 +3,8 @@ build/
 dist/
 build_release/
 dist_release/
+build_*/
+dist_*/
 .tmp/
 licensing_server/data/
 app/__pycache__/

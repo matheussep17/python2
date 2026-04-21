@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: igreja-license-server
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r licensing_server/requirements.txt
+    startCommand: uvicorn licensing_server.server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: IGREJA_ADMIN_TOKEN
+        sync: false
+      - key: IGREJA_OFFLINE_GRACE_HOURS
+        value: "175200"
+      - key: IGREJA_LICENSE_DB
+        value: /var/data/licenses.db
+    disk:
+      name: igreja-license-data
+      mountPath: /var/data
+      sizeGB: 1

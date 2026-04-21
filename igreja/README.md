@@ -87,6 +87,9 @@ Configuração no `config.json`:
   "license_api_url": "https://seu-servidor/api/v1",
   "license_request_timeout_seconds": 10,
   "license_offline_grace_hours": 175200,
+  "license_bypass_machine_names": [
+    "nome-do-note-da-igreja"
+  ],
   "license_bypass_device_fingerprints": [
     "fingerprint-do-pc-autorizado"
   ]
@@ -95,6 +98,7 @@ Configuração no `config.json`:
 
 Se `license_enforced` estiver `false`, o app abre normalmente como hoje.
 Se quiser manter apenas o seu computador liberado e exigir licença nos demais, deixe `license_enforced=true` e adicione só o fingerprint da sua máquina em `license_bypass_device_fingerprints`.
+Se for mais prático, também dá para liberar um equipamento pelo nome do Windows usando `license_bypass_machine_names`.
 Com `license_offline_grace_hours` em `175200`, a máquina ativada continua funcionando por cerca de 20 anos mesmo sem falar com o servidor novamente.
 
 ### Servidor de licenças
@@ -125,6 +129,57 @@ Painel web:
 - Informe o token definido em `IGREJA_ADMIN_TOKEN`
 - O painel permite criar, listar, revogar, reativar, resetar dispositivo, alterar validade e excluir licenças
 
+### Publicar no Render com domínio próprio
+
+Se você quiser que o app valide licenças de qualquer rede, publique o servidor em uma URL pública em vez de usar um IP local `192.168.x.x`.
+
+Este repositório já inclui um [render.yaml](./render.yaml) pronto para isso.
+
+Fluxo recomendado:
+
+1. Suba este projeto para um repositório GitHub.
+2. Crie uma conta em `https://render.com/`.
+3. No Render, clique em `New` -> `Blueprint`.
+4. Selecione o repositório deste projeto.
+5. Confirme a criação do serviço `igreja-license-server`.
+6. No Render, defina a variável secreta `IGREJA_ADMIN_TOKEN` com uma senha forte.
+7. Aguarde o primeiro deploy terminar.
+8. Teste a URL pública do serviço em `/health`.
+9. Abra `/admin`, informe o token e crie as licenças.
+
+Detalhes importantes:
+
+- O `render.yaml` já define `uvicorn licensing_server.server:app --host 0.0.0.0 --port $PORT`.
+- O serviço usa `healthCheckPath: /health`.
+- O banco SQLite fica em `/var/data/licenses.db`.
+- O disco persistente do Render é necessário para não perder as licenças após reinícios e deploys.
+
+Configuração do domínio no Render:
+
+1. No serviço criado no Render, vá em `Settings` -> `Custom Domains`.
+2. Adicione `licenca.seudominio.com`.
+3. O Render vai mostrar o destino DNS que deve ser configurado.
+4. Depois da configuração DNS, clique em `Verify`.
+
+Configuração DNS no hPanel/Hostinger:
+
+1. Vá em `hPanel` -> `Domains`.
+2. Clique em `Manage` ao lado do domínio.
+3. Abra `DNS / Nameservers`.
+4. Crie um registro `CNAME`:
+   - Nome: `licenca`
+   - Destino: o host informado pelo Render
+5. Se houver registro `AAAA` para esse subdomínio, remova.
+6. Aguarde a propagação e valide no Render.
+
+Depois do domínio funcionar, troque no `config.json`:
+
+```json
+{
+  "license_api_url": "https://licenca.matheustorres.dev/api/v1"
+}
+```
+
 ### Gerador / administrador de licenças
 
 O gerador foi implementado como CLI:
@@ -138,6 +193,14 @@ python scripts/license_admin.py reactivate IGREJA-ABC123
 python scripts/license_admin.py reset-device IGREJA-ABC123
 python scripts/license_admin.py extend IGREJA-ABC123 --days 30
 ```
+
+Para descobrir rapidamente a identificação do notebook que precisa ser liberado:
+
+```powershell
+python scripts/show_device_fingerprint.py
+```
+
+Ou abra o app no computador bloqueado e use o botão `Copiar identificação` na tela de ativação.
 
 Recomendação prática:
 

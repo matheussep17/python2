@@ -9,11 +9,13 @@ from app.licensing import (
     LicenseValidationError,
     activate_with_server,
     describe_license_state,
+    device_fingerprint,
     device_has_bypass,
     license_is_enforced,
     load_license_settings,
     load_local_license_state,
     local_license_is_usable_offline,
+    machine_name,
     validate_with_server,
 )
 from app.ui.theme import apply_design_system, resolve_ttk_theme
@@ -34,10 +36,12 @@ class LicenseActivationWindow(ttk.Window):
             value=initial_message.strip() or "Informe o login e a senha enviados para este computador."
         )
         self.summary_var = tk.StringVar(value=describe_license_state(local_state))
+        self.device_var = tk.StringVar(value=f"Computador: {machine_name()}\nFingerprint: {device_fingerprint()}")
 
         self.minsize(640, 440)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._build_ui()
+        self.after(0, self._enter_fullscreen)
 
     def _build_ui(self):
         shell = ttk.Frame(self, padding=24, style="AppBody.TFrame")
@@ -73,8 +77,26 @@ class LicenseActivationWindow(ttk.Window):
             padding=12,
         ).pack(fill="x")
 
+        device_info = ttk.Labelframe(card, text="IdentificaÃ§Ã£o deste computador", style="Hero.TLabelframe")
+        device_info.grid(row=4, column=0, sticky="ew", pady=(18, 0))
+        device_shell = ttk.Frame(device_info, padding=12, style="SurfaceAlt.TFrame")
+        device_shell.pack(fill="x")
+        ttk.Label(
+            device_shell,
+            textvariable=self.device_var,
+            style="SurfaceAlt.TLabel",
+            justify="left",
+            anchor="w",
+        ).pack(fill="x")
+        ttk.Button(
+            device_shell,
+            text="Copiar identificaÃ§Ã£o",
+            command=self._copy_device_info,
+            style="Action.TButton",
+        ).pack(anchor="w", pady=(10, 0))
+
         form = ttk.Labelframe(card, text="Credenciais", style="Hero.TLabelframe")
-        form.grid(row=4, column=0, sticky="ew", pady=(18, 0))
+        form.grid(row=5, column=0, sticky="ew", pady=(18, 0))
         inner = ttk.Frame(form, padding=12, style="SurfaceAlt.TFrame")
         inner.pack(fill="x")
         inner.columnconfigure(1, weight=1)
@@ -100,13 +122,13 @@ class LicenseActivationWindow(ttk.Window):
         ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(12, 0))
 
         status_frame = ttk.Frame(card, style="Card.TFrame")
-        status_frame.grid(row=5, column=0, sticky="ew", pady=(18, 0))
+        status_frame.grid(row=6, column=0, sticky="ew", pady=(18, 0))
         ttk.Label(status_frame, textvariable=self.status_var, style="Status.TLabel", justify="left", wraplength=620).pack(
             fill="x"
         )
 
         actions = ttk.Frame(card, style="Card.TFrame")
-        actions.grid(row=6, column=0, sticky="ew", pady=(18, 0))
+        actions.grid(row=7, column=0, sticky="ew", pady=(18, 0))
         ttk.Button(actions, text="Ativar agora", command=self._activate, style="PrimaryAction.TButton").pack(side="left")
         ttk.Button(actions, text="Validar licença salva", command=self._validate_existing, style="Action.TButton").pack(
             side="left", padx=(10, 0)
@@ -117,6 +139,25 @@ class LicenseActivationWindow(ttk.Window):
 
     def _refresh_summary(self, state=None):
         self.summary_var.set(describe_license_state(state or load_local_license_state()))
+
+    def _copy_device_info(self):
+        self.clipboard_clear()
+        self.clipboard_append(self.device_var.get())
+        self.status_var.set("IdentificaÃ§Ã£o deste computador copiada para a Ã¡rea de transferÃªncia.")
+
+    def _enter_fullscreen(self):
+        try:
+            self.state("zoomed")
+            return
+        except Exception:
+            pass
+
+        try:
+            width = max(self.winfo_screenwidth(), 640)
+            height = max(self.winfo_screenheight(), 440)
+            self.geometry(f"{width}x{height}+0+0")
+        except Exception:
+            pass
 
     def _activate(self):
         username = self.username_var.get().strip()

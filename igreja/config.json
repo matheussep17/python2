@@ -7,9 +7,10 @@
   "ffmpeg_download_url": "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
   "output_folder": "",
   "license_enforced": true,
-  "license_api_url": "http://192.168.3.23:8787/api/v1",
+  "license_api_url": "https://python2-production-e3ee.up.railway.app/api/v1",
   "license_request_timeout_seconds": 10,
   "license_offline_grace_hours": 175200,
+  "license_bypass_machine_names": [],
   "license_bypass_device_fingerprints": [
     "f530df9bea6409dca445c69df5a46045d47860264f4c08ae35102780f9ca8620"
   ]

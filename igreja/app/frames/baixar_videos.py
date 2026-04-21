@@ -1761,10 +1761,15 @@ class BaixarFrame(ttk.Frame):
     def _finish_error(self, msg):
         self.is_running = False
         self._hide_progress()
-        self.status.config(text=msg or "Erro no download.")
+        error_message = msg or "Erro no download."
+        self.status.config(text=error_message)
         self.downloaded_file = None
         self._reserved_output_file = None
         self.open_folder_button.config(state=DISABLED)
         self._update_action_state()
         self._update_visibility()
-        self.on_status(f"Erro: {msg or 'falha no download'}")
+        self.on_status(f"Erro: {error_message}")
+        try:
+            messagebox.showerror("Erro no download", error_message)
+        except Exception:
+            pass
