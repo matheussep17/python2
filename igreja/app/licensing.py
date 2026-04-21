@@ -85,8 +85,12 @@ def load_license_settings() -> dict:
     return {
         "enforced": bool(config.get("license_enforced", False)),
         "api_url": str(config.get("license_api_url", "") or "").strip().rstrip("/"),
-        "timeout_seconds": max(3, int(config.get("license_request_timeout_seconds", DEFAULT_TIMEOUT_SECONDS) or DEFAULT_TIMEOUT_SECONDS)),
-        "offline_grace_hours": max(1, int(config.get("license_offline_grace_hours", DEFAULT_OFFLINE_GRACE_HOURS) or DEFAULT_OFFLINE_GRACE_HOURS)),
+        "timeout_seconds": max(
+            3, int(config.get("license_request_timeout_seconds", DEFAULT_TIMEOUT_SECONDS) or DEFAULT_TIMEOUT_SECONDS)
+        ),
+        "offline_grace_hours": max(
+            1, int(config.get("license_offline_grace_hours", DEFAULT_OFFLINE_GRACE_HOURS) or DEFAULT_OFFLINE_GRACE_HOURS)
+        ),
         "bypass_device_fingerprints": [str(item).strip().lower() for item in bypass_devices if str(item).strip()],
         "bypass_machine_names": [str(item).strip().lower() for item in bypass_machine_names if str(item).strip()],
     }
@@ -207,7 +211,7 @@ def local_license_is_usable_offline(state: dict) -> bool:
 
 def describe_license_state(state: dict) -> str:
     if not state:
-        return "Nenhuma licença foi ativada neste computador."
+        return "Nenhuma licenca foi ativada neste computador."
 
     expires_at = parse_iso_datetime(state.get("expires_at"))
     if expires_at:
@@ -216,11 +220,11 @@ def describe_license_state(state: dict) -> str:
         expires_label = "Permanente"
 
     offline_until = parse_iso_datetime(state.get("offline_valid_until"))
-    offline_label = offline_until.astimezone().strftime("%d/%m/%Y %H:%M") if offline_until else "indisponível"
+    offline_label = offline_until.astimezone().strftime("%d/%m/%Y %H:%M") if offline_until else "indisponivel"
     return (
-        f"Login atual: {state.get('username', 'não informado')}\n"
-        f"Validade da licença: {expires_label}\n"
-        f"Uso offline permitido até: {offline_label}"
+        f"Login atual: {state.get('username', 'nao informado')}\n"
+        f"Validade da licenca: {expires_label}\n"
+        f"Uso offline permitido ate: {offline_label}"
     )
 
 
@@ -233,7 +237,7 @@ def _request_json(url: str, payload: dict, timeout_seconds: int) -> dict:
             headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}"},
         )
     except requests.RequestException as exc:
-        raise LicenseConnectionError(f"Não foi possível conectar ao servidor de licenças.\n\n{exc}") from exc
+        raise LicenseConnectionError(f"Nao foi possivel conectar ao servidor de licencas.\n\n{exc}") from exc
 
     try:
         data = response.json()
@@ -243,7 +247,7 @@ def _request_json(url: str, payload: dict, timeout_seconds: int) -> dict:
     if response.ok:
         return data if isinstance(data, dict) else {}
 
-    message = str(data.get("detail") or data.get("message") or "O servidor rejeitou a licença.")
+    message = str(data.get("detail") or data.get("message") or "O servidor rejeitou a licenca.")
     raise LicenseValidationError(message)
 
 
@@ -251,7 +255,7 @@ def activate_with_server(username: str, password: str, settings: dict | None = N
     settings = settings or load_license_settings()
     api_url = settings.get("api_url")
     if not api_url:
-        raise LicenseValidationError("Configure 'license_api_url' no config.json antes de exigir licenças.")
+        raise LicenseValidationError("Configure 'license_api_url' no config.json antes de exigir licencas.")
 
     payload = {
         "username": username.strip(),
@@ -271,9 +275,9 @@ def validate_with_server(settings: dict | None = None, state: dict | None = None
     current_state = state or load_local_license_state()
     api_url = settings.get("api_url") or current_state.get("server_url", "")
     if not api_url:
-        raise LicenseValidationError("Servidor de licenças não configurado.")
+        raise LicenseValidationError("Servidor de licencas nao configurado.")
     if not current_state:
-        raise LicenseValidationError("Nenhuma licença local foi encontrada.")
+        raise LicenseValidationError("Nenhuma licenca local foi encontrada.")
 
     payload = {
         "username": current_state.get("username", ""),

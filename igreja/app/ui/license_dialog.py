@@ -23,7 +23,7 @@ from app.ui.theme import apply_design_system, resolve_ttk_theme
 
 class LicenseActivationWindow(ttk.Window):
     def __init__(self, settings: dict, initial_message: str = ""):
-        super().__init__(title="Ativação do aplicativo", themename=resolve_ttk_theme("Escuro"), size=(700, 500))
+        super().__init__(title="Ativacao do aplicativo", themename=resolve_ttk_theme("Escuro"), size=(700, 500))
         style = ttk.Style()
         apply_design_system(self, style, "Escuro")
         self.settings = settings
@@ -51,22 +51,22 @@ class LicenseActivationWindow(ttk.Window):
         card.pack(fill="both", expand=True)
         card.columnconfigure(0, weight=1)
 
-        ttk.Label(card, text="ATIVAÇÃO", style="AppKicker.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(card, text="ATIVACAO", style="AppKicker.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(card, text="Controle de acesso por computador", style="WorkspaceTitle.TLabel").grid(
             row=1, column=0, sticky="w", pady=(4, 0)
         )
         ttk.Label(
             card,
             text=(
-                "Este aplicativo agora depende de uma licença vinculada a um único equipamento. "
-                "Após a ativação, as funcionalidades continuam iguais."
+                "Este aplicativo agora depende de uma licenca vinculada a um unico equipamento. "
+                "Apos a ativacao, as funcionalidades continuam iguais."
             ),
             style="WorkspaceSubtitle.TLabel",
             justify="left",
             wraplength=620,
         ).grid(row=2, column=0, sticky="w", pady=(6, 18))
 
-        summary = ttk.Labelframe(card, text="Situação local", style="Hero.TLabelframe")
+        summary = ttk.Labelframe(card, text="Situacao local", style="Hero.TLabelframe")
         summary.grid(row=3, column=0, sticky="ew")
         ttk.Label(
             summary,
@@ -77,7 +77,7 @@ class LicenseActivationWindow(ttk.Window):
             padding=12,
         ).pack(fill="x")
 
-        device_info = ttk.Labelframe(card, text="IdentificaÃ§Ã£o deste computador", style="Hero.TLabelframe")
+        device_info = ttk.Labelframe(card, text="Identificacao deste computador", style="Hero.TLabelframe")
         device_info.grid(row=4, column=0, sticky="ew", pady=(18, 0))
         device_shell = ttk.Frame(device_info, padding=12, style="SurfaceAlt.TFrame")
         device_shell.pack(fill="x")
@@ -90,7 +90,7 @@ class LicenseActivationWindow(ttk.Window):
         ).pack(fill="x")
         ttk.Button(
             device_shell,
-            text="Copiar identificaÃ§Ã£o",
+            text="Copiar identificacao",
             command=self._copy_device_info,
             style="Action.TButton",
         ).pack(anchor="w", pady=(10, 0))
@@ -113,8 +113,8 @@ class LicenseActivationWindow(ttk.Window):
         ttk.Label(
             inner,
             text=(
-                "A licença pode ser permanente ou ter validade definida no servidor. "
-                "Se a internet cair, o app continua pelo período offline permitido."
+                "A licenca pode ser permanente ou ter validade definida no servidor. "
+                "Se a internet cair, o app continua pelo periodo offline permitido."
             ),
             style="SurfaceMuted.TLabel",
             justify="left",
@@ -130,7 +130,7 @@ class LicenseActivationWindow(ttk.Window):
         actions = ttk.Frame(card, style="Card.TFrame")
         actions.grid(row=7, column=0, sticky="ew", pady=(18, 0))
         ttk.Button(actions, text="Ativar agora", command=self._activate, style="PrimaryAction.TButton").pack(side="left")
-        ttk.Button(actions, text="Validar licença salva", command=self._validate_existing, style="Action.TButton").pack(
+        ttk.Button(actions, text="Validar licenca salva", command=self._validate_existing, style="Action.TButton").pack(
             side="left", padx=(10, 0)
         )
         ttk.Button(actions, text="Fechar", command=self._on_close, style="DangerAction.TButton").pack(side="right")
@@ -143,7 +143,7 @@ class LicenseActivationWindow(ttk.Window):
     def _copy_device_info(self):
         self.clipboard_clear()
         self.clipboard_append(self.device_var.get())
-        self.status_var.set("IdentificaÃ§Ã£o deste computador copiada para a Ã¡rea de transferÃªncia.")
+        self.status_var.set("Identificacao deste computador copiada para a area de transferencia.")
 
     def _enter_fullscreen(self):
         try:
@@ -166,7 +166,7 @@ class LicenseActivationWindow(ttk.Window):
             self.status_var.set("Preencha login e senha antes de ativar.")
             return
 
-        self.status_var.set("Validando licença no servidor...")
+        self.status_var.set("Validando licenca no servidor...")
         self.update_idletasks()
         try:
             state = activate_with_server(username, password, self.settings)
@@ -175,12 +175,12 @@ class LicenseActivationWindow(ttk.Window):
             return
 
         self._refresh_summary(state)
-        self.status_var.set("Licença ativada com sucesso neste computador.")
+        self.status_var.set("Licenca ativada com sucesso neste computador.")
         self.result = True
         self.after(250, self.destroy)
 
     def _validate_existing(self):
-        self.status_var.set("Revalidando licença salva...")
+        self.status_var.set("Revalidando licenca salva...")
         self.update_idletasks()
         try:
             state = validate_with_server(self.settings)
@@ -189,7 +189,7 @@ class LicenseActivationWindow(ttk.Window):
             return
 
         self._refresh_summary(state)
-        self.status_var.set("Licença local revalidada com sucesso.")
+        self.status_var.set("Licenca local revalidada com sucesso.")
         self.result = True
         self.after(250, self.destroy)
 
@@ -210,7 +210,7 @@ def ensure_application_license() -> bool:
             root.withdraw()
             messagebox.showerror(
                 "Licenciamento",
-                "O licenciamento está ativado, mas 'license_api_url' não foi configurado no config.json.",
+                "O licenciamento esta ativado, mas 'license_api_url' nao foi configurado no config.json.",
                 parent=root,
             )
             root.destroy()
@@ -227,7 +227,7 @@ def ensure_application_license() -> bool:
             if local_license_is_usable_offline(local_state):
                 return True
             initial_message = (
-                "Não foi possível falar com o servidor e o prazo offline desta licença já acabou. "
+                "Nao foi possivel falar com o servidor e o prazo offline desta licenca ja acabou. "
                 "Conecte a internet e valide novamente."
             )
         except LicenseValidationError as exc:
@@ -235,7 +235,7 @@ def ensure_application_license() -> bool:
         else:
             initial_message = ""
     else:
-        initial_message = "Nenhuma licença ativa foi encontrada neste computador."
+        initial_message = "Nenhuma licenca ativa foi encontrada neste computador."
 
     window = LicenseActivationWindow(settings, initial_message=initial_message)
     window.mainloop()
