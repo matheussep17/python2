@@ -8,9 +8,9 @@ if (-not (Test-Path -LiteralPath $BuildPython)) {
 }
 
 Write-Host "Validando suporte a tkinter no ambiente de build..."
-& $BuildPython -c "import tkinter, tkinter.ttk, ttkbootstrap, tkinterdnd2; interp = tkinter.Tcl(); print('tkinter ok:', tkinter.TkVersion); print('tcl library:', interp.eval('info library')); print('ttkbootstrap ok:', ttkbootstrap.__file__); print('tkinterdnd2 ok:', tkinterdnd2.__file__)"
+& $BuildPython -c "import tkinter, tkinter.ttk; interp = tkinter.Tcl(); print('tkinter ok:', tkinter.TkVersion); print('tcl library:', interp.eval('info library'))"
 if ($LASTEXITCODE -ne 0) {
-    throw "A .buildvenv nao consegue inicializar tkinter/Tcl ou os pacotes de UI obrigatorios. Use um CPython com suporte completo a Tk."
+    throw "A .buildvenv nao consegue inicializar tkinter/Tcl. Use um CPython com suporte completo a Tk."
 }
 
 if (-not $env:BUILD_SKIP_BOOTSTRAP) {
@@ -35,6 +35,12 @@ if (-not $env:BUILD_SKIP_BOOTSTRAP) {
     & $BuildPython -m pip check
     if ($LASTEXITCODE -ne 0) {
         throw "Dependencias inconsistentes na .buildvenv."
+    }
+
+    Write-Host "Validando pacotes obrigatorios da interface..."
+    & $BuildPython -c "import ttkbootstrap, tkinterdnd2; print('ttkbootstrap ok:', ttkbootstrap.__file__); print('tkinterdnd2 ok:', tkinterdnd2.__file__)"
+    if ($LASTEXITCODE -ne 0) {
+        throw "A .buildvenv nao conseguiu instalar os pacotes obrigatorios da interface."
     }
 } else {
     Write-Host "Bootstrap de dependencias ignorado (BUILD_SKIP_BOOTSTRAP=1)."
