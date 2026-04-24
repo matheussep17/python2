@@ -52,6 +52,17 @@ def _find_versioned_dir(root, pattern, required_files):
     return sorted(matches)[-1]
 
 
+def _find_optional_versioned_dir(root, patterns, required_files):
+    for pattern in patterns:
+        matches = []
+        for candidate in root.glob(pattern):
+            if candidate.is_dir() and all((candidate / relative_path).exists() for relative_path in required_files):
+                matches.append(candidate)
+        if matches:
+            return sorted(matches)[-1]
+    return None
+
+
 def _find_runtime_binary(name):
     candidates = []
     for base in {
@@ -77,16 +88,18 @@ if ffmpeg_root.exists():
 
 tcl_root = _find_tcl_root()
 tcl_library_dir = _find_versioned_dir(tcl_root, "tcl*", ("init.tcl",))
-tcl_packages_dir = _find_versioned_dir(tcl_root, "tcl8", ("pkgIndex.tcl",))
 tk_library_dir = _find_versioned_dir(tcl_root, "tk*", ("tk.tcl",))
+tcl_packages_dir = _find_optional_versioned_dir(tcl_root, ("tcl8", "tcl8.*"), ("pkgIndex.tcl",))
 
-tk_datas = _unique_pairs(
-    [
-        (str(tcl_library_dir), "_tcl_data"),
-        (str(tcl_packages_dir), "_tcl_data/tcl8"),
-        (str(tk_library_dir), "_tk_data"),
-    ]
-)
+tk_datas = [
+    (str(tcl_library_dir), "_tcl_data"),
+    (str(tk_library_dir), "_tk_data"),
+]
+
+if tcl_packages_dir is not None:
+    tk_datas.append((str(tcl_packages_dir), "_tcl_data/tcl8"))
+
+tk_datas = _unique_pairs(tk_datas)
 
 tk_binaries = _unique_pairs(
     [
