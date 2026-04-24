@@ -8,9 +8,9 @@ if (-not (Test-Path -LiteralPath $BuildPython)) {
 }
 
 Write-Host "Validando suporte a tkinter no ambiente de build..."
-& $BuildPython -c "import tkinter, tkinter.ttk; print('tkinter ok:', tkinter.TkVersion)"
+& $BuildPython -c "import tkinter, tkinter.ttk, ttkbootstrap, tkinterdnd2; interp = tkinter.Tcl(); print('tkinter ok:', tkinter.TkVersion); print('tcl library:', interp.eval('info library')); print('ttkbootstrap ok:', ttkbootstrap.__file__); print('tkinterdnd2 ok:', tkinterdnd2.__file__)"
 if ($LASTEXITCODE -ne 0) {
-    throw "A .buildvenv nao consegue importar tkinter. Use um CPython com suporte a Tk."
+    throw "A .buildvenv nao consegue inicializar tkinter/Tcl ou os pacotes de UI obrigatorios. Use um CPython com suporte completo a Tk."
 }
 
 if (-not $env:BUILD_SKIP_BOOTSTRAP) {
@@ -21,9 +21,20 @@ if (-not $env:BUILD_SKIP_BOOTSTRAP) {
     }
 
     Write-Host "Instalando dependencias de build..."
+    & $BuildPython -m pip install --upgrade pip setuptools wheel
+    if ($LASTEXITCODE -ne 0) {
+        throw "Falha ao instalar dependencias na .buildvenv."
+    }
+
     & $BuildPython -m pip install -r (Join-Path $ProjectRoot "requirements.txt") pyinstaller
     if ($LASTEXITCODE -ne 0) {
         throw "Falha ao instalar dependencias na .buildvenv."
+    }
+
+    Write-Host "Validando consistencia das dependencias instaladas..."
+    & $BuildPython -m pip check
+    if ($LASTEXITCODE -ne 0) {
+        throw "Dependencias inconsistentes na .buildvenv."
     }
 } else {
     Write-Host "Bootstrap de dependencias ignorado (BUILD_SKIP_BOOTSTRAP=1)."
@@ -56,9 +67,15 @@ if (Test-Path -LiteralPath $DistDir) {
 }
 
 Write-Host "Gerando executavel..."
-& $BuildPython -m PyInstaller --noconfirm (Join-Path $ProjectRoot "igreja.spec")
+& $BuildPython -m PyInstaller --clean --noconfirm (Join-Path $ProjectRoot "igreja.spec")
 if ($LASTEXITCODE -ne 0) {
     throw "Falha durante o PyInstaller."
+}
+
+Write-Host "Validando artefato gerado..."
+& $BuildPython (Join-Path $ProjectRoot "scripts\\verify_frozen_build.py") (Join-Path $DistDir "Igreja.exe")
+if ($LASTEXITCODE -ne 0) {
+    throw "O executavel foi gerado, mas nao contem todos os requireds obrigatorios."
 }
 
 Write-Host "Build concluido. Executavel em 'dist\\Igreja.exe'."

@@ -67,6 +67,21 @@ git push origin v1.0.1
 
 Ao receber a tag, o GitHub executa `.github/workflows/release.yml`, gera `dist/Igreja.exe` e anexa o arquivo na release.
 
+### Build local do executavel
+
+Para evitar builds intermitentes com dependencias faltando, o empacotamento agora segue estas regras:
+
+1. Crie a `.buildvenv` a partir de um CPython completo no Windows, com suporte a Tk/Tcl.
+2. Rode `powershell -ExecutionPolicy Bypass -File .\build.ps1`.
+3. O script valida `tkinter`, `Tcl`, `ttkbootstrap`, `tkinterdnd2`, `pip check` e o executavel final antes de concluir.
+4. Se algum required critico nao entrar no `.exe`, a build falha em vez de gerar um artefato quebrado.
+
+Observacoes importantes:
+
+- A pasta `dist/` continua ignorada no Git. O binario final deve sair da release automatica, nao de commit manual do `.exe`.
+- Se aparecer erro de `init.tcl` ou `Tcl`, recrie a `.buildvenv` usando uma instalacao do Python que realmente tenha a pasta `tcl/` completa.
+- O workflow `.github/workflows/release.yml` continua sendo o caminho recomendado para publicar novas versoes com `Igreja.exe`.
+
 ## Licenciamento por computador
 
 Foi adicionada uma camada opcional de licenciamento sem mexer nas funcionalidades internas do executável.
