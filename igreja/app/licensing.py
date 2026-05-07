@@ -19,6 +19,7 @@ from app.version import APP_NAME, APP_VERSION
 LICENSE_STATE_FILE = "license_state.json"
 DEFAULT_OFFLINE_GRACE_HOURS = 24 * 365 * 20
 DEFAULT_TIMEOUT_SECONDS = 10
+DEVICE_FINGERPRINT_NAMESPACE = "igreja-license-device-v2"
 
 
 class LicenseError(Exception):
@@ -102,8 +103,9 @@ def license_is_enforced(settings: dict | None = None) -> bool:
 
 def device_has_bypass(settings: dict | None = None) -> bool:
     active_settings = settings or load_license_settings()
-    current_fingerprint = device_fingerprint().lower()
-    if current_fingerprint in set(active_settings.get("bypass_device_fingerprints", [])):
+    configured_fingerprints = set(active_settings.get("bypass_device_fingerprints", []))
+    current_fingerprints = {item.lower() for item in acceptable_device_fingerprints()}
+    if current_fingerprints.intersection(configured_fingerprints):
         return True
     current_machine_name = machine_name().strip().lower()
     return current_machine_name in set(active_settings.get("bypass_machine_names", []))
@@ -178,7 +180,12 @@ def _read_windows_bios_uuid() -> str:
         return ""
 
 
-def device_fingerprint() -> str:
+def _fingerprint_from_parts(parts: list[str]) -> str:
+    raw = "|".join(part.strip() for part in parts if part and str(part).strip())
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def legacy_device_fingerprint() -> str:
     raw_parts = [
         APP_NAME,
         machine_name(),
@@ -189,14 +196,29 @@ def device_fingerprint() -> str:
         _read_windows_bios_uuid(),
         str(uuid.getnode()),
     ]
-    raw = "|".join(part.strip() for part in raw_parts if part and str(part).strip())
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    return _fingerprint_from_parts(raw_parts)
+
+
+def device_fingerprint() -> str:
+    raw_parts = [
+        DEVICE_FINGERPRINT_NAMESPACE,
+        platform.system(),
+        platform.machine(),
+        _read_windows_machine_guid(),
+        _read_windows_bios_uuid(),
+        str(uuid.getnode()),
+    ]
+    return _fingerprint_from_parts(raw_parts)
+
+
+def acceptable_device_fingerprints() -> set[str]:
+    return {item for item in {device_fingerprint(), legacy_device_fingerprint()} if item}
 
 
 def local_license_is_usable_offline(state: dict) -> bool:
     if not state:
         return False
-    if state.get("device_fingerprint") != device_fingerprint():
+    if state.get("device_fingerprint") not in acceptable_device_fingerprints():
         return False
     if state.get("status") != "active":
         return False
@@ -261,6 +283,7 @@ def activate_with_server(username: str, password: str, settings: dict | None = N
         "username": username.strip(),
         "password": password,
         "device_fingerprint": device_fingerprint(),
+        "legacy_device_fingerprints": sorted(acceptable_device_fingerprints() - {device_fingerprint()}),
         "device_name": machine_name(),
         "app_version": APP_VERSION,
     }
@@ -283,6 +306,7 @@ def validate_with_server(settings: dict | None = None, state: dict | None = None
         "username": current_state.get("username", ""),
         "activation_token": current_state.get("activation_token", ""),
         "device_fingerprint": device_fingerprint(),
+        "legacy_device_fingerprints": sorted(acceptable_device_fingerprints() - {device_fingerprint()}),
         "device_name": machine_name(),
         "app_version": APP_VERSION,
     }

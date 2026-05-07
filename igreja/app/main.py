@@ -3,6 +3,7 @@ import socket
 import sys
 import threading
 import tkinter as tk
+from datetime import datetime
 from pathlib import Path
 from tkinter import messagebox
 
@@ -110,6 +111,10 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self._sidebar_width = 320
         self._active_layout_refresh_job = None
         self._active_layout_refresh_followup_job = None
+        self._status_window = None
+        self._status_history = []
+        self._status_text_widget = None
+        self._status_current_var = tk.StringVar(value="Pronto.")
 
         self._apply_window_icon()
         install_messagebox_hooks(self)
@@ -276,8 +281,13 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
         sb = ttk.Frame(self, padding=(20, 10), style="StatusBar.TFrame")
         sb.grid(row=2, column=0, sticky="ew")
-        self.statusbar_var = tk.StringVar(value="Pronto.")
-        ttk.Label(sb, textvariable=self.statusbar_var, style="Status.TLabel", anchor="w").pack(side="left")
+        self.status_button = ttk.Button(
+            sb,
+            text="Mensagens",
+            style="Chrome.TButton",
+            command=self._open_status_window,
+        )
+        self.status_button.pack(side="left")
         self.status_meta = ttk.Label(sb, text=f"Versão {APP_VERSION} • Atalhos Ctrl+1 a Ctrl+7", style="Status.TLabel")
         self.status_meta.pack(side="right")
 
@@ -491,7 +501,109 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         )
 
     def _set_status(self, text):
-        self.statusbar_var.set(text)
+        message = str(text or "").strip() or "Pronto."
+        self._status_current_var.set(message)
+        self._status_history.append((datetime.now().strftime("%H:%M:%S"), message))
+        self._status_history = self._status_history[-80:]
+
+        if getattr(self, "status_button", None):
+            label = "Mensagens"
+            if message != "Pronto.":
+                compact = message if len(message) <= 46 else message[:43].rstrip() + "..."
+                label = f"Mensagens: {compact}"
+            self.status_button.configure(text=label)
+
+        self._refresh_status_window()
+
+    def _open_status_window(self):
+        if self._is_closing:
+            return
+        if self._status_window is not None:
+            try:
+                if self._status_window.winfo_exists():
+                    self._status_window.deiconify()
+                    self._status_window.lift()
+                    self._refresh_status_window()
+                    return
+            except tk.TclError:
+                pass
+
+        dialog = tk.Toplevel(self)
+        self._status_window = dialog
+        dialog.title("Mensagens do aplicativo")
+        dialog.transient(self)
+        dialog.minsize(560, 320)
+        dialog.configure(background=self.cget("background"))
+        dialog.protocol("WM_DELETE_WINDOW", self._hide_status_window)
+
+        shell = ttk.Frame(dialog, padding=18, style="Card.TFrame")
+        shell.pack(fill="both", expand=True)
+        shell.grid_columnconfigure(0, weight=1)
+        shell.grid_rowconfigure(2, weight=1)
+
+        ttk.Label(shell, text="Mensagens", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            shell,
+            textvariable=self._status_current_var,
+            style="CardMuted.TLabel",
+            justify="left",
+            wraplength=620,
+        ).grid(row=1, column=0, sticky="ew", pady=(6, 12))
+
+        history = tk.Text(shell, height=10, wrap="word", relief="flat", padx=10, pady=10)
+        history.grid(row=2, column=0, sticky="nsew")
+        history.configure(state="disabled")
+        self._status_text_widget = history
+
+        actions = ttk.Frame(shell, style="Card.TFrame")
+        actions.grid(row=3, column=0, sticky="ew", pady=(12, 0))
+        ttk.Button(actions, text="Limpar", style="Action.TButton", command=self._clear_status_history).pack(side="left")
+        ttk.Button(actions, text="Fechar", style="PrimaryAction.TButton", command=self._hide_status_window).pack(
+            side="right"
+        )
+
+        self._refresh_status_window()
+        dialog.update_idletasks()
+        self._center_child_window(dialog)
+
+    def _hide_status_window(self):
+        if self._status_window is None:
+            return
+        try:
+            self._status_window.withdraw()
+        except tk.TclError:
+            self._status_window = None
+
+    def _clear_status_history(self):
+        self._status_history.clear()
+        self._refresh_status_window()
+
+    def _refresh_status_window(self):
+        widget = self._status_text_widget
+        if widget is None:
+            return
+        try:
+            if not widget.winfo_exists():
+                self._status_text_widget = None
+                return
+            widget.configure(state="normal")
+            widget.delete("1.0", "end")
+            lines = [f"{stamp}  {message}" for stamp, message in self._status_history]
+            widget.insert("1.0", "\n".join(lines) or "Nenhuma mensagem recente.")
+            widget.configure(state="disabled")
+            widget.see("end")
+        except tk.TclError:
+            self._status_text_widget = None
+
+    def _center_child_window(self, dialog):
+        try:
+            width = max(dialog.winfo_reqwidth(), 560)
+            height = max(dialog.winfo_reqheight(), 320)
+            x = self.winfo_rootx() + max(16, (self.winfo_width() - width) // 2)
+            y = self.winfo_rooty() + max(16, (self.winfo_height() - height) // 2)
+            dialog.geometry(f"{width}x{height}+{x}+{y}")
+        except tk.TclError:
+            pass
 
     def _schedule_startup_update_check(self):
         if self._is_closing:
@@ -524,7 +636,8 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             return
 
         self.update_check_in_progress = True
-        self._set_status("Verificando atualizacoes...")
+        if user_initiated:
+            self._set_status("Verificando atualizacoes...")
         threading.Thread(
             target=self._check_for_updates_worker,
             args=(user_initiated,),

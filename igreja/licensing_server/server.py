@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from licensing_server.db import (
     create_license,
@@ -49,6 +49,7 @@ class ActivateRequest(BaseModel):
     username: str
     password: str
     device_fingerprint: str
+    legacy_device_fingerprints: list[str] = Field(default_factory=list)
     device_name: str | None = None
     app_version: str | None = None
 
@@ -57,6 +58,7 @@ class ValidateRequest(BaseModel):
     username: str
     activation_token: str
     device_fingerprint: str
+    legacy_device_fingerprints: list[str] = Field(default_factory=list)
     device_name: str | None = None
     app_version: str | None = None
 
@@ -122,6 +124,12 @@ def _ensure_license_is_usable(row):
     expires_at = parse_iso(row["expires_at"])
     if expires_at and utcnow() > expires_at:
         raise HTTPException(status_code=403, detail="Esta licença expirou e precisa ser renovada.")
+
+
+def _known_fingerprints(payload) -> set[str]:
+    fingerprints = {str(payload.device_fingerprint or "").strip()}
+    fingerprints.update(str(item or "").strip() for item in (payload.legacy_device_fingerprints or []))
+    return {item for item in fingerprints if item}
 
 
 @app.get("/health")
@@ -548,7 +556,8 @@ def activate(payload: ActivateRequest):
     if not verify_password(payload.password, row["password_hash"]):
         raise HTTPException(status_code=401, detail="Login ou senha inválidos.")
 
-    if row["device_fingerprint"] and row["device_fingerprint"] != payload.device_fingerprint:
+    known_fingerprints = _known_fingerprints(payload)
+    if row["device_fingerprint"] and row["device_fingerprint"] not in known_fingerprints:
         raise HTTPException(
             status_code=409,
             detail="Esta licença já está vinculada a outro computador. Faça a transferência antes de ativar de novo.",
@@ -573,10 +582,19 @@ def validate(payload: ValidateRequest):
     if row["activation_token"] != payload.activation_token:
         raise HTTPException(status_code=401, detail="Token de ativação inválido para este login.")
 
-    if row["device_fingerprint"] != payload.device_fingerprint:
+    known_fingerprints = _known_fingerprints(payload)
+    if row["device_fingerprint"] not in known_fingerprints:
         raise HTTPException(status_code=409, detail="Esta licença pertence a outro computador.")
 
-    touch_license_validation(payload.username, payload.device_name or row["device_name"] or "dispositivo")
+    if row["device_fingerprint"] != payload.device_fingerprint:
+        update_license_binding(
+            payload.username,
+            payload.device_fingerprint,
+            payload.device_name or row["device_name"] or "dispositivo",
+            row["activation_token"],
+        )
+    else:
+        touch_license_validation(payload.username, payload.device_name or row["device_name"] or "dispositivo")
     fresh = fetch_license_by_username(payload.username)
     return _build_license_payload(fresh)
 
