@@ -1048,6 +1048,13 @@ class BaixarFrame(ttk.Frame):
         binary = "ffmpeg.exe" if sys.platform.startswith("win") else "ffmpeg"
         return os.path.join(ffmpeg_dir, binary)
 
+    def _get_ffprobe_executable(self):
+        ffmpeg_dir = get_ffmpeg_bin_dir()
+        if not ffmpeg_dir:
+            return None
+        binary = "ffprobe.exe" if sys.platform.startswith("win") else "ffprobe"
+        return os.path.join(ffmpeg_dir, binary)
+
     def _run_ffmpeg(self, args, error_message, timeout_seconds=None):
         ffmpeg_exe = self._get_ffmpeg_executable()
         if not ffmpeg_exe or not os.path.exists(ffmpeg_exe):
@@ -1067,6 +1074,39 @@ class BaixarFrame(ttk.Frame):
         if completed.returncode != 0:
             stderr = (completed.stderr or "").strip()
             raise RuntimeError(stderr or error_message)
+
+    def _output_has_stream(self, path, stream_selector):
+        ffprobe_exe = self._get_ffprobe_executable()
+        if not ffprobe_exe or not os.path.exists(ffprobe_exe) or not path or not os.path.exists(path):
+            return False
+
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform.startswith("win") else 0
+        completed = subprocess.run(
+            [
+                ffprobe_exe,
+                "-v", "error",
+                "-select_streams", stream_selector,
+                "-show_entries", "stream=index",
+                "-of", "csv=p=0",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+            creationflags=creationflags,
+        )
+        return completed.returncode == 0 and bool((completed.stdout or "").strip())
+
+    def _validate_cut_output(self, path, expects_video):
+        if not path or not os.path.exists(path):
+            raise RuntimeError("O corte terminou, mas o arquivo final nao foi encontrado.")
+        if expects_video and not self._output_has_stream(path, "v:0"):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+            raise RuntimeError("O corte gerou um arquivo sem video. Tentando outro formato disponivel...")
+        if not self._output_has_stream(path, "a:0") and not expects_video:
+            raise RuntimeError("O corte terminou, mas o arquivo final nao contem audio.")
 
     def _format_http_headers(self, media_format, info):
         headers = {}
@@ -1152,6 +1192,7 @@ class BaixarFrame(ttk.Frame):
                     args.extend(["-vn", "-codec:a", "libmp3lame", "-q:a", "2", reserved_path])
                     self._queue_event("status", "Baixando e cortando audio...")
                     self._run_ffmpeg(args, "Falha ao baixar e cortar o audio.", timeout_seconds=30 * 60)
+                    self._validate_cut_output(reserved_path, expects_video=False)
                     return reserved_path
 
                 video_format = self._select_requested_format(info, "video")
@@ -1159,30 +1200,61 @@ class BaixarFrame(ttk.Frame):
                 if not video_format:
                     raise RuntimeError("Nao encontrei um formato de video para cortar.")
 
-                args = ["-y"]
-                args.extend(self._ffmpeg_url_input_args(video_format, info, start, duration))
-                if audio_format and audio_format is not video_format:
-                    args.extend(self._ffmpeg_url_input_args(audio_format, info, start, duration))
-                    args.extend(["-map", "0:v:0", "-map", "1:a:0"])
-                else:
-                    args.extend(["-map", "0:v:0", "-map", "0:a:0?"])
-
-                if self._is_holyrics_profile():
-                    args.extend([
+                temp_dir = tempfile.mkdtemp(prefix="igreja-cut-")
+                temp_video = os.path.join(temp_dir, "video.mp4")
+                temp_audio = os.path.join(temp_dir, "audio.m4a")
+                try:
+                    video_args = ["-y"]
+                    video_args.extend(self._ffmpeg_url_input_args(video_format, info, start, duration))
+                    video_args.extend([
+                        "-map", "0:v:0",
+                        "-an",
                         "-c:v", "libx264",
                         "-preset", "medium",
                         "-crf", "23",
                         "-pix_fmt", "yuv420p",
-                        "-c:a", "aac",
-                        "-b:a", "192k",
-                        "-movflags", "+faststart",
-                        reserved_path,
+                        temp_video,
                     ])
-                else:
-                    args.extend(["-c:v", "copy", "-c:a", "copy", reserved_path])
+                    self._queue_event("status", "Baixando e cortando video...")
+                    self._run_ffmpeg(video_args, "Falha ao baixar e cortar o video.", timeout_seconds=30 * 60)
+                    self._validate_cut_output(temp_video, expects_video=True)
 
-                self._queue_event("status", "Baixando e cortando video...")
-                self._run_ffmpeg(args, "Falha ao baixar e cortar o video.", timeout_seconds=30 * 60)
+                    has_audio = False
+                    if audio_format:
+                        audio_args = ["-y"]
+                        audio_args.extend(self._ffmpeg_url_input_args(audio_format, info, start, duration))
+                        audio_args.extend([
+                            "-map", "0:a:0",
+                            "-vn",
+                            "-c:a", "aac",
+                            "-b:a", "192k",
+                            temp_audio,
+                        ])
+                        self._queue_event("status", "Baixando e cortando audio...")
+                        self._run_ffmpeg(audio_args, "Falha ao baixar e cortar o audio do video.", timeout_seconds=30 * 60)
+                        has_audio = self._output_has_stream(temp_audio, "a:0")
+
+                    merge_args = ["-y", "-i", temp_video]
+                    if has_audio:
+                        merge_args.extend(["-i", temp_audio, "-map", "0:v:0", "-map", "1:a:0"])
+                    else:
+                        merge_args.extend(["-map", "0:v:0"])
+                    merge_args.extend(["-c:v", "copy", "-c:a", "copy", "-movflags", "+faststart", reserved_path])
+
+                    self._queue_event("status", "Finalizando video...")
+                    self._run_ffmpeg(merge_args, "Falha ao finalizar o video cortado.", timeout_seconds=10 * 60)
+                    self._validate_cut_output(reserved_path, expects_video=True)
+                finally:
+                    for path in (temp_video, temp_audio):
+                        try:
+                            if path and os.path.exists(path):
+                                os.remove(path)
+                        except Exception:
+                            pass
+                    try:
+                        os.rmdir(temp_dir)
+                    except Exception:
+                        pass
                 return reserved_path
             except Exception as exc:
                 last_error = exc
