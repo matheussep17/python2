@@ -441,7 +441,7 @@ class BaixarFrame(ttk.Frame):
     def _build_youtube_extractor_args(self):
         return {
             "youtube": {
-                "player_client": ["web"],
+                "player_client": ["android_vr", "web"],
             }
         }
 
