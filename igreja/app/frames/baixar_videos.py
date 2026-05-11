@@ -914,6 +914,10 @@ class BaixarFrame(ttk.Frame):
     def _is_quality_strict(self, quality_choice):
         return bool(quality_choice and str(quality_choice).lower() != "best")
 
+    def _height_filter(self, height, exact=True):
+        operator = "=" if exact else "<="
+        return f"[height{operator}{height}]"
+
     def _build_yt_format(self, quality_choice):
         vfilter = "[vcodec^=avc1]"
         afilter = "[acodec^=mp4a]"
@@ -927,12 +931,13 @@ class BaixarFrame(ttk.Frame):
             )
 
         h = self._quality_height(quality_choice)
+        exact = self._height_filter(h, exact=True)
 
         return (
-            f"(bv*{vfilter}[ext=mp4][height={h}]/bv*{vfilter}[height={h}])"
+            f"(bv*{vfilter}[ext=mp4]{exact}/bv*{vfilter}{exact})"
             f"+(ba{afilter}[ext=m4a]/ba{afilter}/ba)"
-            f"/b{vfilter}[ext=mp4][height={h}]/b{vfilter}[height={h}]"
-            f"/b[ext=mp4][height={h}]/b[height={h}]"
+            f"/b{vfilter}[ext=mp4]{exact}/b{vfilter}{exact}"
+            f"/b[ext=mp4]{exact}/b{exact}"
         )
 
     def _build_yt_format_attempts(self, quality_choice):
@@ -941,12 +946,18 @@ class BaixarFrame(ttk.Frame):
 
         h = self._quality_height(quality_choice)
         vfilter = "[vcodec^=avc1]"
+        exact = self._height_filter(h, exact=True)
+        at_most = self._height_filter(h, exact=False)
 
         return [
             self._build_yt_format(quality_choice),
-            f"(bv*{vfilter}[height={h}]+ba/b{vfilter}[height={h}])"
-            f"/b[ext=mp4][height={h}]"
-            f"/b[height={h}]",
+            f"(bv*{vfilter}{exact}+ba/b{vfilter}{exact})"
+            f"/b[ext=mp4]{exact}"
+            f"/b{exact}",
+            f"(bv*{vfilter}[ext=mp4]{at_most}/bv*{vfilter}{at_most})"
+            f"+(ba[ext=m4a]/ba)"
+            f"/b{vfilter}[ext=mp4]{at_most}/b{vfilter}{at_most}"
+            f"/b[ext=mp4]{at_most}/b{at_most}",
         ]
 
     def _build_yt_holyrics_relaxed_attempts(self, quality_choice):
@@ -957,10 +968,15 @@ class BaixarFrame(ttk.Frame):
             ]
 
         h = self._quality_height(quality_choice)
+        exact = self._height_filter(h, exact=True)
+        at_most = self._height_filter(h, exact=False)
         return [
-            f"(bv*[ext=mp4][height={h}]/bv*[height={h}])"
+            f"(bv*[ext=mp4]{exact}/bv*{exact})"
             f"+(ba[ext=m4a]/ba)"
-            f"/b[ext=mp4][height={h}]/b[height={h}]",
+            f"/b[ext=mp4]{exact}/b{exact}",
+            f"(bv*[ext=mp4]{at_most}/bv*{at_most})"
+            f"+(ba[ext=m4a]/ba)"
+            f"/b[ext=mp4]{at_most}/b{at_most}",
         ]
 
     def _build_best_quality_format(self, quality_choice):
@@ -968,16 +984,21 @@ class BaixarFrame(ttk.Frame):
             return "bv*+ba/b"
 
         h = self._quality_height(quality_choice)
-        return f"(bv*[height={h}]+ba/b[height={h}])"
+        exact = self._height_filter(h, exact=True)
+        return f"(bv*{exact}+ba/b{exact})"
 
     def _build_best_quality_attempts(self, quality_choice):
         if quality_choice == "best":
             return [self._build_best_quality_format(quality_choice)]
 
         h = self._quality_height(quality_choice)
+        exact = self._height_filter(h, exact=True)
+        at_most = self._height_filter(h, exact=False)
         return [
             self._build_best_quality_format(quality_choice),
-            f"b[height={h}]",
+            f"b{exact}",
+            f"(bv*{at_most}+ba/b{at_most})",
+            f"b{at_most}",
         ]
 
     def _build_video_attempts(self, quality_choice):
@@ -988,9 +1009,13 @@ class BaixarFrame(ttk.Frame):
             ]
 
         h = self._quality_height(quality_choice)
+        exact = self._height_filter(h, exact=True)
+        at_most = self._height_filter(h, exact=False)
         return [
-            f"(bestvideo*[height={h}]+bestaudio/bv*[height={h}]+ba/b[height={h}])",
-            f"b[height={h}]",
+            f"(bestvideo*{exact}+bestaudio/bv*{exact}+ba/b{exact})",
+            f"b{exact}",
+            f"(bestvideo*{at_most}+bestaudio/bv*{at_most}+ba/b{at_most})",
+            f"b{at_most}",
         ]
 
     def _youtube_common_args(self, outtmpl, final_ext):
