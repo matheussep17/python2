@@ -1048,21 +1048,147 @@ class BaixarFrame(ttk.Frame):
         binary = "ffmpeg.exe" if sys.platform.startswith("win") else "ffmpeg"
         return os.path.join(ffmpeg_dir, binary)
 
-    def _run_ffmpeg(self, args, error_message):
+    def _run_ffmpeg(self, args, error_message, timeout_seconds=None):
         ffmpeg_exe = self._get_ffmpeg_executable()
         if not ffmpeg_exe or not os.path.exists(ffmpeg_exe):
             raise RuntimeError("FFmpeg não encontrado para finalizar o download.")
 
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform.startswith("win") else 0
-        completed = subprocess.run(
-            [ffmpeg_exe, *args],
-            capture_output=True,
-            text=True,
-            creationflags=creationflags,
-        )
+        try:
+            completed = subprocess.run(
+                [ffmpeg_exe, *args],
+                capture_output=True,
+                text=True,
+                creationflags=creationflags,
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError("O corte demorou demais e foi interrompido. Tente um trecho menor.") from exc
         if completed.returncode != 0:
             stderr = (completed.stderr or "").strip()
             raise RuntimeError(stderr or error_message)
+
+    def _format_http_headers(self, media_format, info):
+        headers = {}
+        headers.update((info or {}).get("http_headers") or {})
+        headers.update((media_format or {}).get("http_headers") or {})
+        if not headers:
+            return None
+        return "".join(f"{key}: {value}\r\n" for key, value in headers.items() if value is not None)
+
+    def _ffmpeg_url_input_args(self, media_format, info, start, duration):
+        media_url = (media_format or {}).get("url")
+        if not media_url:
+            raise RuntimeError("Nao foi possivel obter o link interno da midia para cortar.")
+
+        args = []
+        headers = self._format_http_headers(media_format, info)
+        if headers:
+            args.extend(["-headers", headers])
+        args.extend(["-ss", f"{float(start):.3f}", "-t", f"{float(duration):.3f}", "-i", media_url])
+        return args
+
+    def _extract_cut_source_info(self, url, ydl_opts):
+        y = self._yt_dlp
+        if y is None:
+            raise RuntimeError("yt-dlp nao esta disponivel para preparar o corte.")
+
+        with y.YoutubeDL(ydl_opts) as ydl:
+            return ydl.extract_info(url, download=False)
+
+    def _select_requested_format(self, info, media_kind):
+        requested = (info or {}).get("requested_formats") or []
+        candidates = requested or [info or {}]
+        for item in candidates:
+            if not isinstance(item, dict) or not item.get("url"):
+                continue
+            vcodec = str(item.get("vcodec") or "none").lower()
+            acodec = str(item.get("acodec") or "none").lower()
+            if media_kind == "video" and vcodec != "none":
+                return item
+            if media_kind == "audio" and acodec != "none":
+                return item
+        return None
+
+    def _iter_cut_extract_attempts(self, fmt_mode, quality_choice, outtmpl):
+        if self._is_music_mode(fmt_mode):
+            yield {
+                **self._youtube_common_args(outtmpl, "mp3"),
+                "format": "bestaudio[ext=m4a]/bestaudio/best",
+                "simulate": True,
+            }
+            return
+
+        holyrics_mode = self._is_holyrics_profile()
+        format_attempts = (
+            self._build_yt_holyrics_relaxed_attempts(quality_choice)
+            if holyrics_mode
+            else self._build_best_quality_attempts(quality_choice)
+        )
+        for attempt_opts in self._iter_ydl_attempts({
+            **self._youtube_common_args(outtmpl, "mp4" if holyrics_mode else "mkv"),
+            "format": format_attempts[0],
+            "_format_attempts": format_attempts,
+            "simulate": True,
+        }):
+            yield attempt_opts
+
+    def _download_cut_with_ffmpeg(self, url, fmt_mode, quality_choice, outtmpl, reserved_path, cut_range):
+        start, end = cut_range
+        duration = end - start
+        self._queue_event("progress_busy", True)
+        self._queue_event("status", "Preparando corte direto...")
+
+        last_error = None
+        for attempt_opts in self._iter_cut_extract_attempts(fmt_mode, quality_choice, outtmpl):
+            try:
+                info = self._extract_cut_source_info(url, attempt_opts)
+                if self._is_music_mode(fmt_mode):
+                    audio_format = self._select_requested_format(info, "audio")
+                    if not audio_format:
+                        raise RuntimeError("Nao encontrei uma faixa de audio para cortar.")
+                    args = ["-y"]
+                    args.extend(self._ffmpeg_url_input_args(audio_format, info, start, duration))
+                    args.extend(["-vn", "-codec:a", "libmp3lame", "-q:a", "2", reserved_path])
+                    self._queue_event("status", "Baixando e cortando audio...")
+                    self._run_ffmpeg(args, "Falha ao baixar e cortar o audio.", timeout_seconds=30 * 60)
+                    return reserved_path
+
+                video_format = self._select_requested_format(info, "video")
+                audio_format = self._select_requested_format(info, "audio")
+                if not video_format:
+                    raise RuntimeError("Nao encontrei um formato de video para cortar.")
+
+                args = ["-y"]
+                args.extend(self._ffmpeg_url_input_args(video_format, info, start, duration))
+                if audio_format and audio_format is not video_format:
+                    args.extend(self._ffmpeg_url_input_args(audio_format, info, start, duration))
+                    args.extend(["-map", "0:v:0", "-map", "1:a:0"])
+                else:
+                    args.extend(["-map", "0:v:0", "-map", "0:a:0?"])
+
+                if self._is_holyrics_profile():
+                    args.extend([
+                        "-c:v", "libx264",
+                        "-preset", "medium",
+                        "-crf", "23",
+                        "-pix_fmt", "yuv420p",
+                        "-c:a", "aac",
+                        "-b:a", "192k",
+                        "-movflags", "+faststart",
+                        reserved_path,
+                    ])
+                else:
+                    args.extend(["-c:v", "copy", "-c:a", "copy", reserved_path])
+
+                self._queue_event("status", "Baixando e cortando video...")
+                self._run_ffmpeg(args, "Falha ao baixar e cortar o video.", timeout_seconds=30 * 60)
+                return reserved_path
+            except Exception as exc:
+                last_error = exc
+                continue
+
+        raise last_error or RuntimeError("Falha ao preparar o corte.")
 
     def _transcode_to_holyrics(self, source_path, target_path):
         self._queue_event("status", "Convertendo para MP4 compatível com Holyrics...")
@@ -1703,6 +1829,23 @@ class BaixarFrame(ttk.Frame):
             outtmpl, reserved_path = self._resolve_download_target(url, fmt_mode, quality_choice)
             self._queue_event("reserved_output_file", reserved_path)
 
+            if cut_range:
+                final_path = self._download_cut_with_ffmpeg(
+                    url,
+                    fmt_mode,
+                    quality_choice,
+                    outtmpl,
+                    reserved_path,
+                    cut_range,
+                )
+                self._cleanup_download_sidecars(final_path, reserved_path)
+                self.downloaded_file = final_path
+                self._queue_event("downloaded_file", final_path)
+                self._queue_event("progress_busy", False)
+                self._queue_event("progress", 100)
+                self._queue_event("done")
+                return
+
             if self._is_music_mode(fmt_mode):
                 attempt_opts_list = [{
                     **self._youtube_common_args(outtmpl, "mp3"),
@@ -1840,8 +1983,10 @@ class BaixarFrame(ttk.Frame):
             self.downloaded_file = None
             if self.cancel_requested:
                 self._cleanup_partial()
+                self._queue_event("progress_busy", False)
                 self._queue_event("canceled")
                 return
+            self._queue_event("progress_busy", False)
             self._queue_event("error", msg)
 
     def ydl_hook(self, d):
