@@ -189,9 +189,11 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
     current_exe = Path(sys.executable).resolve()
     app_dir = current_exe.parent
     script_path = Path(tempfile.gettempdir()) / f"igreja-update-{os.getpid()}.cmd"
+    log_path = Path(tempfile.gettempdir()) / f"igreja-update-{os.getpid()}.log"
     current_pid = os.getpid()
     source_path = str(downloaded_exe)
     target_path = str(current_exe)
+    backup_path = str(current_exe.with_suffix(current_exe.suffix + ".old"))
 
     script = "\n".join(
         [
@@ -200,19 +202,36 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             f'set "APP_PID={current_pid}"',
             f'set "SOURCE={source_path}"',
             f'set "TARGET={target_path}"',
+            f'set "BACKUP={backup_path}"',
+            f'set "LOG={log_path}"',
+            'echo [%date% %time%] Iniciando atualizacao. > "%LOG%"',
+            'echo SOURCE=%SOURCE% >> "%LOG%"',
+            'echo TARGET=%TARGET% >> "%LOG%"',
             ":wait_exit",
             'tasklist /FI "PID eq %APP_PID%" 2>nul | find "%APP_PID%" >nul',
             "if not errorlevel 1 (",
             "  timeout /t 1 /nobreak >nul",
             "  goto wait_exit",
             ")",
+            'echo [%date% %time%] Processo principal encerrado. >> "%LOG%"',
+            'if not exist "%SOURCE%" (',
+            '  echo [%date% %time%] ERRO: arquivo baixado nao encontrado. >> "%LOG%"',
+            "  exit /b 1",
+            ")",
+            'del /Q "%BACKUP%" >nul 2>&1',
             "for /L %%I in (1,1,90) do (",
-            '  move /Y "%SOURCE%" "%TARGET%" >nul 2>&1 && goto cleanup',
+            '  move /Y "%TARGET%" "%BACKUP%" >> "%LOG%" 2>&1 && (',
+            '    move /Y "%SOURCE%" "%TARGET%" >> "%LOG%" 2>&1 && goto cleanup',
+            '    move /Y "%BACKUP%" "%TARGET%" >> "%LOG%" 2>&1',
+            "  )",
             "  timeout /t 1 /nobreak >nul",
             ")",
+            'echo [%date% %time%] ERRO: nao foi possivel substituir o executavel. >> "%LOG%"',
             "exit /b 1",
             ":cleanup",
+            'echo [%date% %time%] Atualizacao aplicada. >> "%LOG%"',
             'del /Q "%SOURCE%" >nul 2>&1',
+            'del /Q "%BACKUP%" >nul 2>&1',
             'del /Q "%~f0" >nul 2>&1',
         ]
     )
