@@ -1173,6 +1173,87 @@ class BaixarFrame(ttk.Frame):
         }):
             yield attempt_opts
 
+    def _iter_cut_download_attempts(self, fmt_mode, quality_choice, outtmpl, reserved_path):
+        if self._is_music_mode(fmt_mode):
+            yield {
+                **self._youtube_common_args(outtmpl, "mp3"),
+                "format": "bestaudio[ext=m4a]/bestaudio/best",
+                "keepvideo": False,
+                "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}],
+            }
+            return
+
+        holyrics_mode = self._is_holyrics_profile()
+        format_attempts = (
+            self._build_yt_holyrics_relaxed_attempts(quality_choice)
+            if holyrics_mode
+            else self._build_best_quality_attempts(quality_choice)
+        )
+        source_outtmpl = outtmpl
+        if holyrics_mode:
+            source_outtmpl = f"{os.path.splitext(reserved_path)[0]}.__source__.%(ext)s"
+
+        for attempt_opts in self._iter_ydl_attempts({
+            **self._youtube_common_args(source_outtmpl, "mp4" if holyrics_mode else "mkv"),
+            "format": format_attempts[0],
+            "_format_attempts": format_attempts,
+        }):
+            yield attempt_opts
+
+    def _download_cut_with_ytdlp(self, url, fmt_mode, quality_choice, outtmpl, reserved_path, cut_range):
+        y = self._yt_dlp
+        if y is None:
+            raise RuntimeError("yt-dlp nao esta disponivel para baixar o trecho.")
+
+        self._queue_event("progress_busy", True)
+        self._queue_event("status", "Baixando apenas o trecho selecionado...")
+
+        last_error = None
+        for attempt_opts in self._iter_cut_download_attempts(fmt_mode, quality_choice, outtmpl, reserved_path):
+            attempt_opts = self._add_cut_options(attempt_opts, cut_range)
+            try:
+                with y.YoutubeDL(attempt_opts) as ydl:
+                    ydl.download([url])
+                last_error = None
+                break
+            except y.utils.DownloadCancelled:
+                raise
+            except Exception as exc:
+                last_error = exc
+                continue
+
+        if last_error is not None:
+            raise last_error
+
+        if self._is_music_mode(fmt_mode):
+            final_path = self._resolve_completed_output_path(reserved_path, expected_ext="mp3")
+            self._validate_cut_output(final_path, expects_video=False)
+            return final_path
+
+        if self._is_holyrics_profile():
+            source_final_path = None
+            stem = os.path.splitext(reserved_path)[0]
+            for ext in ("mp4", "mkv", "webm"):
+                candidate = f"{stem}.__source__.{ext}"
+                if os.path.exists(candidate):
+                    source_final_path = candidate
+                    break
+            if not source_final_path:
+                raise RuntimeError("O trecho foi baixado, mas o arquivo intermediario para conversao nao foi encontrado.")
+
+            self._transcode_to_holyrics(source_final_path, reserved_path)
+            try:
+                if os.path.exists(source_final_path):
+                    os.remove(source_final_path)
+            except Exception:
+                pass
+            self._validate_cut_output(reserved_path, expects_video=True)
+            return reserved_path
+
+        final_path = self._resolve_completed_output_path(reserved_path, expected_ext="mkv")
+        self._validate_cut_output(final_path, expects_video=True)
+        return final_path
+
     def _download_cut_with_ffmpeg(self, url, fmt_mode, quality_choice, outtmpl, reserved_path, cut_range):
         start, end = cut_range
         duration = end - start
@@ -1902,14 +1983,29 @@ class BaixarFrame(ttk.Frame):
             self._queue_event("reserved_output_file", reserved_path)
 
             if cut_range:
-                final_path = self._download_cut_with_ffmpeg(
-                    url,
-                    fmt_mode,
-                    quality_choice,
-                    outtmpl,
-                    reserved_path,
-                    cut_range,
-                )
+                try:
+                    final_path = self._download_cut_with_ytdlp(
+                        url,
+                        fmt_mode,
+                        quality_choice,
+                        outtmpl,
+                        reserved_path,
+                        cut_range,
+                    )
+                except Exception as exc:
+                    if self._yt_dlp is not None and isinstance(exc, self._yt_dlp.utils.DownloadCancelled):
+                        self._cleanup_partial()
+                        self._queue_event("canceled")
+                        return
+                    self._queue_event("status", "Tentando corte direto com FFmpeg...")
+                    final_path = self._download_cut_with_ffmpeg(
+                        url,
+                        fmt_mode,
+                        quality_choice,
+                        outtmpl,
+                        reserved_path,
+                        cut_range,
+                    )
                 self._cleanup_download_sidecars(final_path, reserved_path)
                 self.downloaded_file = final_path
                 self._queue_event("downloaded_file", final_path)
