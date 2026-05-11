@@ -231,6 +231,10 @@ def ensure_application_license() -> bool:
                 "Conecte a internet e valide novamente."
             )
         except LicenseValidationError as exc:
+            error_text = str(exc)
+            blocking_terms = ("bloqueada", "expirou", "renovada")
+            if local_license_is_usable_offline(local_state) and not any(term in error_text.lower() for term in blocking_terms):
+                return True
             initial_message = str(exc)
         else:
             initial_message = ""

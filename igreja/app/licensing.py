@@ -71,8 +71,25 @@ def licensing_storage_dir() -> Path:
     return Path(base) / APP_NAME
 
 
+def machine_license_storage_dir() -> Path | None:
+    if not sys.platform.startswith("win"):
+        return None
+    base = os.environ.get("PROGRAMDATA") or r"C:\ProgramData"
+    return Path(base) / APP_NAME
+
+
 def license_state_path() -> Path:
     return licensing_storage_dir() / LICENSE_STATE_FILE
+
+
+def license_state_paths() -> list[Path]:
+    paths = [license_state_path()]
+    machine_dir = machine_license_storage_dir()
+    if machine_dir:
+        machine_path = machine_dir / LICENSE_STATE_FILE
+        if machine_path not in paths:
+            paths.append(machine_path)
+    return paths
 
 
 def load_license_settings() -> dict:
@@ -112,30 +129,48 @@ def device_has_bypass(settings: dict | None = None) -> bool:
 
 
 def load_local_license_state() -> dict:
-    path = license_state_path()
-    if not path.exists():
-        return {}
-    try:
-        with path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
-            return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
+    primary_path = license_state_path()
+    for path in license_state_paths():
+        if not path.exists():
+            continue
+        try:
+            with path.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+            if not isinstance(data, dict):
+                continue
+            if path != primary_path:
+                try:
+                    save_local_license_state(data)
+                except Exception:
+                    pass
+            return data
+        except Exception:
+            continue
+    return {}
 
 
 def save_local_license_state(data: dict) -> None:
-    target = license_state_path()
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("w", encoding="utf-8") as file:
-        json.dump(data, file, ensure_ascii=False, indent=2)
+    saved = False
+    last_error = None
+    for target in license_state_paths():
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with target.open("w", encoding="utf-8") as file:
+                json.dump(data, file, ensure_ascii=False, indent=2)
+            saved = True
+        except Exception as exc:
+            last_error = exc
+
+    if not saved and last_error:
+        raise last_error
 
 
 def clear_local_license_state() -> None:
-    target = license_state_path()
-    try:
-        target.unlink(missing_ok=True)
-    except Exception:
-        pass
+    for target in license_state_paths():
+        try:
+            target.unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 def machine_name() -> str:
