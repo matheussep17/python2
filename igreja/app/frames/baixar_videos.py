@@ -47,11 +47,16 @@ class BaixarFrame(ttk.Frame):
         self.selected_format = ttk.StringVar(value="Música")
         self.selected_quality = ttk.StringVar(value="1080p")
         self.video_profile = ttk.StringVar(value="Compatível com Holyrics")
+        self.download_mode = ttk.StringVar(value="Completo")
+        self.cut_start = ttk.StringVar(value="")
+        self.cut_end = ttk.StringVar(value="")
 
         self.downloaded_file = None
         self._reserved_output_file = None
         self.cancel_requested = False
         self._last_tmp_file = None
+        self._last_indeterminate_progress = 0.0
+        self._progress_is_busy = False
         self._yt_dlp = None
         self._pytubefix = None
         self._quality_pack_options = {}
@@ -196,6 +201,45 @@ class BaixarFrame(ttk.Frame):
         self._profile_widgets = [self.profile_label, self.profile_menu]
         self._profile_pack_options = {w: w.grid_info() for w in self._profile_widgets}
 
+        ttk.Label(opts_inner, text="Download:", font=("Helvetica", 13)).grid(row=1, column=0, sticky="w", pady=(12, 0))
+        self.mode_menu = ttk.Combobox(
+            opts_inner,
+            textvariable=self.download_mode,
+            values=["Completo", "Cortado"],
+            state="readonly",
+            width=12,
+        )
+        self.mode_menu.grid(row=1, column=1, sticky="w", padx=(8, 20), pady=(12, 0))
+        self.mode_menu.bind("<<ComboboxSelected>>", self._on_download_mode_change)
+
+        self.cut_start_label = ttk.Label(opts_inner, text="Inicio:", font=("Helvetica", 13))
+        self.cut_start_label.grid(row=1, column=2, sticky="w", pady=(12, 0))
+        self.cut_start_entry = ttk.Entry(opts_inner, textvariable=self.cut_start, width=12, font=("Helvetica", 12))
+        self.cut_start_entry.grid(row=1, column=3, sticky="w", padx=(8, 0), pady=(12, 0))
+
+        self.cut_end_label = ttk.Label(opts_inner, text="Fim:", font=("Helvetica", 13))
+        self.cut_end_label.grid(row=1, column=4, sticky="w", padx=(20, 0), pady=(12, 0))
+        self.cut_end_entry = ttk.Entry(opts_inner, textvariable=self.cut_end, width=12, font=("Helvetica", 12))
+        self.cut_end_entry.grid(row=1, column=5, sticky="w", padx=(8, 0), pady=(12, 0))
+
+        self.cut_hint_label = ttk.Label(
+            opts_inner,
+            text="Use minutos ou tempo: 5, 12:30, 1:02:15",
+            style="SurfaceMuted.TLabel",
+        )
+        self.cut_hint_label.grid(row=2, column=1, columnspan=5, sticky="w", pady=(4, 0))
+        self._cut_widgets = [
+            self.cut_start_label,
+            self.cut_start_entry,
+            self.cut_end_label,
+            self.cut_end_entry,
+            self.cut_hint_label,
+        ]
+        self._cut_grid_options = {w: w.grid_info() for w in self._cut_widgets}
+        self.cut_start.trace_add("write", lambda *_: self._update_action_state())
+        self.cut_end.trace_add("write", lambda *_: self._update_action_state())
+        self._apply_cut_visibility()
+
         # --- Ações ---
         self.controls_frame = ttk.Frame(card, style="Card.TFrame")
         self.controls_frame.pack_forget()
@@ -337,6 +381,63 @@ class BaixarFrame(ttk.Frame):
 
         return [dict(base_opts)]
 
+    def _is_cut_mode(self):
+        return self.download_mode.get() == "Cortado"
+
+    def _parse_cut_time(self, value):
+        text = str(value or "").strip().replace(",", ".")
+        if not text:
+            return None
+
+        if ":" not in text:
+            try:
+                return float(text) * 60
+            except ValueError:
+                return None
+
+        parts = text.split(":")
+        if len(parts) not in (2, 3):
+            return None
+
+        try:
+            numbers = [float(part) for part in parts]
+        except ValueError:
+            return None
+
+        if any(number < 0 for number in numbers):
+            return None
+
+        if len(numbers) == 2:
+            minutes, seconds = numbers
+            return minutes * 60 + seconds
+
+        hours, minutes, seconds = numbers
+        return hours * 3600 + minutes * 60 + seconds
+
+    def _get_cut_range(self):
+        if not self._is_cut_mode():
+            return None
+
+        start = self._parse_cut_time(self.cut_start.get())
+        end = self._parse_cut_time(self.cut_end.get())
+        if start is None or end is None:
+            raise ValueError("Informe inicio e fim do corte. Exemplo: 12:30 ate 18:00.")
+        if start < 0 or end <= start:
+            raise ValueError("O fim do corte precisa ser maior que o inicio.")
+        return start, end
+
+    def _add_cut_options(self, ydl_opts, cut_range):
+        if not cut_range:
+            return ydl_opts
+        if self._yt_dlp is None:
+            raise RuntimeError("A opcao cortada precisa do yt-dlp disponivel.")
+
+        start, end = cut_range
+        opts = dict(ydl_opts)
+        opts["download_ranges"] = self._yt_dlp.utils.download_range_func(None, [(start, end)])
+        opts["force_keyframes_at_cuts"] = True
+        return opts
+
     def _build_youtube_extractor_args(self):
         return {
             "youtube": {
@@ -450,6 +551,22 @@ class BaixarFrame(ttk.Frame):
 
     def _on_format_change(self, _evt=None):
         self._apply_quality_visibility()
+
+    def _on_download_mode_change(self, _evt=None):
+        self._apply_cut_visibility()
+        self._update_action_state()
+
+    def _apply_cut_visibility(self):
+        show_cut = self._is_cut_mode()
+        for widget in getattr(self, "_cut_widgets", []):
+            try:
+                if show_cut:
+                    if not widget.winfo_ismapped():
+                        widget.grid(**(self._cut_grid_options.get(widget) or {}))
+                else:
+                    widget.grid_forget()
+            except Exception:
+                pass
 
     def _is_valid_url(self, url: str) -> bool:
         return bool(re.match(r"^https?://", (url or "").strip(), re.IGNORECASE))
@@ -611,7 +728,12 @@ class BaixarFrame(ttk.Frame):
 
         has_url = bool(self.url_entry.get().strip())
         has_destination = bool(self.destination_folder)
-        self.download_btn.config(state=NORMAL if has_url and has_destination else DISABLED)
+        has_valid_cut = True
+        if self._is_cut_mode():
+            start = self._parse_cut_time(self.cut_start.get())
+            end = self._parse_cut_time(self.cut_end.get())
+            has_valid_cut = start is not None and end is not None and end > start
+        self.download_btn.config(state=NORMAL if has_url and has_destination and has_valid_cut else DISABLED)
         self.cancel_btn.config(state=DISABLED)
         self._update_visibility()
 
@@ -653,8 +775,29 @@ class BaixarFrame(ttk.Frame):
             self.progress_frame.pack(fill="x", pady=(8, 4))
 
     def _hide_progress(self):
+        self._stop_busy_progress()
         if getattr(self, "progress_frame", None) and self.progress_frame.winfo_ismapped():
             self.progress_frame.pack_forget()
+
+    def _start_busy_progress(self):
+        if self._progress_is_busy:
+            return
+        try:
+            self.progress.configure(mode="indeterminate")
+            self.progress.start(12)
+            self._progress_is_busy = True
+        except Exception:
+            pass
+
+    def _stop_busy_progress(self):
+        if not self._progress_is_busy:
+            return
+        try:
+            self.progress.stop()
+            self.progress.configure(mode="determinate")
+            self._progress_is_busy = False
+        except Exception:
+            pass
 
     def _add_entry_context_menu(self, entry):
         menu = tk.Menu(self, tearoff=0)
@@ -718,9 +861,16 @@ class BaixarFrame(ttk.Frame):
 
                 if kind == "progress":
                     try:
+                        self._stop_busy_progress()
                         self.progress["value"] = float(payload)
                     except Exception:
                         pass
+
+                elif kind == "progress_busy":
+                    if payload:
+                        self._start_busy_progress()
+                    else:
+                        self._stop_busy_progress()
 
                 elif kind == "status":
                     self.status.config(text=str(payload or ""))
@@ -1274,6 +1424,12 @@ class BaixarFrame(ttk.Frame):
         self.destination_folder = dest
 
         try:
+            cut_range = self._get_cut_range()
+        except ValueError as exc:
+            messagebox.showerror("Corte invalido", str(exc))
+            return
+
+        try:
             import yt_dlp
             self._yt_dlp = yt_dlp
         except Exception:
@@ -1297,6 +1453,8 @@ class BaixarFrame(ttk.Frame):
         self._reserved_output_file = None
         self.cancel_requested = False
         self._last_tmp_file = None
+        self._last_indeterminate_progress = 0.0
+        self._progress_is_busy = False
 
         self.is_running = True
         self._show_progress()
@@ -1309,7 +1467,7 @@ class BaixarFrame(ttk.Frame):
             qual = "1080p"
             self.selected_quality.set(qual)
 
-        threading.Thread(target=self.download_media_v2, args=(url, fmt_mode, qual), daemon=True).start()
+        threading.Thread(target=self.download_media_v2, args=(url, fmt_mode, qual, cut_range), daemon=True).start()
 
     def cancel_download(self):
         if self.cancel_requested:
@@ -1334,7 +1492,45 @@ class BaixarFrame(ttk.Frame):
             except Exception:
                 pass
 
-    def download_media(self, url, fmt_mode, quality_choice):
+    def _cleanup_download_sidecars(self, *base_paths):
+        folders_and_names = []
+        for path in base_paths:
+            if not path:
+                continue
+            folder = os.path.dirname(os.path.abspath(path))
+            name = os.path.basename(path)
+            if folder and name:
+                folders_and_names.append((folder, name))
+
+        if self._last_tmp_file:
+            tmp_path = os.path.abspath(self._last_tmp_file)
+            folders_and_names.append((os.path.dirname(tmp_path), os.path.basename(tmp_path)))
+
+        for folder, name in folders_and_names:
+            try:
+                entries = os.listdir(folder)
+            except Exception:
+                continue
+
+            for entry in entries:
+                if entry == name:
+                    continue
+                is_sidecar = (
+                    entry == f"{name}.ytdl"
+                    or entry == f"{name}.part"
+                    or (entry.startswith(f"{name}.part-Frag") and entry.endswith(".part"))
+                )
+                if not is_sidecar:
+                    continue
+
+                full_path = os.path.join(folder, entry)
+                try:
+                    if os.path.isfile(full_path):
+                        os.remove(full_path)
+                except Exception:
+                    pass
+
+    def download_media(self, url, fmt_mode, quality_choice, cut_range=None):
         try:
             outtmpl, reserved_path = self._resolve_download_target(url, fmt_mode, quality_choice)
             self._queue_event("reserved_output_file", reserved_path)
@@ -1419,6 +1615,7 @@ class BaixarFrame(ttk.Frame):
             y = self._yt_dlp
             last_error = None
             for attempt_opts in self._iter_ydl_attempts(ydl_opts):
+                attempt_opts = self._add_cut_options(attempt_opts, cut_range)
                 try:
                     with y.YoutubeDL(attempt_opts) as ydl:
                         ydl.download([url])
@@ -1476,7 +1673,7 @@ class BaixarFrame(ttk.Frame):
                 return
             self._queue_event("error", msg)
 
-    def download_media_v2(self, url, fmt_mode, quality_choice):
+    def download_media_v2(self, url, fmt_mode, quality_choice, cut_range=None):
         try:
             outtmpl, reserved_path = self._resolve_download_target(url, fmt_mode, quality_choice)
             self._queue_event("reserved_output_file", reserved_path)
@@ -1519,7 +1716,11 @@ class BaixarFrame(ttk.Frame):
                 y = self._yt_dlp
                 last_error = None
                 for attempt_opts in attempt_opts_list:
+                    attempt_opts = self._add_cut_options(attempt_opts, cut_range)
                     try:
+                        if cut_range:
+                            self._queue_event("progress_busy", True)
+                            self._queue_event("status", "Baixando trecho selecionado...")
                         with y.YoutubeDL(attempt_opts) as ydl:
                             ydl.download([url])
                         last_error = None
@@ -1540,7 +1741,9 @@ class BaixarFrame(ttk.Frame):
             used_pytubefix = False
             pytubefix_error = None
 
-            if not used_yt_dlp and self._is_youtube_service() and self._pytubefix is not None:
+            if not used_yt_dlp and cut_range:
+                pytubefix_error = RuntimeError("A opcao cortada usa yt-dlp para baixar apenas o trecho selecionado.")
+            elif not used_yt_dlp and self._is_youtube_service() and self._pytubefix is not None:
                 try:
                     final_path = self._download_with_pytubefix(url, fmt_mode, quality_choice, reserved_path)
                     used_pytubefix = True
@@ -1581,6 +1784,7 @@ class BaixarFrame(ttk.Frame):
                 expected_ext = "mp3" if self._is_music_mode(fmt_mode) else "mkv"
                 final_path = self._resolve_completed_output_path(reserved_path, expected_ext=expected_ext)
 
+            self._cleanup_download_sidecars(final_path, reserved_path)
             self.downloaded_file = final_path
             self._queue_event("downloaded_file", final_path)
             self._queue_event("done")
@@ -1630,6 +1834,7 @@ class BaixarFrame(ttk.Frame):
             suffix = f" - Selecionado: {chosen} {fmt_note}".strip()
             text = f"Concluído! {suffix}".strip()
 
+            self._queue_event("progress_busy", False)
             self._queue_event("progress", 100)
             self._queue_event("status", text)
             self._queue_event("notify", "Download finalizado")
@@ -1639,6 +1844,8 @@ class BaixarFrame(ttk.Frame):
             downloaded = d.get("downloaded_bytes")
             total = d.get("total_bytes") or d.get("total_bytes_estimate")
             speed = d.get("speed")
+            fragment_index = d.get("fragment_index")
+            fragment_count = d.get("fragment_count")
 
             pct = None
             if downloaded is not None and total:
@@ -1649,6 +1856,16 @@ class BaixarFrame(ttk.Frame):
 
             if pct is not None:
                 self._queue_event("progress", pct)
+                self._last_indeterminate_progress = pct
+            elif fragment_index and fragment_count:
+                try:
+                    pct = max(0.0, min(99.0, (float(fragment_index) / float(fragment_count)) * 100.0))
+                    self._queue_event("progress", pct)
+                    self._last_indeterminate_progress = pct
+                except Exception:
+                    self._queue_event("progress_busy", True)
+            elif downloaded is not None:
+                self._queue_event("progress_busy", True)
 
             parts = ["Baixando..."]
             if pct is not None:
@@ -1656,6 +1873,9 @@ class BaixarFrame(ttk.Frame):
 
             if downloaded is not None:
                 parts.append(f"({format_bytes(downloaded)} de {format_bytes(total) if total else '??'})")
+
+            if pct is None and fragment_index and fragment_count:
+                parts.append(f"fragmento {fragment_index}/{fragment_count}")
 
             if speed:
                 sp = format_bytes(speed)
