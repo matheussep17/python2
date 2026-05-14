@@ -1,5 +1,7 @@
+import hashlib
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -7,7 +9,7 @@ from pathlib import Path
 
 import requests
 
-from app.utils import app_base_dir, load_app_config
+from app.utils import load_app_config
 from app.version import APP_NAME, APP_VERSION
 
 
@@ -78,6 +80,7 @@ def _fetch_manifest_from_url(manifest_url: str, timeout: int) -> dict:
     download_url = str(payload.get("url", "") or "").strip()
     notes = str(payload.get("notes", "") or "").strip()
     expected_size = int(payload.get("size", 0) or 0)
+    digest = str(payload.get("digest") or payload.get("sha256") or "").strip()
 
     if not version or not download_url:
         raise UpdateError("O manifesto precisa conter 'version' e 'url'.")
@@ -87,13 +90,14 @@ def _fetch_manifest_from_url(manifest_url: str, timeout: int) -> dict:
         "url": download_url,
         "notes": notes,
         "size": expected_size,
+        "digest": _normalize_sha256_digest(digest),
         "mandatory": bool(payload.get("mandatory", False)),
     }
 
 
 def _fetch_manifest_from_github_release(repo: str, asset_name: str, timeout: int) -> dict:
     repo = _normalize_github_repo(repo)
-    api_url = f"https://api.github.com/repos/{repo}/releases/latest"
+    api_url = f"https://api.github.com/repos/{repo}/releases?per_page=30"
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": f"{APP_NAME}/{APP_VERSION}",
@@ -104,24 +108,35 @@ def _fetch_manifest_from_github_release(repo: str, asset_name: str, timeout: int
         raise UpdateError(f"Nenhuma release encontrada em '{repo}'.")
     response.raise_for_status()
     payload = response.json()
+    if not isinstance(payload, list):
+        raise UpdateError("A resposta de releases do GitHub nao esta no formato esperado.")
 
+    manifests = []
+    for release in payload:
+        if not isinstance(release, dict):
+            continue
+        if release.get("draft") or release.get("prerelease"):
+            continue
+        try:
+            manifests.append(_build_github_release_manifest(repo, asset_name, release))
+        except UpdateError:
+            continue
+
+    if not manifests:
+        raise UpdateError(
+            f"Nao encontrei uma release valida de '{repo}' com o asset '{asset_name}'."
+        )
+
+    return sorted(manifests, key=lambda item: _parse_version(item["version"]), reverse=True)[0]
+
+
+def _build_github_release_manifest(repo: str, asset_name: str, payload: dict) -> dict:
     tag_name = str(payload.get("tag_name", "") or "").strip()
     version = _normalize_release_version(tag_name)
     notes = str(payload.get("body", "") or "").strip()
     assets = payload.get("assets", []) or []
 
-    selected_asset = None
-    for asset in assets:
-        if str(asset.get("name", "")).strip().lower() == asset_name.lower():
-            selected_asset = asset
-            break
-
-    if not selected_asset and assets:
-        for asset in assets:
-            name = str(asset.get("name", "")).strip().lower()
-            if name.endswith(".exe"):
-                selected_asset = asset
-                break
+    selected_asset = _select_release_asset(assets, asset_name)
 
     if not version:
         raise UpdateError("A release do GitHub precisa ter uma tag de versao, por exemplo 'v1.0.1'.")
@@ -136,9 +151,23 @@ def _fetch_manifest_from_github_release(repo: str, asset_name: str, timeout: int
         "url": download_url,
         "notes": notes,
         "size": int(selected_asset.get("size", 0) or 0),
+        "digest": _normalize_sha256_digest(str(selected_asset.get("digest", "") or "")),
         "mandatory": False,
         "source": f"github:{repo}",
     }
+
+
+def _select_release_asset(assets: list, asset_name: str) -> dict | None:
+    for asset in assets:
+        if str(asset.get("name", "")).strip().lower() == asset_name.lower():
+            return asset
+
+    for asset in assets:
+        name = str(asset.get("name", "")).strip().lower()
+        if name.endswith(".exe"):
+            return asset
+
+    return None
 
 
 def has_update(manifest: dict) -> bool:
@@ -179,6 +208,15 @@ def download_update_package(manifest: dict, progress_callback=None) -> Path:
     if downloaded_bytes <= 0:
         raise UpdateError("O arquivo de atualizacao foi baixado vazio.")
 
+    expected_digest = str(manifest.get("digest", "") or "").strip().lower()
+    if expected_digest:
+        downloaded_digest = _sha256_file(package_path)
+        if downloaded_digest != expected_digest:
+            raise UpdateError(
+                "O arquivo de atualizacao baixado nao confere com a assinatura esperada. "
+                "Tente novamente em alguns minutos."
+            )
+
     return package_path
 
 
@@ -188,17 +226,18 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
 
     current_exe = Path(sys.executable).resolve()
     app_dir = current_exe.parent
+    staged_exe = _stage_update_exe(downloaded_exe, current_exe)
     script_path = Path(tempfile.gettempdir()) / f"igreja-update-{os.getpid()}.cmd"
     log_path = Path(tempfile.gettempdir()) / f"igreja-update-{os.getpid()}.log"
     current_pid = os.getpid()
-    source_path = str(downloaded_exe)
+    source_path = str(staged_exe)
     target_path = str(current_exe)
     backup_path = str(current_exe.with_suffix(current_exe.suffix + ".old"))
 
     script = "\n".join(
         [
             "@echo off",
-            "setlocal",
+            "setlocal EnableExtensions",
             f'set "APP_PID={current_pid}"',
             f'set "SOURCE={source_path}"',
             f'set "TARGET={target_path}"',
@@ -218,11 +257,30 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             '  echo [%date% %time%] ERRO: arquivo baixado nao encontrado. >> "%LOG%"',
             "  exit /b 1",
             ")",
+            'for %%A in ("%SOURCE%") do set "SOURCE_SIZE=%%~zA"',
+            'echo SOURCE_SIZE=%SOURCE_SIZE% >> "%LOG%"',
             'del /Q "%BACKUP%" >nul 2>&1',
             "for /L %%I in (1,1,90) do (",
-            '  move /Y "%TARGET%" "%BACKUP%" >> "%LOG%" 2>&1 && (',
-            '    move /Y "%SOURCE%" "%TARGET%" >> "%LOG%" 2>&1 && goto cleanup',
-            '    move /Y "%BACKUP%" "%TARGET%" >> "%LOG%" 2>&1',
+            '  echo [%date% %time%] Tentativa %%I de substituir o executavel. >> "%LOG%"',
+            '  move /Y "%TARGET%" "%BACKUP%" >> "%LOG%" 2>&1',
+            "  if errorlevel 1 (",
+            "    timeout /t 1 /nobreak >nul",
+            "  ) else (",
+            '    copy /Y "%SOURCE%" "%TARGET%" >> "%LOG%" 2>&1',
+            "    if errorlevel 1 (",
+            '      echo [%date% %time%] ERRO: falha ao copiar nova versao; restaurando backup. >> "%LOG%"',
+            '      del /Q "%TARGET%" >nul 2>&1',
+            '      move /Y "%BACKUP%" "%TARGET%" >> "%LOG%" 2>&1',
+            "      timeout /t 1 /nobreak >nul",
+            "    ) else (",
+            '      for %%A in ("%TARGET%") do set "TARGET_SIZE=%%~zA"',
+            '      call echo TARGET_SIZE=%%TARGET_SIZE%% >> "%LOG%"',
+            '      call if "%%TARGET_SIZE%%"=="%SOURCE_SIZE%" goto cleanup',
+            '      echo [%date% %time%] ERRO: tamanho final divergente; restaurando backup. >> "%LOG%"',
+            '      del /Q "%TARGET%" >nul 2>&1',
+            '      move /Y "%BACKUP%" "%TARGET%" >> "%LOG%" 2>&1',
+            "      timeout /t 1 /nobreak >nul",
+            "    )",
             "  )",
             "  timeout /t 1 /nobreak >nul",
             ")",
@@ -232,6 +290,7 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             'echo [%date% %time%] Atualizacao aplicada. >> "%LOG%"',
             'del /Q "%SOURCE%" >nul 2>&1',
             'del /Q "%BACKUP%" >nul 2>&1',
+            'start "" "%TARGET%"',
             'del /Q "%~f0" >nul 2>&1',
         ]
     )
@@ -245,12 +304,56 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
     )
 
 
+def _stage_update_exe(downloaded_exe: Path, current_exe: Path) -> Path:
+    downloaded_exe = Path(downloaded_exe).resolve()
+    current_exe = Path(current_exe).resolve()
+    if not downloaded_exe.exists():
+        raise UpdateError("O arquivo de atualizacao baixado nao foi encontrado.")
+
+    staged_exe = current_exe.with_name(f"{current_exe.stem}.update-{os.getpid()}{current_exe.suffix}")
+    try:
+        if staged_exe.exists():
+            staged_exe.unlink()
+        shutil.copy2(downloaded_exe, staged_exe)
+    except OSError as exc:
+        raise UpdateError(
+            "Nao consegui preparar a atualizacao na pasta do aplicativo. "
+            "Verifique se voce tem permissao de escrita nessa pasta ou execute o app como administrador."
+        ) from exc
+
+    try:
+        if staged_exe.stat().st_size != downloaded_exe.stat().st_size:
+            staged_exe.unlink(missing_ok=True)
+            raise UpdateError("A copia local da atualizacao ficou incompleta.")
+    except OSError as exc:
+        raise UpdateError("Nao foi possivel validar a copia local da atualizacao.") from exc
+
+    return staged_exe
+
+
 def _parse_version(value: str) -> tuple[int, ...]:
     parts = []
     for piece in str(value).replace("-", ".").split("."):
         digits = "".join(char for char in piece if char.isdigit())
         parts.append(int(digits or 0))
     return tuple(parts)
+
+
+def _normalize_sha256_digest(value: str) -> str:
+    digest = str(value or "").strip().lower()
+    if digest.startswith("sha256:"):
+        digest = digest.split(":", 1)[1].strip()
+    if re.fullmatch(r"[0-9a-f]{64}", digest):
+        return digest
+    return ""
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _normalize_release_version(tag_name: str) -> str:

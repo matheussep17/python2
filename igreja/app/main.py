@@ -762,7 +762,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             return
 
         self._set_status("Fechando para concluir a atualizacao...")
-        self.destroy()
+        self._on_close()
 
     def _finish_update_download_error(self, exc: Exception):
         if self._is_closing:

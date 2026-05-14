@@ -1,2 +1,2 @@
 APP_NAME = "Igreja"
-APP_VERSION = "2.0.14"
+APP_VERSION = "2.0.15"
