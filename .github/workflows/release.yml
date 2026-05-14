@@ -44,6 +44,10 @@ jobs:
         shell: pwsh
         run: .\.buildvenv\Scripts\python.exe -c "import tkinter, tkinter.ttk; print('tkinter ok:', tkinter.TkVersion)"
 
+      - name: Validate tag version
+        shell: pwsh
+        run: python .\scripts\validate_tag_version.py
+
       - name: Download FFmpeg for packaging
         shell: pwsh
         run: |
