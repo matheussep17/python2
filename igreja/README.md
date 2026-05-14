@@ -35,7 +35,9 @@ No `config.json`, o fluxo com GitHub Releases usa:
 {
   "github_update_repo": "matheussep17/python2",
   "github_update_asset_name": "Igreja.exe",
-  "auto_check_updates": true
+  "auto_check_updates": true,
+  "yt_dlp_auto_update": true,
+  "yt_dlp_check_interval_hours": 24
 }
 ```
 
@@ -52,6 +54,18 @@ Exemplo:
 ```
 
 O app pode checar isso ao abrir e também oferece o botão `Atualizar`.
+
+### Atualizacao do yt-dlp
+
+A aba de download tambem pode atualizar o `yt-dlp` separadamente do executavel. Ao abrir a tela, o app verifica no maximo uma vez por dia se existe uma versao nova no PyPI. Se houver, baixa o wheel oficial, extrai em uma pasta do usuario e passa a carregar essa versao antes da versao embutida no `.exe`.
+
+No Windows, o pacote externo fica em:
+
+```text
+%LOCALAPPDATA%\Igreja\runtime\yt-dlp\versions
+```
+
+Se a atualizacao externa falhar, o aplicativo continua usando o `yt-dlp` embutido no executavel. A tela tambem tem o botao `Atualizar yt-dlp` para forcar a verificacao manualmente.
 
 ### Fluxo automatico de release
 

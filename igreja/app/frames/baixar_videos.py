@@ -26,6 +26,11 @@ from app.utils import (
     get_output_folder,
     save_output_folder,
 )
+from app.yt_dlp_runtime import (
+    load_yt_dlp,
+    maybe_update_yt_dlp,
+    update_yt_dlp,
+)
 
 
 def app_base_dir() -> Path:
@@ -58,6 +63,7 @@ class BaixarFrame(ttk.Frame):
         self._last_indeterminate_progress = 0.0
         self._progress_is_busy = False
         self._yt_dlp = None
+        self._yt_dlp_update_in_progress = False
         self._pytubefix = None
         self._quality_pack_options = {}
         self.is_running = False
@@ -73,6 +79,7 @@ class BaixarFrame(ttk.Frame):
         self.bind_all("<Return>", self._handle_return_key, add="+")
         self.bind_all("<Escape>", self._handle_escape_key, add="+")
         self.after(100, self._drain_ui_queue)
+        self.after(1600, self._schedule_yt_dlp_auto_update)
         self._apply_quality_visibility()
 
     def _build_ui(self):
@@ -113,6 +120,13 @@ class BaixarFrame(ttk.Frame):
         )
         self.service_menu.pack(side="left", padx=(8, 0))
         self.service_menu.bind("<<ComboboxSelected>>", self._on_service_change)
+        self.update_engine_btn = ttk.Button(
+            svc_frame,
+            text="Atualizar yt-dlp",
+            command=self.update_yt_dlp_engine,
+            style="Action.TButton",
+        )
+        self.update_engine_btn.pack(side="left", padx=(10, 0))
 
         ttk.Separator(card).pack(fill="x", pady=12)
 
@@ -607,9 +621,7 @@ class BaixarFrame(ttk.Frame):
 
     def _fetch_url_title(self, url: str):
         try:
-            import yt_dlp
-
-            self._yt_dlp = yt_dlp
+            self._yt_dlp = load_yt_dlp()
             info = self._probe_media_info(url)
 
             title = (
@@ -637,6 +649,43 @@ class BaixarFrame(ttk.Frame):
         except Exception:
             fallback_title = self._fetch_youtube_oembed_title(url)
             self._queue_event("preview_title", fallback_title or "(não foi possível obter o título)")
+
+    def _schedule_yt_dlp_auto_update(self):
+        if self._yt_dlp_update_in_progress:
+            return
+        self._yt_dlp_update_in_progress = True
+        threading.Thread(target=self._yt_dlp_auto_update_worker, daemon=True).start()
+
+    def _yt_dlp_auto_update_worker(self):
+        try:
+            result = maybe_update_yt_dlp()
+            if result.get("updated"):
+                self._queue_event("yt_dlp_updated", result.get("version", ""))
+        except Exception:
+            pass
+        finally:
+            self._yt_dlp_update_in_progress = False
+
+    def update_yt_dlp_engine(self):
+        if self._yt_dlp_update_in_progress:
+            messagebox.showinfo("yt-dlp", "Ja existe uma atualizacao do yt-dlp em andamento.")
+            return
+
+        self._yt_dlp_update_in_progress = True
+        self.update_engine_btn.config(state=DISABLED)
+        self.status.config(text="Atualizando yt-dlp...")
+        self._show_progress()
+        self.progress.configure(mode="indeterminate")
+        self.progress.start(12)
+        self.on_status("Atualizando yt-dlp...")
+        threading.Thread(target=self._yt_dlp_manual_update_worker, daemon=True).start()
+
+    def _yt_dlp_manual_update_worker(self):
+        try:
+            result = update_yt_dlp()
+            self._queue_event("yt_dlp_manual_updated", result)
+        except Exception as exc:
+            self._queue_event("yt_dlp_update_error", str(exc))
 
     def _fetch_thumbnail(self, url: str):
         try:
@@ -722,6 +771,7 @@ class BaixarFrame(ttk.Frame):
     def _update_action_state(self):
         if self.is_running:
             self.download_btn.config(state=DISABLED)
+            self.update_engine_btn.config(state=DISABLED)
             self.cancel_btn.config(state=NORMAL if not self.cancel_requested else DISABLED)
             self._update_visibility()
             return
@@ -734,6 +784,7 @@ class BaixarFrame(ttk.Frame):
             end = self._parse_cut_time(self.cut_end.get())
             has_valid_cut = start is not None and end is not None and end > start
         self.download_btn.config(state=NORMAL if has_url and has_destination and has_valid_cut else DISABLED)
+        self.update_engine_btn.config(state=DISABLED if self._yt_dlp_update_in_progress else NORMAL)
         self.cancel_btn.config(state=DISABLED)
         self._update_visibility()
 
@@ -891,6 +942,17 @@ class BaixarFrame(ttk.Frame):
                 elif kind == "preview_thumb":
                     self._set_thumbnail(payload)
 
+                elif kind == "yt_dlp_updated":
+                    version = str(payload or "").strip()
+                    if version:
+                        self.on_status(f"yt-dlp atualizado para {version}")
+
+                elif kind == "yt_dlp_manual_updated":
+                    self._finish_yt_dlp_update(payload or {})
+
+                elif kind == "yt_dlp_update_error":
+                    self._finish_yt_dlp_update_error(str(payload or ""))
+
                 elif kind == "done":
                     self._finish_ok()
 
@@ -905,6 +967,33 @@ class BaixarFrame(ttk.Frame):
         finally:
             if self.winfo_exists():
                 self.after(100, self._drain_ui_queue)
+
+    def _finish_yt_dlp_update(self, result: dict):
+        self._yt_dlp_update_in_progress = False
+        self._stop_busy_progress()
+        self._hide_progress()
+        self.update_engine_btn.config(state=NORMAL)
+
+        version = str(result.get("version") or result.get("latest_version") or "").strip()
+        if result.get("updated"):
+            message = f"yt-dlp atualizado para {version}."
+        else:
+            message = f"yt-dlp ja esta atualizado ({version})." if version else "yt-dlp ja esta atualizado."
+
+        self.status.config(text=message)
+        self.on_status(message)
+        try:
+            self._yt_dlp = load_yt_dlp()
+        except Exception:
+            pass
+
+    def _finish_yt_dlp_update_error(self, message: str):
+        self._yt_dlp_update_in_progress = False
+        self._stop_busy_progress()
+        self._hide_progress()
+        self.update_engine_btn.config(state=NORMAL)
+        self.status.config(text="Falha ao atualizar yt-dlp.")
+        messagebox.showerror("yt-dlp", f"Falha ao atualizar yt-dlp:\n{message}")
 
     def _quality_height(self, quality_choice):
         if quality_choice == "best":
@@ -1734,8 +1823,7 @@ class BaixarFrame(ttk.Frame):
             return
 
         try:
-            import yt_dlp
-            self._yt_dlp = yt_dlp
+            self._yt_dlp = load_yt_dlp()
         except Exception:
             self._yt_dlp = None
 

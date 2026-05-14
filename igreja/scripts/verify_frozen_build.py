@@ -32,6 +32,8 @@ REQUIRED_PYZ_MODULES = (
     "ttkbootstrap.localization",
     "tkinterdnd2",
     "tkinterdnd2.TkinterDnD",
+    "yt_dlp",
+    "yt_dlp.version",
 )
 
 
