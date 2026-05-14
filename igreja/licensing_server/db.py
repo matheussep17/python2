@@ -2,7 +2,7 @@ import hashlib
 import os
 import secrets
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -46,6 +46,13 @@ def init_db() -> None:
             )
             """
         )
+        existing_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(licenses)").fetchall()
+        }
+        if "privacy_deleted_at" not in existing_columns:
+            conn.execute("ALTER TABLE licenses ADD COLUMN privacy_deleted_at TEXT")
+        if "privacy_erasure_reason" not in existing_columns:
+            conn.execute("ALTER TABLE licenses ADD COLUMN privacy_erasure_reason TEXT")
         conn.commit()
 
 
@@ -66,7 +73,10 @@ def verify_password(password: str, encoded: str) -> bool:
 
 def fetch_license_by_username(username: str):
     with connect() as conn:
-        return conn.execute("SELECT * FROM licenses WHERE username = ?", (username.strip(),)).fetchone()
+        return conn.execute(
+            "SELECT * FROM licenses WHERE username = ? AND privacy_deleted_at IS NULL",
+            (username.strip(),),
+        ).fetchone()
 
 
 def create_license(username: str, password: str, expires_at: str | None = None, notes: str = ""):
@@ -95,6 +105,7 @@ def list_licenses():
                 id, username, status, device_name, device_fingerprint,
                 created_at, activated_at, last_validated_at, expires_at, notes
             FROM licenses
+            WHERE privacy_deleted_at IS NULL
             ORDER BY username
             """
         ).fetchall()
@@ -104,6 +115,78 @@ def delete_license(username: str):
     with connect() as conn:
         conn.execute("DELETE FROM licenses WHERE username = ?", (username.strip(),))
         conn.commit()
+
+
+def export_license_data(username: str):
+    with connect() as conn:
+        return conn.execute(
+            """
+            SELECT
+                id, username, status, device_name, device_fingerprint,
+                created_at, activated_at, last_validated_at, expires_at, notes,
+                privacy_deleted_at, privacy_erasure_reason
+            FROM licenses
+            WHERE username = ?
+            """,
+            (username.strip(),),
+        ).fetchone()
+
+
+def anonymize_license(username: str, reason: str = "") -> bool:
+    row = export_license_data(username)
+    if not row:
+        return False
+
+    now = utcnow_text()
+    anonymous_username = f"apagado-{row['id']}-{secrets.token_hex(4)}"
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE licenses
+            SET username = ?,
+                password_hash = ?,
+                status = 'revoked',
+                device_fingerprint = NULL,
+                device_name = NULL,
+                activation_token = NULL,
+                notes = NULL,
+                privacy_deleted_at = ?,
+                privacy_erasure_reason = ?
+            WHERE username = ?
+            """,
+            (
+                anonymous_username,
+                hash_password(secrets.token_urlsafe(32)),
+                now,
+                reason.strip(),
+                username.strip(),
+            ),
+        )
+        conn.commit()
+    return True
+
+
+def purge_inactive_licenses(retention_days: int) -> int:
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max(1, int(retention_days)))
+    cutoff_text = cutoff.isoformat()
+    with connect() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE licenses
+            SET device_fingerprint = NULL,
+                device_name = NULL,
+                activation_token = NULL,
+                notes = NULL,
+                privacy_deleted_at = COALESCE(privacy_deleted_at, ?),
+                privacy_erasure_reason = COALESCE(privacy_erasure_reason, 'retention_period_expired')
+            WHERE privacy_deleted_at IS NULL
+              AND status != 'active'
+              AND COALESCE(last_validated_at, activated_at, created_at) < ?
+            """,
+            (utcnow_text(), cutoff_text),
+        )
+        conn.commit()
+        return int(cursor.rowcount or 0)
 
 
 def update_license_binding(username: str, device_fingerprint: str, device_name: str, activation_token: str):

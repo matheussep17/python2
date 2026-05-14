@@ -120,6 +120,16 @@ class LicenseActivationWindow(ttk.Window):
             justify="left",
             wraplength=560,
         ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(12, 0))
+        ttk.Label(
+            inner,
+            text=(
+                "Ao ativar, o servidor recebe o login da licenca, um identificador tecnico deste dispositivo "
+                "e datas de validacao para controle de acesso e suporte."
+            ),
+            style="SurfaceMuted.TLabel",
+            justify="left",
+            wraplength=560,
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         status_frame = ttk.Frame(card, style="Card.TFrame")
         status_frame.grid(row=6, column=0, sticky="ew", pady=(18, 0))

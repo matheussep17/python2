@@ -10,7 +10,17 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from licensing_server.db import create_license, init_db, list_licenses, reset_device, set_expiration, update_status
+from licensing_server.db import (
+    anonymize_license,
+    create_license,
+    export_license_data,
+    init_db,
+    list_licenses,
+    purge_inactive_licenses,
+    reset_device,
+    set_expiration,
+    update_status,
+)
 
 
 def random_credential(length: int = 10) -> str:
@@ -73,6 +83,42 @@ def cmd_extend(args):
     print(f"Nova validade de {args.username}: {expires_at or 'permanente'}")
 
 
+def cmd_export(args):
+    row = export_license_data(args.username)
+    if not row:
+        print("Licenca nao encontrada.")
+        return
+
+    fields = (
+        "id",
+        "username",
+        "status",
+        "device_name",
+        "device_fingerprint",
+        "created_at",
+        "activated_at",
+        "last_validated_at",
+        "expires_at",
+        "notes",
+        "privacy_deleted_at",
+        "privacy_erasure_reason",
+    )
+    for field in fields:
+        print(f"{field}: {row[field]}")
+
+
+def cmd_anonymize(args):
+    if anonymize_license(args.username, args.reason or ""):
+        print(f"Dados pessoais de {args.username} anonimizados.")
+    else:
+        print("Licenca nao encontrada.")
+
+
+def cmd_purge(args):
+    changed = purge_inactive_licenses(args.retention_days)
+    print(f"Licencas inativas anonimizadas: {changed}")
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description="Gerenciador de licenças do app Igreja.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -105,6 +151,19 @@ def build_parser():
     extend_parser.add_argument("--days", type=int, help="Quantidade de dias a partir de agora.")
     extend_parser.add_argument("--expires-at", help="Validade em ISO 8601. Omitido com ambos vazios = permanente.")
     extend_parser.set_defaults(func=cmd_extend)
+
+    export_parser = subparsers.add_parser("export-data", help="Exporta dados pessoais associados a uma licenca.")
+    export_parser.add_argument("username")
+    export_parser.set_defaults(func=cmd_export)
+
+    anonymize_parser = subparsers.add_parser("anonymize", help="Anonimiza dados pessoais de uma licenca.")
+    anonymize_parser.add_argument("username")
+    anonymize_parser.add_argument("--reason", help="Motivo ou protocolo da solicitacao.")
+    anonymize_parser.set_defaults(func=cmd_anonymize)
+
+    purge_parser = subparsers.add_parser("purge-inactive", help="Anonimiza licencas inativas alem do prazo.")
+    purge_parser.add_argument("--retention-days", type=int, default=1095)
+    purge_parser.set_defaults(func=cmd_purge)
 
     return parser
 

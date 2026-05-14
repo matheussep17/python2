@@ -7,11 +7,14 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from licensing_server.db import (
+    anonymize_license,
     create_license,
     delete_license,
+    export_license_data,
     fetch_license_by_username,
     init_db,
     list_licenses,
+    purge_inactive_licenses,
     reset_device,
     set_expiration,
     touch_license_validation,
@@ -40,38 +43,44 @@ def parse_iso(value: str | None):
 
 OFFLINE_GRACE_HOURS = max(1, int(os.environ.get("IGREJA_OFFLINE_GRACE_HOURS", str(24 * 365 * 20))))
 ADMIN_TOKEN = str(os.environ.get("IGREJA_ADMIN_TOKEN", "") or "").strip()
+PRIVACY_CONTACT = str(os.environ.get("IGREJA_PRIVACY_CONTACT", "") or "").strip()
+PRIVACY_RETENTION_DAYS = max(1, int(os.environ.get("IGREJA_PRIVACY_RETENTION_DAYS", "1095")))
 
 app = FastAPI(title="Igreja Licensing API", version="1.0.0")
 init_db()
 
 
 class ActivateRequest(BaseModel):
-    username: str
-    password: str
-    device_fingerprint: str
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=200)
+    device_fingerprint: str = Field(min_length=16, max_length=128)
     legacy_device_fingerprints: list[str] = Field(default_factory=list)
-    device_name: str | None = None
-    app_version: str | None = None
+    device_name: str | None = Field(default=None, max_length=120)
+    app_version: str | None = Field(default=None, max_length=40)
 
 
 class ValidateRequest(BaseModel):
-    username: str
-    activation_token: str
-    device_fingerprint: str
+    username: str = Field(min_length=1, max_length=120)
+    activation_token: str = Field(min_length=1, max_length=200)
+    device_fingerprint: str = Field(min_length=16, max_length=128)
     legacy_device_fingerprints: list[str] = Field(default_factory=list)
-    device_name: str | None = None
-    app_version: str | None = None
+    device_name: str | None = Field(default=None, max_length=120)
+    app_version: str | None = Field(default=None, max_length=40)
 
 
 class AdminCreateLicenseRequest(BaseModel):
-    username: str
-    password: str
-    expires_at: str | None = None
-    notes: str | None = None
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=8, max_length=200)
+    expires_at: str | None = Field(default=None, max_length=80)
+    notes: str | None = Field(default=None, max_length=500)
 
 
 class AdminExpirationRequest(BaseModel):
-    expires_at: str | None = None
+    expires_at: str | None = Field(default=None, max_length=80)
+
+
+class AdminErasureRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)
 
 
 def _build_license_payload(row) -> dict:
@@ -104,6 +113,28 @@ def _row_to_admin_payload(row) -> dict:
     }
 
 
+def _row_to_privacy_payload(row) -> dict:
+    return {
+        "license_id": row["id"],
+        "username": row["username"],
+        "status": row["status"],
+        "device_name": row["device_name"],
+        "device_fingerprint": row["device_fingerprint"],
+        "created_at": row["created_at"],
+        "activated_at": row["activated_at"],
+        "last_validated_at": row["last_validated_at"],
+        "expires_at": row["expires_at"],
+        "notes": row["notes"],
+        "privacy_deleted_at": row["privacy_deleted_at"],
+        "privacy_erasure_reason": row["privacy_erasure_reason"],
+    }
+
+
+def _clean_optional_text(value: str | None, fallback: str = "") -> str:
+    text = str(value or "").strip()
+    return text if text else fallback
+
+
 def _require_admin_token(token: str | None):
     if not ADMIN_TOKEN:
         raise HTTPException(
@@ -128,13 +159,36 @@ def _ensure_license_is_usable(row):
 
 def _known_fingerprints(payload) -> set[str]:
     fingerprints = {str(payload.device_fingerprint or "").strip()}
-    fingerprints.update(str(item or "").strip() for item in (payload.legacy_device_fingerprints or []))
-    return {item for item in fingerprints if item}
+    fingerprints.update(str(item or "").strip()[:128] for item in (payload.legacy_device_fingerprints or []))
+    return {item for item in fingerprints if 16 <= len(item) <= 128}
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/privacy")
+def privacy_notice():
+    return {
+        "service": "Igreja Licensing API",
+        "purpose": "Controle de ativacao, validacao e suporte de licencas do aplicativo.",
+        "personal_data": [
+            "login da licenca",
+            "identificador tecnico do dispositivo em formato de hash",
+            "nome do dispositivo quando enviado pelo aplicativo",
+            "datas de criacao, ativacao, validacao e validade",
+            "observacoes administrativas cadastradas pelo controlador",
+        ],
+        "retention_days_for_inactive_licenses": PRIVACY_RETENTION_DAYS,
+        "data_subject_requests": [
+            "acesso/exportacao",
+            "correcao administrativa",
+            "revogacao",
+            "anonimizacao ou exclusao quando cabivel",
+        ],
+        "privacy_contact": PRIVACY_CONTACT or "Configure IGREJA_PRIVACY_CONTACT no servidor.",
+    }
 
 
 @app.get("/admin", response_class=HTMLResponse)
@@ -384,6 +438,16 @@ def admin_panel():
       status.style.color = isError ? "#ff7b72" : "#9fb2cf";
     }
 
+    function escapeHtml(value) {
+      return String(value || "").replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[char]));
+    }
+
     async function apiFetch(url, options = {}) {
       const response = await fetch(url, {
         ...options,
@@ -447,6 +511,8 @@ def admin_panel():
                 <button class="mini" onclick="reactivateLicense('${item.username}')">Reativar</button>
                 <button class="mini warning" onclick="changeExpiration('${item.username}')">Alterar validade</button>
                 <button class="mini" onclick="resetDevice('${item.username}')">Resetar dispositivo</button>
+                <button class="mini" onclick="exportPrivacyData('${item.username}')">Exportar dados</button>
+                <button class="mini danger" onclick="anonymizeLicense('${item.username}')">Anonimizar</button>
                 <button class="mini danger" onclick="revokeLicense('${item.username}')">Revogar</button>
                 <button class="mini danger" onclick="deleteLicense('${item.username}')">Excluir</button>
               </div>
@@ -532,6 +598,32 @@ def admin_panel():
       }
     }
 
+    async function exportPrivacyData(username) {
+      try {
+        const data = await apiFetch(`/api/v1/admin/privacy/export/${encodeURIComponent(username)}`);
+        const pretty = JSON.stringify(data, null, 2);
+        await navigator.clipboard.writeText(pretty);
+        setStatus(`Dados de ${username} copiados para a area de transferencia.`);
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    async function anonymizeLicense(username) {
+      if (!confirm(`Anonimizar dados pessoais da licenca ${username}? Esta acao remove vinculo, token, dispositivo e observacoes.`)) return;
+      const reason = prompt("Motivo ou protocolo da solicitacao:", "") || "";
+      try {
+        await apiFetch(`/api/v1/admin/privacy/anonymize/${encodeURIComponent(username)}`, {
+          method: "POST",
+          body: JSON.stringify({ reason })
+        });
+        setStatus(`Dados pessoais de ${username} anonimizados.`);
+        await loadLicenses();
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
     async function deleteLicense(username) {
       if (!confirm(`Excluir definitivamente a licença ${username}?`)) return;
       try {
@@ -567,7 +659,7 @@ def activate(payload: ActivateRequest):
     update_license_binding(
         payload.username,
         payload.device_fingerprint,
-        payload.device_name or "dispositivo",
+        _clean_optional_text(payload.device_name, "dispositivo"),
         activation_token,
     )
     fresh = fetch_license_by_username(payload.username)
@@ -590,11 +682,14 @@ def validate(payload: ValidateRequest):
         update_license_binding(
             payload.username,
             payload.device_fingerprint,
-            payload.device_name or row["device_name"] or "dispositivo",
+            _clean_optional_text(payload.device_name, row["device_name"] or "dispositivo"),
             row["activation_token"],
         )
     else:
-        touch_license_validation(payload.username, payload.device_name or row["device_name"] or "dispositivo")
+        touch_license_validation(
+            payload.username,
+            _clean_optional_text(payload.device_name, row["device_name"] or "dispositivo"),
+        )
     fresh = fetch_license_by_username(payload.username)
     return _build_license_payload(fresh)
 
@@ -687,3 +782,30 @@ def admin_delete_license(username: str, x_admin_token: str | None = Header(defau
         raise HTTPException(status_code=404, detail="Licença não encontrada.")
     delete_license(username)
     return {"ok": True}
+
+
+@app.get("/api/v1/admin/privacy/export/{username}")
+def admin_export_privacy_data(username: str, x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
+    _require_admin_token(x_admin_token)
+    row = export_license_data(username)
+    if not row:
+        raise HTTPException(status_code=404, detail="Licenca nao encontrada.")
+    return _row_to_privacy_payload(row)
+
+
+@app.post("/api/v1/admin/privacy/anonymize/{username}")
+def admin_anonymize_license(
+    username: str,
+    payload: AdminErasureRequest,
+    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
+):
+    _require_admin_token(x_admin_token)
+    if not anonymize_license(username, payload.reason or ""):
+        raise HTTPException(status_code=404, detail="Licenca nao encontrada.")
+    return {"ok": True}
+
+
+@app.post("/api/v1/admin/privacy/purge")
+def admin_purge_inactive_licenses(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
+    _require_admin_token(x_admin_token)
+    return {"ok": True, "anonymized": purge_inactive_licenses(PRIVACY_RETENTION_DAYS)}

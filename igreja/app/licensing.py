@@ -109,6 +109,7 @@ def load_license_settings() -> dict:
         "offline_grace_hours": max(
             1, int(config.get("license_offline_grace_hours", DEFAULT_OFFLINE_GRACE_HOURS) or DEFAULT_OFFLINE_GRACE_HOURS)
         ),
+        "send_device_name": bool(config.get("license_send_device_name", False)),
         "bypass_device_fingerprints": [str(item).strip().lower() for item in bypass_devices if str(item).strip()],
         "bypass_machine_names": [str(item).strip().lower() for item in bypass_machine_names if str(item).strip()],
     }
@@ -319,7 +320,7 @@ def activate_with_server(username: str, password: str, settings: dict | None = N
         "password": password,
         "device_fingerprint": device_fingerprint(),
         "legacy_device_fingerprints": sorted(acceptable_device_fingerprints() - {device_fingerprint()}),
-        "device_name": machine_name(),
+        "device_name": machine_name() if settings.get("send_device_name") else None,
         "app_version": APP_VERSION,
     }
     response = _request_json(f"{api_url}/activate", payload, int(settings["timeout_seconds"]))
@@ -342,7 +343,7 @@ def validate_with_server(settings: dict | None = None, state: dict | None = None
         "activation_token": current_state.get("activation_token", ""),
         "device_fingerprint": device_fingerprint(),
         "legacy_device_fingerprints": sorted(acceptable_device_fingerprints() - {device_fingerprint()}),
-        "device_name": machine_name(),
+        "device_name": machine_name() if settings.get("send_device_name") else None,
         "app_version": APP_VERSION,
     }
     response = _request_json(f"{api_url}/validate", payload, int(settings["timeout_seconds"]))

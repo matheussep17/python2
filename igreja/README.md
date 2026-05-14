@@ -116,6 +116,7 @@ Configuração no `config.json`:
   "license_api_url": "https://seu-servidor/api/v1",
   "license_request_timeout_seconds": 10,
   "license_offline_grace_hours": 175200,
+  "license_send_device_name": false,
   "license_bypass_machine_names": [
     "nome-do-note-da-igreja"
   ],
@@ -157,6 +158,7 @@ Painel web:
 - Abra `http://SEU-SERVIDOR:8787/admin`
 - Informe o token definido em `IGREJA_ADMIN_TOKEN`
 - O painel permite criar, listar, revogar, reativar, resetar dispositivo, alterar validade e excluir licenças
+- O painel tambem permite exportar e anonimizar dados de uma licença para atendimento de solicitações de privacidade
 
 ### Publicar no Render com domínio próprio
 
@@ -221,6 +223,9 @@ python scripts/license_admin.py revoke IGREJA-ABC123
 python scripts/license_admin.py reactivate IGREJA-ABC123
 python scripts/license_admin.py reset-device IGREJA-ABC123
 python scripts/license_admin.py extend IGREJA-ABC123 --days 30
+python scripts/license_admin.py export-data IGREJA-ABC123
+python scripts/license_admin.py anonymize IGREJA-ABC123 --reason "solicitacao do titular"
+python scripts/license_admin.py purge-inactive --retention-days 1095
 ```
 
 Para descobrir rapidamente a identificação do notebook que precisa ser liberado:
@@ -236,3 +241,9 @@ Recomendação prática:
 - Use licença permanente para a maioria dos casos.
 - Use validade quando quiser controle de renovação.
 - Use `reset-device` quando o usuário trocar de computador.
+
+## LGPD
+
+O projeto inclui controles tecnicos de apoio a LGPD no licenciamento: minimizacao do nome do dispositivo, aviso na tela de ativacao, endpoint publico `/privacy`, exportacao, anonimizacao e purga de licencas inativas.
+
+Veja o plano operacional em [docs/LGPD.md](docs/LGPD.md). A conformidade completa ainda depende de definicoes juridicas e operacionais do controlador, como base legal, encarregado/canal de atendimento, politica de privacidade, contratos e resposta a incidentes.
