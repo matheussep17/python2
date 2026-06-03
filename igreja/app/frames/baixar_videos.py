@@ -12,7 +12,7 @@ import time
 import tempfile
 import subprocess
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import messagebox
 import tkinter as tk
 
 import requests
@@ -23,9 +23,10 @@ from app.utils import (
     format_bytes,
     get_available_js_runtimes,
     get_ffmpeg_bin_dir,
-    get_output_folder,
+    normalize_folder_path,
     save_output_folder,
 )
+from app.ui.output_folder import OutputFolderMixin
 from app.yt_dlp_runtime import (
     load_yt_dlp,
     maybe_update_yt_dlp,
@@ -43,12 +44,12 @@ def app_base_dir() -> Path:
     return Path(__file__).resolve().parents[2]  # .../igreja
 
 
-class BaixarFrame(ttk.Frame):
+class BaixarFrame(OutputFolderMixin, ttk.Frame):
     def __init__(self, master, on_status):
         super().__init__(master)
         self.on_status = on_status
 
-        self.destination_folder = self.load_config()
+        self.init_output_folder("Nenhuma pasta selecionada")
         self.selected_format = ttk.StringVar(value="Música")
         self.selected_quality = ttk.StringVar(value="1080p")
         self.video_profile = ttk.StringVar(value="Compatível com Holyrics")
@@ -65,7 +66,8 @@ class BaixarFrame(ttk.Frame):
         self._yt_dlp = None
         self._yt_dlp_update_in_progress = False
         self._pytubefix = None
-        self._quality_pack_options = {}
+        self._quality_grid_options = {}
+        self._profile_grid_options = {}
         self.is_running = False
         self._last_action_key_ts = 0.0
 
@@ -169,7 +171,7 @@ class BaixarFrame(ttk.Frame):
             row=0, column=0, sticky="w"
         )
         self.dest_label = ttk.Label(
-            dest_inner, text=self.destination_folder or "Nenhuma pasta selecionada", anchor="w", font=("Helvetica", 12), style="SurfaceAlt.TLabel"
+            dest_inner, text=self.get_destination_label_text(), anchor="w", font=("Helvetica", 12), style="SurfaceAlt.TLabel"
         )
         self.dest_label.grid(row=0, column=1, sticky="ew", padx=(10, 0))
 
@@ -200,7 +202,7 @@ class BaixarFrame(ttk.Frame):
         )
         self.quality_menu.grid(row=0, column=3, sticky="w", padx=(8, 0))
         self._quality_widgets = [self.quality_label, self.quality_menu]
-        self._quality_pack_options = {w: w.grid_info() for w in self._quality_widgets}
+        self._quality_grid_options = {w: w.grid_info() for w in self._quality_widgets}
 
         self.profile_label = ttk.Label(opts_inner, text="Perfil:", font=("Helvetica", 13))
         self.profile_label.grid(row=0, column=4, sticky="w", padx=(20, 0))
@@ -213,7 +215,7 @@ class BaixarFrame(ttk.Frame):
         )
         self.profile_menu.grid(row=0, column=5, sticky="w", padx=(8, 0))
         self._profile_widgets = [self.profile_label, self.profile_menu]
-        self._profile_pack_options = {w: w.grid_info() for w in self._profile_widgets}
+        self._profile_grid_options = {w: w.grid_info() for w in self._profile_widgets}
 
         ttk.Label(opts_inner, text="Download:", font=("Helvetica", 13)).grid(row=1, column=0, sticky="w", pady=(12, 0))
         self.mode_menu = ttk.Combobox(
@@ -341,12 +343,6 @@ class BaixarFrame(ttk.Frame):
         else:
             self.scrollbar.pack_forget()
             self.scroll_canvas.configure(yscrollcommand=None)
-
-    def _normalize_path(self, path_value):
-        try:
-            return os.path.abspath(os.path.expanduser(str(path_value))) if path_value else ""
-        except Exception:
-            return str(path_value)
 
     def _sanitize_filename(self, value):
         text = str(value or "").strip()
@@ -540,12 +536,6 @@ class BaixarFrame(ttk.Frame):
         )
         return self._build_outtmpl(title, fmt_mode, quality_choice)
 
-    def load_config(self):
-        try:
-            return self._normalize_path(get_output_folder())
-        except Exception:
-            return ""
-
     def save_config(self):
         try:
             self.destination_folder = save_output_folder(self.destination_folder)
@@ -556,11 +546,7 @@ class BaixarFrame(ttk.Frame):
                 pass
 
     def choose_dest_folder(self):
-        folder = filedialog.askdirectory()
-        if folder:
-            self.destination_folder = folder
-            self.dest_label.config(text=folder)
-            self.save_config()
+        if super().choose_dest_folder():
             self._update_action_state()
 
     def _on_format_change(self, _evt=None):
@@ -730,14 +716,14 @@ class BaixarFrame(ttk.Frame):
             for w in self._quality_widgets:
                 try:
                     if not w.winfo_ismapped():
-                        grid_options = self._quality_pack_options.get(w) or {}
+                        grid_options = self._quality_grid_options.get(w) or {}
                         w.grid(**grid_options)
                 except Exception:
                     pass
             for w in self._profile_widgets:
                 try:
                     if not w.winfo_ismapped():
-                        grid_options = self._profile_pack_options.get(w) or {}
+                        grid_options = self._profile_grid_options.get(w) or {}
                         w.grid(**grid_options)
                 except Exception:
                     pass
@@ -1794,7 +1780,7 @@ class BaixarFrame(ttk.Frame):
             messagebox.showerror("Erro", "Escolha a pasta de destino.")
             return
 
-        dest = self._normalize_path(self.destination_folder)
+        dest = normalize_folder_path(self.destination_folder)
 
         try:
             os.makedirs(dest, exist_ok=True)
@@ -2381,27 +2367,6 @@ class BaixarFrame(ttk.Frame):
         self.download_btn.config(state=NORMAL, text="Baixar agora")
         self.cancel_btn.config(state=DISABLED)
         self._update_visibility()
-        self.on_status("Download cancelado")
-
-    def _legacy_finish_error(self, msg):
-        self.status.config(text=msg or "Erro no download.")
-        self.download_btn.config(state=NORMAL)
-        self.cancel_btn.config(state=DISABLED)
-        self.open_folder_button.config(state=DISABLED)
-        self.on_status(f"Erro: {msg or 'falha no download'}")
-
-    def _legacy_finish_ok(self):
-        self.is_running = False
-        self.status.config(text=self.status.cget("text") or "Download concluido!")
-        self.open_folder_button.config(state=NORMAL)
-        self._update_action_state()
-
-    def _legacy_finish_canceled(self):
-        self.is_running = False
-        self.status.config(text="Download cancelado.")
-        self.progress["value"] = 0
-        self.open_folder_button.config(state=DISABLED)
-        self._update_action_state()
         self.on_status("Download cancelado")
 
     def _finish_error(self, msg):
