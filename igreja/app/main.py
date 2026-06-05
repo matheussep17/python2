@@ -1,5 +1,4 @@
 ﻿import os
-import socket
 import sys
 import threading
 import tkinter as tk
@@ -37,6 +36,7 @@ from app.updater import (
 from app.ui.alerts import install_messagebox_hooks, show_info
 from app.ui.cursors import install_cursor_profile
 from app.ui.license_dialog import ensure_application_license
+from app.single_instance import acquire_single_instance_lock
 from app.ui.theme import apply_design_system, resolve_ttk_theme
 from app.utils import (
     HAS_DND,
@@ -805,19 +805,6 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             pass
 
 
-def single_instance_or_exit(port=54321):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        sock.bind(("127.0.0.1", port))
-    except OSError:
-        try:
-            messagebox.showinfo("Ja esta aberto", "O aplicativo ja esta em execucao.")
-        except Exception:
-            pass
-        sys.exit(0)
-    return sock
-
-
 def _try_recover_missing_ffmpeg(root, missing: list[str]) -> bool:
     missing_set = set(missing)
     ffmpeg_missing = {"ffmpeg", "ffprobe"}
@@ -870,6 +857,9 @@ def _try_recover_missing_ffmpeg(root, missing: list[str]) -> bool:
 
 
 def main():
+    if not acquire_single_instance_lock():
+        sys.exit(0)
+
     configure_runtime_environment()
     missing, runtime = missing_runtime_requirements()
     if missing:
@@ -888,7 +878,6 @@ def main():
         if missing:
             sys.exit(1)
 
-    _lock = single_instance_or_exit()
     if not ensure_application_license():
         sys.exit(1)
 
