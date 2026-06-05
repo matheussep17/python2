@@ -233,6 +233,7 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
     source_path = str(staged_exe)
     target_path = str(current_exe)
     backup_path = str(current_exe.with_suffix(current_exe.suffix + ".old"))
+    sleep_command = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 1" >nul 2>&1'
 
     script = "\n".join(
         [
@@ -249,14 +250,14 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             ":wait_exit",
             'tasklist /FI "PID eq %APP_PID%" 2>nul | find "%APP_PID%" >nul',
             "if not errorlevel 1 (",
-            "  timeout /t 1 /nobreak >nul",
+            f"  {sleep_command}",
             "  goto wait_exit",
             ")",
             'echo [%date% %time%] Processo principal encerrado. >> "%LOG%"',
             "for /L %%W in (1,1,180) do (",
             '  powershell -NoProfile -ExecutionPolicy Bypass -Command "$target=$env:TARGET; $pidToIgnore=[int]$env:APP_PID; $name=[IO.Path]::GetFileNameWithoutExtension($target); $matches=@(Get-Process -Name $name -ErrorAction SilentlyContinue | Where-Object { try { $_.Id -ne $pidToIgnore -and $_.Path -eq $target } catch { $false } }); if ($matches.Count -gt 0) { exit 1 } else { exit 0 }" >nul 2>&1',
             "  if not errorlevel 1 goto no_running_instances",
-            "  timeout /t 1 /nobreak >nul",
+            f"  {sleep_command}",
             ")",
             'echo [%date% %time%] ERRO: ainda existem outras instancias do aplicativo usando o executavel. >> "%LOG%"',
             "exit /b 1",
@@ -273,14 +274,14 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             '  echo [%date% %time%] Tentativa %%I de substituir o executavel. >> "%LOG%"',
             '  move /Y "%TARGET%" "%BACKUP%" >> "%LOG%" 2>&1',
             "  if errorlevel 1 (",
-            "    timeout /t 1 /nobreak >nul",
+            f"    {sleep_command}",
             "  ) else (",
             '    copy /Y "%SOURCE%" "%TARGET%" >> "%LOG%" 2>&1',
             "    if errorlevel 1 (",
             '      echo [%date% %time%] ERRO: falha ao copiar nova versao; restaurando backup. >> "%LOG%"',
             '      del /Q "%TARGET%" >nul 2>&1',
             '      move /Y "%BACKUP%" "%TARGET%" >> "%LOG%" 2>&1',
-            "      timeout /t 1 /nobreak >nul",
+            f"      {sleep_command}",
             "    ) else (",
             '      for %%A in ("%TARGET%") do set "TARGET_SIZE=%%~zA"',
             '      call echo TARGET_SIZE=%%TARGET_SIZE%% >> "%LOG%"',
@@ -288,10 +289,10 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             '      echo [%date% %time%] ERRO: tamanho final divergente; restaurando backup. >> "%LOG%"',
             '      del /Q "%TARGET%" >nul 2>&1',
             '      move /Y "%BACKUP%" "%TARGET%" >> "%LOG%" 2>&1',
-            "      timeout /t 1 /nobreak >nul",
+            f"      {sleep_command}",
             "    )",
             "  )",
-            "  timeout /t 1 /nobreak >nul",
+            f"  {sleep_command}",
             ")",
             'echo [%date% %time%] ERRO: nao foi possivel substituir o executavel. >> "%LOG%"',
             "exit /b 1",
