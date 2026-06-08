@@ -19,6 +19,16 @@ GITHUB_REPO_CONFIG_KEY = "github_update_repo"
 GITHUB_ASSET_NAME_CONFIG_KEY = "github_update_asset_name"
 DEFAULT_GITHUB_UPDATE_REPO = "matheussep17/python2"
 DEFAULT_GITHUB_UPDATE_ASSET_NAME = f"{APP_NAME}.exe"
+PYINSTALLER_COOKIE = b"MEI\014\013\012\013\016"
+REQUIRED_FROZEN_PACKAGE_MARKERS = (
+    (PYINSTALLER_COOKIE, "arquivo one-file do PyInstaller"),
+    (b"_tcl_data\\init.tcl", "_tcl_data\\init.tcl"),
+    (b"_tcl_data\\msgs\\es_mx.msg", "_tcl_data\\msgs\\es_mx.msg"),
+    (b"_tk_data\\tk.tcl", "_tk_data\\tk.tcl"),
+    (b"tcl86t.dll", "tcl86t.dll"),
+    (b"tk86t.dll", "tk86t.dll"),
+    (b"_tkinter.pyd", "_tkinter.pyd"),
+)
 
 
 class UpdateError(Exception):
@@ -217,6 +227,8 @@ def download_update_package(manifest: dict, progress_callback=None) -> Path:
                 "Tente novamente em alguns minutos."
             )
 
+    _validate_frozen_update_package(package_path)
+
     return package_path
 
 
@@ -335,6 +347,7 @@ def _stage_update_exe(downloaded_exe: Path, current_exe: Path) -> Path:
         if staged_exe.stat().st_size != downloaded_exe.stat().st_size:
             staged_exe.unlink(missing_ok=True)
             raise UpdateError("A copia local da atualizacao ficou incompleta.")
+        _validate_frozen_update_package(staged_exe)
     except OSError as exc:
         raise UpdateError("Nao foi possivel validar a copia local da atualizacao.") from exc
 
@@ -364,6 +377,34 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: file.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _validate_frozen_update_package(path: Path) -> None:
+    missing_markers = _missing_binary_markers(path, REQUIRED_FROZEN_PACKAGE_MARKERS)
+    if missing_markers:
+        raise UpdateError(
+            "O arquivo de atualizacao baixado parece incompleto ou corrompido. "
+            "Tente baixar novamente. Marcadores ausentes: "
+            + ", ".join(missing_markers)
+        )
+
+
+def _missing_binary_markers(path: Path, markers: tuple[tuple[bytes, str], ...]) -> list[str]:
+    found = {label: False for _, label in markers}
+    max_marker_size = max(len(marker) for marker, _ in markers)
+    tail = b""
+
+    with Path(path).open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            block = tail + chunk
+            for marker, label in markers:
+                if not found[label] and marker in block:
+                    found[label] = True
+            if all(found.values()):
+                return []
+            tail = block[-max_marker_size + 1 :]
+
+    return [label for label, was_found in found.items() if not was_found]
 
 
 def _normalize_release_version(tag_name: str) -> str:

@@ -16,6 +16,8 @@ REQUIRED_ARCHIVE_PREFIXES = (
 
 REQUIRED_ARCHIVE_ITEMS = (
     "_tcl_data\\init.tcl",
+    "_tcl_data\\msgs\\es_mx.msg",
+    "_tcl_data\\msgs\\pt_br.msg",
     "_tk_data\\tk.tcl",
     "tcl86t.dll",
     "tk86t.dll",

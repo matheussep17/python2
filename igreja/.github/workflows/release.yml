@@ -46,7 +46,7 @@ jobs:
         with:
           files: dist/Igreja.exe
           body: |
-            Melhorias visuais em toda a interface.
-            Ajustes nos modais e refinamentos gerais de usabilidade.
+            Corrige a validacao do pacote de atualizacao antes da instalacao.
+            Reforca a verificacao dos arquivos Tcl/Tk incluidos no executavel.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
