@@ -46,7 +46,7 @@ jobs:
         with:
           files: dist/Igreja.exe
           body: |
-            Corrige a validacao do pacote de atualizacao antes da instalacao.
-            Reforca a verificacao dos arquivos Tcl/Tk incluidos no executavel.
+            Corrige loop em que a atualizacao baixava, mas nao substituia o executavel.
+            Reforca a troca do exe em pastas com permissao de escrita sem permissao de renomear/apagar.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

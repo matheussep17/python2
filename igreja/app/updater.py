@@ -244,6 +244,7 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
     current_pid = os.getpid()
     source_path = str(staged_exe)
     target_path = str(current_exe)
+    target_image = current_exe.name
     backup_path = str(current_exe.with_suffix(current_exe.suffix + ".old"))
     sleep_command = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 1" >nul 2>&1'
 
@@ -254,6 +255,7 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             f'set "APP_PID={current_pid}"',
             f'set "SOURCE={source_path}"',
             f'set "TARGET={target_path}"',
+            f'set "TARGET_IMAGE={target_image}"',
             f'set "BACKUP={backup_path}"',
             f'set "LOG={log_path}"',
             'echo [%date% %time%] Iniciando atualizacao. > "%LOG%"',
@@ -267,11 +269,11 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             ")",
             'echo [%date% %time%] Processo principal encerrado. >> "%LOG%"',
             "for /L %%W in (1,1,180) do (",
-            '  powershell -NoProfile -ExecutionPolicy Bypass -Command "$target=$env:TARGET; $pidToIgnore=[int]$env:APP_PID; $name=[IO.Path]::GetFileNameWithoutExtension($target); $matches=@(Get-Process -Name $name -ErrorAction SilentlyContinue | Where-Object { try { $_.Id -ne $pidToIgnore -and $_.Path -eq $target } catch { $false } }); if ($matches.Count -gt 0) { exit 1 } else { exit 0 }" >nul 2>&1',
-            "  if not errorlevel 1 goto no_running_instances",
+            '  tasklist /FI "IMAGENAME eq %TARGET_IMAGE%" 2>nul | find /I "%TARGET_IMAGE%" >nul',
+            "  if errorlevel 1 goto no_running_instances",
             f"  {sleep_command}",
             ")",
-            'echo [%date% %time%] ERRO: ainda existem outras instancias do aplicativo usando o executavel. >> "%LOG%"',
+            'echo [%date% %time%] ERRO: ainda existem instancias do aplicativo abertas. >> "%LOG%"',
             "exit /b 1",
             ":no_running_instances",
             'echo [%date% %time%] Nenhuma outra instancia encontrada. >> "%LOG%"',
@@ -281,9 +283,18 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             ")",
             'for %%A in ("%SOURCE%") do set "SOURCE_SIZE=%%~zA"',
             'echo SOURCE_SIZE=%SOURCE_SIZE% >> "%LOG%"',
+            'attrib -R "%TARGET%" >nul 2>&1',
             'del /Q "%BACKUP%" >nul 2>&1',
             "for /L %%I in (1,1,90) do (",
             '  echo [%date% %time%] Tentativa %%I de substituir o executavel. >> "%LOG%"',
+            '  powershell -NoProfile -ExecutionPolicy Bypass -Command "[IO.File]::Copy($env:SOURCE, $env:TARGET, $true)" >> "%LOG%" 2>&1',
+            "  if not errorlevel 1 (",
+            '    for %%A in ("%TARGET%") do set "TARGET_SIZE=%%~zA"',
+            '    call echo TARGET_SIZE=%%TARGET_SIZE%% >> "%LOG%"',
+            '    call if "%%TARGET_SIZE%%"=="%SOURCE_SIZE%" goto cleanup',
+            '    echo [%date% %time%] ERRO: tamanho final divergente apos copia direta. >> "%LOG%"',
+            "  )",
+            '  echo [%date% %time%] Copia direta falhou; tentando fluxo com backup. >> "%LOG%"',
             '  move /Y "%TARGET%" "%BACKUP%" >> "%LOG%" 2>&1',
             "  if errorlevel 1 (",
             f"    {sleep_command}",
