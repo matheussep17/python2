@@ -35,6 +35,9 @@ async function route(request, env) {
   if (path === `${PREFIX}/privacy` && method === "GET") {
     return privacyNotice(env);
   }
+  if (path === `${PREFIX}/favicon.svg` && (method === "GET" || method === "HEAD")) {
+    return svg(churchFavicon());
+  }
   if (path === `${PREFIX}/admin` && method === "GET") {
     return html(adminPage());
   }
@@ -432,6 +435,15 @@ function html(content) {
   return new Response(content, { headers: { "content-type": "text/html; charset=utf-8" } });
 }
 
+function svg(content) {
+  return new Response(content, {
+    headers: {
+      "content-type": "image/svg+xml; charset=utf-8",
+      "cache-control": "public, max-age=86400",
+    },
+  });
+}
+
 function corsHeaders() {
   return {
     "access-control-allow-origin": "*",
@@ -452,7 +464,7 @@ function privacyNotice(env) {
 function adminPage() {
   return `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#07111f"><title>Licenças | App Igreja</title>
+<meta name="theme-color" content="#07111f"><link rel="icon" href="${PREFIX}/favicon.svg" type="image/svg+xml"><title>Licenças | App Igreja</title>
 <style>
 *{box-sizing:border-box}
 :root{color-scheme:dark;--bg:#07111f;--panel:#0e1d30;--panel2:#13263d;--line:#263d57;--text:#f4f8fc;--muted:#9eb0c3;--cyan:#46d7e8;--green:#78e6b1;--red:#ff7d86;--yellow:#f4c96b}
@@ -480,32 +492,49 @@ th{color:var(--muted);background:#102238;font-size:11px;letter-spacing:.08em;tex
 .badge.revoked{border-color:rgba(255,125,134,.3);color:var(--red);background:rgba(255,125,134,.08)}
 .actions{display:flex;flex-wrap:wrap;gap:7px}.actions button{min-height:34px;padding:0 10px;font-size:12px}
 .empty{text-align:center!important;color:var(--muted);padding:32px!important}
+.hidden{display:none!important}
 @media(max-width:700px){main{width:min(100% - 20px,1180px);padding-top:25px}.topbar{align-items:start;flex-direction:column}.auth-row,.field-grid{grid-template-columns:1fr}.auth-row button{width:100%}.card{padding:16px}}
 </style></head><body><main>
 <div class="topbar"><div><p class="eyebrow">App Igreja</p><h1>Painel de licenças</h1></div><span class="health">Servidor operacional</span></div>
-<section class="card"><div class="auth-row"><label>Token administrativo<input id="token" type="password" placeholder="Digite o token para acessar"></label>
-<button class="primary" onclick="load()">Acessar painel</button></div><span id="status">Informe o token para carregar as licenças.</span></section>
-<section class="card"><h2>Nova licença</h2><div class="field-grid">
+<section class="card" id="auth-card"><form id="auth-form" class="auth-row"><label>Token administrativo<input id="token" type="password" autocomplete="current-password" placeholder="Digite o token para acessar"></label>
+<button class="primary" type="submit">Acessar painel</button></form><span id="auth-status">Informe o token para carregar as licenças.</span></section>
+<div id="admin-panel" class="hidden">
+<section class="card"><h2>Nova licença</h2><form id="license-form"><div class="field-grid">
 <label>Login<input id="username" placeholder="Nome da licença"></label>
 <label>Senha<input id="password" type="password" placeholder="Mínimo de 8 caracteres"></label>
 <label>Validade<input id="expires" placeholder="ISO 8601 (opcional)"></label>
 <label>Observações<input id="notes" placeholder="Informações administrativas"></label>
-</div><button class="primary" style="margin-top:16px" onclick="createLicense()">Criar licença</button></section>
+</div><button class="primary" type="submit" style="margin-top:16px">Criar licença</button></form></section>
 <section class="card"><h2>Licenças cadastradas</h2><div class="table-wrap"><table><thead><tr><th>Login</th><th>Status</th><th>Dispositivo</th><th>Validade</th><th>Ações</th></tr></thead>
 <tbody id="rows"><tr><td colspan="5" class="empty">A lista será exibida após informar o token.</td></tr></tbody></table></div></section>
+<span id="panel-status"></span>
+</div>
 </main><script>
 const api="${API_PREFIX}";
-const token=()=>document.querySelector("#token").value;
-function status(text,bad=false){const el=document.querySelector("#status");el.textContent=" "+text;el.className=bad?"danger":""}
+let adminToken="";
+let authenticated=false;
+const token=()=>adminToken||document.querySelector("#token").value;
+function status(text,bad=false){const el=document.querySelector(authenticated?"#panel-status":"#auth-status");el.textContent=" "+text;el.className=bad?"danger":""}
 async function call(path,options={}){options.headers={...(options.headers||{}),"Content-Type":"application/json","X-Admin-Token":token()};
  const response=await fetch(api+path,options);const data=await response.json();if(!response.ok)throw new Error(data.detail||"Falha");return data}
-async function load(){try{const data=await call("/admin/licenses");document.querySelector("#rows").innerHTML=data.map(row=>\`
+async function load(){try{adminToken=document.querySelector("#token").value;const data=await call("/admin/licenses");authenticated=true;document.querySelector("#auth-card").classList.add("hidden");document.querySelector("#admin-panel").classList.remove("hidden");document.querySelector("#rows").innerHTML=data.map(row=>\`
 <tr><td class="user">\${row.username}</td><td><span class="badge \${row.status==="active"?"":"revoked"}">\${row.status==="active"?"Ativa":"Revogada"}</span></td><td class="device">\${row.device_name||"Não vinculado"}</td><td>\${row.expires_at||"Permanente"}</td>
 <td><div class="actions"><button class="\${row.status==="active"?"warning":""}" onclick="action('\${encodeURIComponent(row.username)}','\${row.status==="active"?"revoke":"reactivate"}')">\${row.status==="active"?"Revogar":"Reativar"}</button>
 <button onclick="action('\${encodeURIComponent(row.username)}','reset-device')">Liberar PC</button>
 <button class="destructive" onclick="removeLicense('\${encodeURIComponent(row.username)}')">Excluir</button></div></td></tr>\`).join("")||'<tr><td colspan="5" class="empty">Nenhuma licença cadastrada.</td></tr>';status(data.length+" licença(s) carregada(s).")}catch(e){status(e.message,true)}}
-async function createLicense(){try{await call("/admin/licenses",{method:"POST",body:JSON.stringify({username:username.value,password:password.value,expires_at:expires.value||null,notes:notes.value})});await load()}catch(e){status(e.message,true)}}
+async function createLicense(){try{await call("/admin/licenses",{method:"POST",body:JSON.stringify({username:username.value,password:password.value,expires_at:expires.value||null,notes:notes.value})});document.querySelector("#license-form").reset();await load()}catch(e){status(e.message,true)}}
 async function action(user,name){try{await call("/admin/licenses/"+user+"/"+name,{method:"POST",body:"{}"});await load()}catch(e){status(e.message,true)}}
 async function removeLicense(user){if(!confirm("Excluir esta licença definitivamente?"))return;try{await call("/admin/licenses/"+user,{method:"DELETE"});await load()}catch(e){status(e.message,true)}}
+document.querySelector("#auth-form").addEventListener("submit",event=>{event.preventDefault();load()});
+document.querySelector("#license-form").addEventListener("submit",event=>{event.preventDefault();createLicense()});
 </script></body></html>`;
+}
+
+function churchFavicon() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs><linearGradient id="bg" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse"><stop stop-color="#4f7cff"/><stop offset="1" stop-color="#46d7e8"/></linearGradient></defs>
+  <rect width="64" height="64" rx="16" fill="#07111f"/>
+  <path d="M27 10h10v14h13v10H37v20H27V34H14V24h13V10Z" fill="url(#bg)"/>
+  <path d="M32 13v37M17 29h30" stroke="#f4f8fc" stroke-width="3" stroke-linecap="round" opacity=".85"/>
+</svg>`;
 }

@@ -46,7 +46,8 @@ jobs:
         with:
           files: dist/Igreja.exe
           body: |
-            Corrige licencas revogadas ou excluidas que continuavam funcionando pelo modo offline.
-            Remove o bypass fixo de dispositivo e exige nova autenticacao quando o servidor rejeita a licenca.
+            Consolida a migracao do licenciamento para matheustorresqa.com.
+            Corrige automaticamente configuracoes antigas da Railway e remove bypasses externos.
+            Envia o nome do computador ao painel administrativo.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

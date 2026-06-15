@@ -20,6 +20,10 @@ LICENSE_STATE_FILE = "license_state.json"
 DEFAULT_OFFLINE_GRACE_HOURS = 24 * 365 * 20
 DEFAULT_TIMEOUT_SECONDS = 10
 DEVICE_FINGERPRINT_NAMESPACE = "igreja-license-device-v2"
+CURRENT_LICENSE_API_URL = "https://matheustorresqa.com/appigreja/api/v1"
+LEGACY_LICENSE_API_URLS = {
+    "https://python2-production-e3ee.up.railway.app/api/v1",
+}
 
 
 class LicenseError(Exception):
@@ -94,24 +98,21 @@ def license_state_paths() -> list[Path]:
 
 def load_license_settings() -> dict:
     config = load_app_config()
-    bypass_devices = config.get("license_bypass_device_fingerprints", [])
-    if not isinstance(bypass_devices, list):
-        bypass_devices = []
-    bypass_machine_names = config.get("license_bypass_machine_names", [])
-    if not isinstance(bypass_machine_names, list):
-        bypass_machine_names = []
+    configured_api_url = str(config.get("license_api_url", "") or "").strip().rstrip("/")
+    if not configured_api_url or configured_api_url in LEGACY_LICENSE_API_URLS:
+        configured_api_url = CURRENT_LICENSE_API_URL
     return {
-        "enforced": bool(config.get("license_enforced", False)),
-        "api_url": str(config.get("license_api_url", "") or "").strip().rstrip("/"),
+        "enforced": bool(config.get("license_enforced", True)),
+        "api_url": configured_api_url,
         "timeout_seconds": max(
             3, int(config.get("license_request_timeout_seconds", DEFAULT_TIMEOUT_SECONDS) or DEFAULT_TIMEOUT_SECONDS)
         ),
         "offline_grace_hours": max(
             1, int(config.get("license_offline_grace_hours", DEFAULT_OFFLINE_GRACE_HOURS) or DEFAULT_OFFLINE_GRACE_HOURS)
         ),
-        "send_device_name": bool(config.get("license_send_device_name", False)),
-        "bypass_device_fingerprints": [str(item).strip().lower() for item in bypass_devices if str(item).strip()],
-        "bypass_machine_names": [str(item).strip().lower() for item in bypass_machine_names if str(item).strip()],
+        "send_device_name": bool(config.get("license_send_device_name", True)),
+        "bypass_device_fingerprints": [],
+        "bypass_machine_names": [],
     }
 
 
