@@ -7,7 +7,7 @@
   "ffmpeg_download_url": "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
   "output_folder": "",
   "license_enforced": true,
-  "license_api_url": "https://python2-production-e3ee.up.railway.app/api/v1",
+  "license_api_url": "https://matheustorresqa.com/appigreja/api/v1",
   "license_request_timeout_seconds": 10,
   "license_offline_grace_hours": 175200,
   "license_bypass_machine_names": [],
