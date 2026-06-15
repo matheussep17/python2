@@ -451,24 +451,48 @@ function privacyNotice(env) {
 
 function adminPage() {
   return `<!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>Licencas Igreja</title>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#07111f"><title>Licenças | App Igreja</title>
 <style>
-body{font:16px system-ui;background:#0b1320;color:#eef4ff;margin:0}main{max-width:1050px;margin:auto;padding:28px}
-input,button{font:inherit;padding:9px;margin:4px;border-radius:7px;border:1px solid #40506a}
-button{cursor:pointer}.card{background:#111c2d;padding:18px;border-radius:12px;margin:14px 0}
-table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #2b3b56;text-align:left}
-.actions button{padding:5px}#status{color:#67d5b5;white-space:pre-wrap}.danger{color:#ff8d85}
+*{box-sizing:border-box}
+:root{color-scheme:dark;--bg:#07111f;--panel:#0e1d30;--panel2:#13263d;--line:#263d57;--text:#f4f8fc;--muted:#9eb0c3;--cyan:#46d7e8;--green:#78e6b1;--red:#ff7d86;--yellow:#f4c96b}
+body{min-height:100vh;margin:0;color:var(--text);background:radial-gradient(circle at 85% 0,rgba(79,124,255,.2),transparent 34rem),var(--bg);font:15px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+main{width:min(1180px,calc(100% - 32px));margin:auto;padding:42px 0 70px}
+.topbar{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:25px}
+.eyebrow{margin:0 0 5px;color:var(--cyan);font:700 12px monospace;letter-spacing:.12em;text-transform:uppercase}
+h1{margin:0;font-size:clamp(2rem,5vw,3.5rem);letter-spacing:-.055em;line-height:1}h2{margin:0 0 18px;font-size:1.25rem}
+.health{display:inline-flex;align-items:center;gap:8px;color:var(--green);font-size:13px}.health:before{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 14px var(--green);content:""}
+.card{margin:14px 0;border:1px solid var(--line);border-radius:18px;padding:22px;background:rgba(14,29,48,.9);box-shadow:0 18px 50px rgba(0,0,0,.16)}
+.auth-row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end}.field-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+label{display:grid;gap:7px;color:var(--muted);font-size:13px;font-weight:650}
+input{width:100%;min-height:46px;border:1px solid var(--line);border-radius:11px;padding:0 13px;color:var(--text);background:#081522;font:inherit;outline:none}
+input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(70,215,232,.12)}
+button{min-height:42px;border:1px solid var(--line);border-radius:10px;padding:0 15px;color:var(--text);background:#182c44;font:700 13px system-ui;cursor:pointer;transition:transform .15s,border-color .15s,filter .15s}
+button:hover{transform:translateY(-1px);border-color:#4b6b8c;filter:brightness(1.08)}
+.primary{border-color:transparent;color:#06121d;background:linear-gradient(120deg,var(--cyan),var(--green))}
+.warning{border-color:rgba(244,201,107,.3);color:var(--yellow);background:rgba(244,201,107,.1)}
+.destructive{border-color:rgba(255,125,134,.3);color:#ffadb3;background:rgba(255,125,134,.1)}
+#status{display:block;min-height:22px;margin-top:12px;color:var(--green);font-size:13px;white-space:pre-wrap}.danger{color:var(--red)!important}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:13px}
+table{width:100%;border-collapse:collapse;min-width:850px;background:#0a1827}th,td{padding:14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{color:var(--muted);background:#102238;font-size:11px;letter-spacing:.08em;text-transform:uppercase}tbody tr:last-child td{border-bottom:0}tbody tr:hover{background:rgba(70,215,232,.035)}
+.user{font-weight:750}.device{color:var(--muted)}.badge{display:inline-flex;border:1px solid rgba(120,230,177,.3);border-radius:999px;padding:4px 9px;color:var(--green);background:rgba(120,230,177,.08);font-size:11px;font-weight:800;text-transform:uppercase}
+.badge.revoked{border-color:rgba(255,125,134,.3);color:var(--red);background:rgba(255,125,134,.08)}
+.actions{display:flex;flex-wrap:wrap;gap:7px}.actions button{min-height:34px;padding:0 10px;font-size:12px}
+.empty{text-align:center!important;color:var(--muted);padding:32px!important}
+@media(max-width:700px){main{width:min(100% - 20px,1180px);padding-top:25px}.topbar{align-items:start;flex-direction:column}.auth-row,.field-grid{grid-template-columns:1fr}.auth-row button{width:100%}.card{padding:16px}}
 </style></head><body><main>
-<h1>Painel de licencas</h1>
-<div class="card"><label>Token administrativo <input id="token" type="password"></label>
-<button onclick="load()">Atualizar</button><span id="status"></span></div>
-<div class="card"><h2>Nova licenca</h2>
-<input id="username" placeholder="Login"><input id="password" type="password" placeholder="Senha (8+ caracteres)">
-<input id="expires" placeholder="Validade ISO (opcional)"><input id="notes" placeholder="Observacoes">
-<button onclick="createLicense()">Criar</button></div>
-<div class="card"><table><thead><tr><th>Login</th><th>Status</th><th>Dispositivo</th><th>Validade</th><th>Acoes</th></tr></thead>
-<tbody id="rows"></tbody></table></div>
+<div class="topbar"><div><p class="eyebrow">App Igreja</p><h1>Painel de licenças</h1></div><span class="health">Servidor operacional</span></div>
+<section class="card"><div class="auth-row"><label>Token administrativo<input id="token" type="password" placeholder="Digite o token para acessar"></label>
+<button class="primary" onclick="load()">Acessar painel</button></div><span id="status">Informe o token para carregar as licenças.</span></section>
+<section class="card"><h2>Nova licença</h2><div class="field-grid">
+<label>Login<input id="username" placeholder="Nome da licença"></label>
+<label>Senha<input id="password" type="password" placeholder="Mínimo de 8 caracteres"></label>
+<label>Validade<input id="expires" placeholder="ISO 8601 (opcional)"></label>
+<label>Observações<input id="notes" placeholder="Informações administrativas"></label>
+</div><button class="primary" style="margin-top:16px" onclick="createLicense()">Criar licença</button></section>
+<section class="card"><h2>Licenças cadastradas</h2><div class="table-wrap"><table><thead><tr><th>Login</th><th>Status</th><th>Dispositivo</th><th>Validade</th><th>Ações</th></tr></thead>
+<tbody id="rows"><tr><td colspan="5" class="empty">A lista será exibida após informar o token.</td></tr></tbody></table></div></section>
 </main><script>
 const api="${API_PREFIX}";
 const token=()=>document.querySelector("#token").value;
@@ -476,12 +500,12 @@ function status(text,bad=false){const el=document.querySelector("#status");el.te
 async function call(path,options={}){options.headers={...(options.headers||{}),"Content-Type":"application/json","X-Admin-Token":token()};
  const response=await fetch(api+path,options);const data=await response.json();if(!response.ok)throw new Error(data.detail||"Falha");return data}
 async function load(){try{const data=await call("/admin/licenses");document.querySelector("#rows").innerHTML=data.map(row=>\`
-<tr><td>\${row.username}</td><td>\${row.status}</td><td>\${row.device_name||"-"}</td><td>\${row.expires_at||"Permanente"}</td>
-<td class="actions"><button onclick="action('\${encodeURIComponent(row.username)}','\${row.status==="active"?"revoke":"reactivate"}')">\${row.status==="active"?"Revogar":"Reativar"}</button>
+<tr><td class="user">\${row.username}</td><td><span class="badge \${row.status==="active"?"":"revoked"}">\${row.status==="active"?"Ativa":"Revogada"}</span></td><td class="device">\${row.device_name||"Não vinculado"}</td><td>\${row.expires_at||"Permanente"}</td>
+<td><div class="actions"><button class="\${row.status==="active"?"warning":""}" onclick="action('\${encodeURIComponent(row.username)}','\${row.status==="active"?"revoke":"reactivate"}')">\${row.status==="active"?"Revogar":"Reativar"}</button>
 <button onclick="action('\${encodeURIComponent(row.username)}','reset-device')">Liberar PC</button>
-<button onclick="removeLicense('\${encodeURIComponent(row.username)}')">Excluir</button></td></tr>\`).join("");status("Lista atualizada.")}catch(e){status(e.message,true)}}
+<button class="destructive" onclick="removeLicense('\${encodeURIComponent(row.username)}')">Excluir</button></div></td></tr>\`).join("")||'<tr><td colspan="5" class="empty">Nenhuma licença cadastrada.</td></tr>';status(data.length+" licença(s) carregada(s).")}catch(e){status(e.message,true)}}
 async function createLicense(){try{await call("/admin/licenses",{method:"POST",body:JSON.stringify({username:username.value,password:password.value,expires_at:expires.value||null,notes:notes.value})});await load()}catch(e){status(e.message,true)}}
 async function action(user,name){try{await call("/admin/licenses/"+user+"/"+name,{method:"POST",body:"{}"});await load()}catch(e){status(e.message,true)}}
-async function removeLicense(user){if(!confirm("Excluir definitivamente?"))return;try{await call("/admin/licenses/"+user,{method:"DELETE"});await load()}catch(e){status(e.message,true)}}
+async function removeLicense(user){if(!confirm("Excluir esta licença definitivamente?"))return;try{await call("/admin/licenses/"+user,{method:"DELETE"});await load()}catch(e){status(e.message,true)}}
 </script></body></html>`;
 }
