@@ -8,6 +8,7 @@ from app.licensing import (
     LicenseConnectionError,
     LicenseValidationError,
     activate_with_server,
+    clear_local_license_state,
     describe_license_state,
     device_fingerprint,
     device_has_bypass,
@@ -241,10 +242,9 @@ def ensure_application_license() -> bool:
                 "Conecte a internet e valide novamente."
             )
         except LicenseValidationError as exc:
-            error_text = str(exc)
-            blocking_terms = ("bloqueada", "expirou", "renovada")
-            if local_license_is_usable_offline(local_state) and not any(term in error_text.lower() for term in blocking_terms):
-                return True
+            # Uma resposta do servidor e autoritativa. O modo offline deve ser
+            # usado somente quando o servidor nao puder ser alcancado.
+            clear_local_license_state()
             initial_message = str(exc)
         else:
             initial_message = ""

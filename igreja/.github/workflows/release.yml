@@ -46,7 +46,7 @@ jobs:
         with:
           files: dist/Igreja.exe
           body: |
-            Migra o servidor de licencas para matheustorresqa.com/appigreja.
-            Mantem as licencas, dispositivos e senhas existentes.
+            Corrige licencas revogadas ou excluidas que continuavam funcionando pelo modo offline.
+            Remove o bypass fixo de dispositivo e exige nova autenticacao quando o servidor rejeita a licenca.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
