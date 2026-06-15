@@ -1,0 +1,16 @@
+name = "igreja-license-server"
+main = "src/worker.js"
+compatibility_date = "2026-06-15"
+workers_dev = true
+routes = [
+  { pattern = "matheustorresqa.com/appigreja*", zone_name = "matheustorresqa.com" }
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "igreja-licenses"
+database_id = "eaa831be-fb4b-4878-9a95-be2c7759d292"
+
+[vars]
+OFFLINE_GRACE_HOURS = "175200"
+PRIVACY_RETENTION_DAYS = "1095"

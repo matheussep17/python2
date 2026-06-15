@@ -1,0 +1,20 @@
+{
+  "name": "igreja-license-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:init:local": "wrangler d1 execute igreja-licenses --local --file=schema.sql",
+    "db:init:remote": "wrangler d1 execute igreja-licenses --remote --file=schema.sql"
+  },
+  "dependencies": {
+    "scrypt-js": "3.0.1"
+  },
+  "devDependencies": {
+    "wrangler": "4.100.0"
+  },
+  "overrides": {
+    "esbuild": "0.28.1"
+  }
+}

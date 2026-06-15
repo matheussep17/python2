@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from licensing_server.db import (
     anonymize_license,
+    connect,
     create_license,
     delete_license,
     export_license_data,
@@ -698,6 +699,14 @@ def validate(payload: ValidateRequest):
 def admin_list_licenses(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
     _require_admin_token(x_admin_token)
     return [_row_to_admin_payload(row) for row in list_licenses()]
+
+
+@app.get("/api/v1/admin/backup")
+def admin_backup_licenses(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
+    _require_admin_token(x_admin_token)
+    with connect() as conn:
+        rows = conn.execute("SELECT * FROM licenses ORDER BY id").fetchall()
+    return {"version": 1, "licenses": [dict(row) for row in rows]}
 
 
 @app.post("/api/v1/admin/licenses")
