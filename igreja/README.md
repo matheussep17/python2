@@ -55,6 +55,21 @@ Exemplo:
 
 O app pode checar isso ao abrir e também oferece o botão `Atualizar`.
 
+Se você quiser usar o GitHub Releases como manifesto estável, o workflow de release também publica:
+
+- `dist/update-manifest.json`
+- `dist/Igreja.sha256.txt`
+
+Nesse caso, basta apontar `update_manifest_url` para:
+
+```json
+{
+  "update_manifest_url": "https://github.com/matheussep17/python2/releases/latest/download/update-manifest.json"
+}
+```
+
+Esse manifesto já inclui `version`, `url`, `size`, `digest` e `notes`, então o app consegue validar melhor o download antes de aplicar a troca do executável.
+
 ### Atualizacao do yt-dlp
 
 A aba de download tambem pode atualizar o `yt-dlp` separadamente do executavel. Ao abrir a tela, o app verifica no maximo uma vez por dia se existe uma versao nova no PyPI. Se houver, baixa o wheel oficial, extrai em uma pasta do usuario e passa a carregar essa versao antes da versao embutida no `.exe`.

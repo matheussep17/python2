@@ -1,7 +1,6 @@
 import hashlib
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -9,7 +8,7 @@ from pathlib import Path
 
 import requests
 
-from app.utils import load_app_config
+from app.utils import format_bytes, load_app_config
 from app.version import APP_NAME, APP_VERSION
 
 
@@ -184,6 +183,26 @@ def has_update(manifest: dict) -> bool:
     return compare_versions(get_current_version(), manifest["version"]) < 0
 
 
+def describe_update_manifest(manifest: dict) -> str:
+    lines = [
+        f"Versao: {manifest.get('version', 'desconhecida')}",
+    ]
+
+    size = int(manifest.get("size", 0) or 0)
+    if size > 0:
+        lines.append(f"Tamanho: {format_bytes(size)}")
+
+    digest = str(manifest.get("digest", "") or "").strip().lower()
+    if digest:
+        lines.append(f"SHA-256: {digest}")
+
+    source = str(manifest.get("source", "") or "").strip()
+    if source:
+        lines.append(f"Origem: {source}")
+
+    return "\n".join(lines)
+
+
 def download_update_package(manifest: dict, progress_callback=None) -> Path:
     response = requests.get(manifest["url"], stream=True, timeout=20)
     response.raise_for_status()
@@ -236,13 +255,14 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
     if not can_self_update():
         raise UpdateError("Auto-update disponivel apenas no executavel Windows.")
 
+    downloaded_exe = Path(downloaded_exe).resolve()
     current_exe = Path(sys.executable).resolve()
     app_dir = current_exe.parent
-    staged_exe = _stage_update_exe(downloaded_exe, current_exe)
     script_path = Path(tempfile.gettempdir()) / f"igreja-update-{os.getpid()}.cmd"
     log_path = Path(tempfile.gettempdir()) / f"igreja-update-{os.getpid()}.log"
     current_pid = os.getpid()
-    source_path = str(staged_exe)
+    package_path = str(downloaded_exe)
+    package_dir = str(downloaded_exe.parent)
     target_path = str(current_exe)
     target_image = current_exe.name
     backup_path = str(current_exe.with_suffix(current_exe.suffix + ".old"))
@@ -253,18 +273,19 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             "@echo off",
             "setlocal EnableExtensions",
             f'set "APP_PID={current_pid}"',
-            f'set "SOURCE={source_path}"',
+            f'set "PACKAGE={package_path}"',
+            f'set "PACKAGE_DIR={package_dir}"',
             f'set "TARGET={target_path}"',
             f'set "TARGET_IMAGE={target_image}"',
             f'set "BACKUP={backup_path}"',
             f'set "LOG={log_path}"',
             'echo [%date% %time%] Iniciando atualizacao. > "%LOG%"',
-            'echo SOURCE=%SOURCE% >> "%LOG%"',
+            'echo PACKAGE=%PACKAGE% >> "%LOG%"',
             'echo TARGET=%TARGET% >> "%LOG%"',
             ":wait_exit",
             'tasklist /FI "PID eq %APP_PID%" 2>nul | find "%APP_PID%" >nul',
             "if not errorlevel 1 (",
-            f"  {sleep_command}",
+                f"  {sleep_command}",
             "  goto wait_exit",
             ")",
             'echo [%date% %time%] Processo principal encerrado. >> "%LOG%"',
@@ -277,54 +298,49 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             "exit /b 1",
             ":no_running_instances",
             'echo [%date% %time%] Nenhuma outra instancia encontrada. >> "%LOG%"',
-            'if not exist "%SOURCE%" (',
+            'if not exist "%PACKAGE%" (',
             '  echo [%date% %time%] ERRO: arquivo baixado nao encontrado. >> "%LOG%"',
-            "  exit /b 1",
+            "  goto cleanup_fail",
             ")",
-            'for %%A in ("%SOURCE%") do set "SOURCE_SIZE=%%~zA"',
-            'echo SOURCE_SIZE=%SOURCE_SIZE% >> "%LOG%"',
+            'for %%A in ("%PACKAGE%") do set "PACKAGE_SIZE=%%~zA"',
+            'echo PACKAGE_SIZE=%PACKAGE_SIZE% >> "%LOG%"',
             'attrib -R "%TARGET%" >nul 2>&1',
             'del /Q "%BACKUP%" >nul 2>&1',
             "for /L %%I in (1,1,90) do (",
             '  echo [%date% %time%] Tentativa %%I de substituir o executavel. >> "%LOG%"',
-            '  powershell -NoProfile -ExecutionPolicy Bypass -Command "[IO.File]::Copy($env:SOURCE, $env:TARGET, $true)" >> "%LOG%" 2>&1',
+            '  copy /Y "%TARGET%" "%BACKUP%" >> "%LOG%" 2>&1',
             "  if not errorlevel 1 (",
-            '    for %%A in ("%TARGET%") do set "TARGET_SIZE=%%~zA"',
-            '    call echo TARGET_SIZE=%%TARGET_SIZE%% >> "%LOG%"',
-            '    call if "%%TARGET_SIZE%%"=="%SOURCE_SIZE%" goto cleanup',
-            '    echo [%date% %time%] ERRO: tamanho final divergente apos copia direta. >> "%LOG%"',
-            "  )",
-            '  echo [%date% %time%] Copia direta falhou; tentando fluxo com backup. >> "%LOG%"',
-            '  move /Y "%TARGET%" "%BACKUP%" >> "%LOG%" 2>&1',
-            "  if errorlevel 1 (",
-            f"    {sleep_command}",
-            "  ) else (",
-            '    copy /Y "%SOURCE%" "%TARGET%" >> "%LOG%" 2>&1',
-            "    if errorlevel 1 (",
-            '      echo [%date% %time%] ERRO: falha ao copiar nova versao; restaurando backup. >> "%LOG%"',
-            '      del /Q "%TARGET%" >nul 2>&1',
-            '      move /Y "%BACKUP%" "%TARGET%" >> "%LOG%" 2>&1',
-            f"      {sleep_command}",
-            "    ) else (",
+            '    copy /Y "%PACKAGE%" "%TARGET%" >> "%LOG%" 2>&1',
+            "    if not errorlevel 1 (",
             '      for %%A in ("%TARGET%") do set "TARGET_SIZE=%%~zA"',
             '      call echo TARGET_SIZE=%%TARGET_SIZE%% >> "%LOG%"',
-            '      call if "%%TARGET_SIZE%%"=="%SOURCE_SIZE%" goto cleanup',
-            '      echo [%date% %time%] ERRO: tamanho final divergente; restaurando backup. >> "%LOG%"',
-            '      del /Q "%TARGET%" >nul 2>&1',
-            '      move /Y "%BACKUP%" "%TARGET%" >> "%LOG%" 2>&1',
-            f"      {sleep_command}",
+            '      call if "%%TARGET_SIZE%%"=="%PACKAGE_SIZE%" goto cleanup_success',
+            '      echo [%date% %time%] ERRO: tamanho final divergente apos copia. >> "%LOG%"',
             "    )",
+            "  )",
+            '  echo [%date% %time%] Copia falhou; restaurando backup. >> "%LOG%"',
+            '  if exist "%BACKUP%" (',
+            '    del /Q "%TARGET%" >nul 2>&1',
+            '    move /Y "%BACKUP%" "%TARGET%" >> "%LOG%" 2>&1',
             "  )",
             f"  {sleep_command}",
             ")",
-            'echo [%date% %time%] ERRO: nao foi possivel substituir o executavel. >> "%LOG%"',
-            "exit /b 1",
-            ":cleanup",
+            "goto cleanup_fail",
+            ":cleanup_success",
             'echo [%date% %time%] Atualizacao aplicada. >> "%LOG%"',
-            'del /Q "%SOURCE%" >nul 2>&1',
+            'del /Q "%PACKAGE%" >nul 2>&1',
+            'rmdir /S /Q "%PACKAGE_DIR%" >nul 2>&1',
             'del /Q "%BACKUP%" >nul 2>&1',
             'start "" "%TARGET%"',
             'del /Q "%~f0" >nul 2>&1',
+            "exit /b 0",
+            ":cleanup_fail",
+            'echo [%date% %time%] ERRO: nao foi possivel substituir o executavel. >> "%LOG%"',
+            'del /Q "%PACKAGE%" >nul 2>&1',
+            'rmdir /S /Q "%PACKAGE_DIR%" >nul 2>&1',
+            'del /Q "%BACKUP%" >nul 2>&1',
+            'del /Q "%~f0" >nul 2>&1',
+            "exit /b 1",
         ]
     )
     script_path.write_text(script, encoding="utf-8")
@@ -335,34 +351,6 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
         close_fds=True,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
-
-
-def _stage_update_exe(downloaded_exe: Path, current_exe: Path) -> Path:
-    downloaded_exe = Path(downloaded_exe).resolve()
-    current_exe = Path(current_exe).resolve()
-    if not downloaded_exe.exists():
-        raise UpdateError("O arquivo de atualizacao baixado nao foi encontrado.")
-
-    staged_exe = current_exe.with_name(f"{current_exe.stem}.update-{os.getpid()}{current_exe.suffix}")
-    try:
-        if staged_exe.exists():
-            staged_exe.unlink()
-        shutil.copy2(downloaded_exe, staged_exe)
-    except OSError as exc:
-        raise UpdateError(
-            "Nao consegui preparar a atualizacao na pasta do aplicativo. "
-            "Verifique se voce tem permissao de escrita nessa pasta ou execute o app como administrador."
-        ) from exc
-
-    try:
-        if staged_exe.stat().st_size != downloaded_exe.stat().st_size:
-            staged_exe.unlink(missing_ok=True)
-            raise UpdateError("A copia local da atualizacao ficou incompleta.")
-        _validate_frozen_update_package(staged_exe)
-    except OSError as exc:
-        raise UpdateError("Nao foi possivel validar a copia local da atualizacao.") from exc
-
-    return staged_exe
 
 
 def _parse_version(value: str) -> tuple[int, ...]:

@@ -93,6 +93,10 @@ def license_state_paths() -> list[Path]:
         machine_path = machine_dir / LICENSE_STATE_FILE
         if machine_path not in paths:
             paths.append(machine_path)
+    if sys.platform.startswith("win") and getattr(sys, "frozen", False):
+        legacy_path = Path(sys.executable).resolve().parent / LICENSE_STATE_FILE
+        if legacy_path not in paths:
+            paths.append(legacy_path)
     return paths
 
 

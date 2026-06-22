@@ -41,10 +41,40 @@ jobs:
             throw "Arquivo dist\Igreja.exe nao encontrado apos o build."
           }
 
+      - name: Generate release manifest and checksum
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $exe = Get-Item -LiteralPath ".\dist\Igreja.exe"
+          $version = $env:GITHUB_REF_NAME.TrimStart("v")
+          $repo = $env:GITHUB_REPOSITORY
+          $downloadUrl = "https://github.com/$repo/releases/latest/download/Igreja.exe"
+          $manifestPath = Join-Path $PWD "dist\update-manifest.json"
+          $checksumPath = Join-Path $PWD "dist\Igreja.sha256.txt"
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe.FullName).Hash.ToLower()
+          $manifest = [ordered]@{
+            version = $version
+            url = $downloadUrl
+            notes = @"
+Consolida a migracao do licenciamento para matheustorresqa.com.
+Corrige automaticamente configuracoes antigas da Railway e remove bypasses externos.
+Envia o nome do computador ao painel administrativo.
+"@.Trim()
+            size = $exe.Length
+            digest = $hash
+            mandatory = $false
+          }
+
+          $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+          "$hash  $($exe.Name)" | Set-Content -LiteralPath $checksumPath -Encoding UTF8
+
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Igreja.exe
+          files: |
+            dist/Igreja.exe
+            dist/update-manifest.json
+            dist/Igreja.sha256.txt
           body: |
             Consolida a migracao do licenciamento para matheustorresqa.com.
             Corrige automaticamente configuracoes antigas da Railway e remove bypasses externos.

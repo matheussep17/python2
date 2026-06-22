@@ -27,6 +27,7 @@ from app.frames.transcriber import TranscriberFrame
 from app.updater import (
     UpdateError,
     can_self_update,
+    describe_update_manifest,
     download_update_package,
     fetch_update_manifest,
     get_current_version,
@@ -683,10 +684,13 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             return
 
         notes = manifest.get("notes", "").strip()
+        details = describe_update_manifest(manifest)
         prompt = (
             f"Versao atual: {get_current_version()}\n"
-            f"Nova versao: {manifest['version']}\n\n"
+            f"Nova versao: {manifest['version']}\n"
+            f"{details}\n\n"
             "A atualizacao sera baixada agora e aplicada quando o aplicativo for fechado.\n"
+            "O executavel atual sera substituido pelo novo e a licenca local sera preservada.\n"
             "Depois disso, basta abrir o app novamente normalmente.\n\n"
             "Deseja continuar?"
         )
@@ -745,7 +749,9 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             "Instalar atualizacao",
             (
                 f"A versao {manifest['version']} foi baixada.\n\n"
+                f"{describe_update_manifest(manifest)}\n\n"
                 "O aplicativo sera fechado para substituir o arquivo atual pela nova versao.\n"
+                "A licenca e os dados locais continuam salvos no computador.\n"
                 "Depois disso, abra o aplicativo novamente normalmente.\n\n"
                 "Deseja continuar agora?"
             ),
@@ -762,7 +768,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             return
 
         self._set_status("Fechando para concluir a atualizacao...")
-        self._on_close()
+        self.destroy()
 
     def _finish_update_download_error(self, exc: Exception):
         if self._is_closing:
