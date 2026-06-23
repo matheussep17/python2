@@ -42,7 +42,7 @@ def parse_iso(value: str | None):
         return None
 
 
-OFFLINE_GRACE_HOURS = max(1, int(os.environ.get("IGREJA_OFFLINE_GRACE_HOURS", str(24 * 365 * 20))))
+OFFLINE_GRACE_HOURS = max(1, int(os.environ.get("IGREJA_OFFLINE_GRACE_HOURS", "24")))
 ADMIN_TOKEN = str(os.environ.get("IGREJA_ADMIN_TOKEN", "") or "").strip()
 PRIVACY_CONTACT = str(os.environ.get("IGREJA_PRIVACY_CONTACT", "") or "").strip()
 PRIVACY_RETENTION_DAYS = max(1, int(os.environ.get("IGREJA_PRIVACY_RETENTION_DAYS", "1095")))
@@ -142,7 +142,7 @@ def _require_admin_token(token: str | None):
             status_code=503,
             detail="Configure IGREJA_ADMIN_TOKEN no servidor antes de usar o painel administrativo.",
         )
-    if not token or token.strip() != ADMIN_TOKEN:
+    if not token or not secrets.compare_digest(token.strip(), ADMIN_TOKEN):
         raise HTTPException(status_code=401, detail="Token administrativo inválido.")
 
 

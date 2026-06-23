@@ -24,6 +24,7 @@ from app.frames.editor import EditorFrame
 from app.frames.lyrics_search import LyricsSearchFrame
 from app.frames.pdf_editor import PdfEditorFrame
 from app.frames.transcriber import TranscriberFrame
+from app.logging_config import configure_logging
 from app.updater import (
     UpdateError,
     can_self_update,
@@ -863,6 +864,7 @@ def _try_recover_missing_ffmpeg(root, missing: list[str]) -> bool:
 
 
 def main():
+    configure_logging()
     if not acquire_single_instance_lock():
         sys.exit(0)
 

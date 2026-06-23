@@ -10,7 +10,7 @@ services:
       - key: IGREJA_ADMIN_TOKEN
         sync: false
       - key: IGREJA_OFFLINE_GRACE_HOURS
-        value: "175200"
+        value: "24"
       - key: IGREJA_LICENSE_DB
         value: /var/data/licenses.db
     disk:

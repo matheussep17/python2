@@ -130,7 +130,7 @@ Configuração no `config.json`:
   "license_enforced": true,
   "license_api_url": "https://seu-servidor/api/v1",
   "license_request_timeout_seconds": 10,
-  "license_offline_grace_hours": 175200,
+  "license_offline_grace_hours": 24,
   "license_send_device_name": false,
   "license_bypass_machine_names": [
     "nome-do-note-da-igreja"
@@ -144,7 +144,11 @@ Configuração no `config.json`:
 Se `license_enforced` estiver `false`, o app abre normalmente como hoje.
 Se quiser manter apenas o seu computador liberado e exigir licença nos demais, deixe `license_enforced=true` e adicione só o fingerprint da sua máquina em `license_bypass_device_fingerprints`.
 Se for mais prático, também dá para liberar um equipamento pelo nome do Windows usando `license_bypass_machine_names`.
-Com `license_offline_grace_hours` em `175200`, a máquina ativada continua funcionando por cerca de 20 anos mesmo sem falar com o servidor novamente.
+Com `license_offline_grace_hours` em `24`, a máquina ativada pode funcionar por até
+24 horas sem alcançar o servidor. Sempre que houver internet, o token salvo é
+revalidado automaticamente e esse prazo é renovado sem solicitar login e senha.
+As credenciais só são solicitadas novamente quando não há estado local válido ou
+quando o servidor rejeita, revoga ou expira a licença.
 
 ### Servidor de licenças
 

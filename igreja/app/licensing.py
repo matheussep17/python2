@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import os
 import platform
 import secrets
@@ -12,18 +13,19 @@ from pathlib import Path
 
 import requests
 
-from app.utils import load_app_config
+from app.utils import atomic_write_json, load_app_config
 from app.version import APP_NAME, APP_VERSION
 
 
 LICENSE_STATE_FILE = "license_state.json"
-DEFAULT_OFFLINE_GRACE_HOURS = 24 * 365 * 20
+DEFAULT_OFFLINE_GRACE_HOURS = 24
 DEFAULT_TIMEOUT_SECONDS = 10
 DEVICE_FINGERPRINT_NAMESPACE = "igreja-license-device-v2"
 CURRENT_LICENSE_API_URL = "https://matheustorresqa.com/appigreja/api/v1"
 LEGACY_LICENSE_API_URLS = {
     "https://python2-production-e3ee.up.railway.app/api/v1",
 }
+LOGGER = logging.getLogger(__name__)
 
 
 class LicenseError(Exception):
@@ -160,11 +162,10 @@ def save_local_license_state(data: dict) -> None:
     last_error = None
     for target in license_state_paths():
         try:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with target.open("w", encoding="utf-8") as file:
-                json.dump(data, file, ensure_ascii=False, indent=2)
+            atomic_write_json(target, data)
             saved = True
         except Exception as exc:
+            LOGGER.exception("Nao foi possivel salvar o estado da licenca em %s.", target)
             last_error = exc
 
     if not saved and last_error:
@@ -256,7 +257,7 @@ def acceptable_device_fingerprints() -> set[str]:
     return {item for item in {device_fingerprint(), legacy_device_fingerprint()} if item}
 
 
-def local_license_is_usable_offline(state: dict) -> bool:
+def local_license_is_usable_offline(state: dict, settings: dict | None = None) -> bool:
     if not state:
         return False
     if state.get("device_fingerprint") not in acceptable_device_fingerprints():
@@ -269,7 +270,13 @@ def local_license_is_usable_offline(state: dict) -> bool:
         return False
 
     offline_valid_until = parse_iso_datetime(state.get("offline_valid_until"))
-    return bool(offline_valid_until and utcnow() <= offline_valid_until)
+    last_validated_at = parse_iso_datetime(state.get("last_validated_at"))
+    grace_hours = int((settings or load_license_settings()).get("offline_grace_hours", DEFAULT_OFFLINE_GRACE_HOURS))
+    local_limit = last_validated_at + timedelta(hours=max(1, grace_hours)) if last_validated_at else None
+    valid_until_candidates = [value for value in (offline_valid_until, local_limit) if value]
+    if not valid_until_candidates:
+        return False
+    return utcnow() <= min(valid_until_candidates)
 
 
 def describe_license_state(state: dict) -> str:
@@ -329,7 +336,7 @@ def activate_with_server(username: str, password: str, settings: dict | None = N
         "app_version": APP_VERSION,
     }
     response = _request_json(f"{api_url}/activate", payload, int(settings["timeout_seconds"]))
-    state = _build_local_state(response, api_url)
+    state = _build_local_state(response, api_url, settings)
     save_local_license_state(state)
     return state
 
@@ -352,14 +359,20 @@ def validate_with_server(settings: dict | None = None, state: dict | None = None
         "app_version": APP_VERSION,
     }
     response = _request_json(f"{api_url}/validate", payload, int(settings["timeout_seconds"]))
-    fresh_state = _build_local_state(response, api_url)
+    fresh_state = _build_local_state(response, api_url, settings)
     save_local_license_state(fresh_state)
     return fresh_state
 
 
-def _build_local_state(response: dict, api_url: str) -> dict:
+def _build_local_state(response: dict, api_url: str, settings: dict | None = None) -> dict:
     now = utcnow()
-    fallback_offline_until = now + timedelta(hours=DEFAULT_OFFLINE_GRACE_HOURS)
+    grace_hours = int((settings or {}).get("offline_grace_hours", DEFAULT_OFFLINE_GRACE_HOURS))
+    local_offline_limit = now + timedelta(hours=max(1, grace_hours))
+    server_offline_limit = parse_iso_datetime(response.get("offline_valid_until"))
+    offline_valid_until = min(
+        [value for value in (server_offline_limit, local_offline_limit) if value],
+        default=local_offline_limit,
+    )
     return {
         "username": response.get("username", ""),
         "license_id": response.get("license_id"),
@@ -368,7 +381,7 @@ def _build_local_state(response: dict, api_url: str) -> dict:
         "device_name": response.get("device_name") or machine_name(),
         "activation_token": response.get("activation_token", ""),
         "expires_at": response.get("expires_at"),
-        "offline_valid_until": response.get("offline_valid_until") or to_iso_datetime(fallback_offline_until),
+        "offline_valid_until": to_iso_datetime(offline_valid_until),
         "last_validated_at": response.get("validated_at") or to_iso_datetime(now),
         "server_url": api_url,
     }

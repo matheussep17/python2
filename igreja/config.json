@@ -11,7 +11,7 @@
   "license_enforced": true,
   "license_api_url": "https://matheustorresqa.com/appigreja/api/v1",
   "license_request_timeout_seconds": 10,
-  "license_offline_grace_hours": 175200,
+  "license_offline_grace_hours": 24,
   "license_send_device_name": true,
   "license_bypass_machine_names": [],
   "license_bypass_device_fingerprints": []

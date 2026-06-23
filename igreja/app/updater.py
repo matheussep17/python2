@@ -93,13 +93,16 @@ def _fetch_manifest_from_url(manifest_url: str, timeout: int) -> dict:
 
     if not version or not download_url:
         raise UpdateError("O manifesto precisa conter 'version' e 'url'.")
+    normalized_digest = _normalize_sha256_digest(digest)
+    if not normalized_digest:
+        raise UpdateError("O manifesto de atualizacao precisa conter um SHA-256 valido.")
 
     return {
         "version": version,
         "url": download_url,
         "notes": notes,
         "size": expected_size,
-        "digest": _normalize_sha256_digest(digest),
+        "digest": normalized_digest,
         "mandatory": bool(payload.get("mandatory", False)),
     }
 
@@ -127,7 +130,7 @@ def _fetch_manifest_from_github_release(repo: str, asset_name: str, timeout: int
         if release.get("draft") or release.get("prerelease"):
             continue
         try:
-            manifests.append(_build_github_release_manifest(repo, asset_name, release))
+            manifests.append(_build_github_release_manifest(repo, asset_name, release, timeout))
         except UpdateError:
             continue
 
@@ -139,7 +142,7 @@ def _fetch_manifest_from_github_release(repo: str, asset_name: str, timeout: int
     return sorted(manifests, key=lambda item: _parse_version(item["version"]), reverse=True)[0]
 
 
-def _build_github_release_manifest(repo: str, asset_name: str, payload: dict) -> dict:
+def _build_github_release_manifest(repo: str, asset_name: str, payload: dict, timeout: int = 8) -> dict:
     tag_name = str(payload.get("tag_name", "") or "").strip()
     version = _normalize_release_version(tag_name)
     notes = str(payload.get("body", "") or "").strip()
@@ -155,12 +158,17 @@ def _build_github_release_manifest(repo: str, asset_name: str, payload: dict) ->
         )
 
     download_url = str(selected_asset.get("browser_download_url", "") or "").strip()
+    digest = _normalize_sha256_digest(str(selected_asset.get("digest", "") or ""))
+    if not digest:
+        digest = _fetch_release_checksum(assets, selected_asset, timeout)
+    if not digest:
+        raise UpdateError("A release nao fornece um SHA-256 verificavel para o executavel.")
     return {
         "version": version,
         "url": download_url,
         "notes": notes,
         "size": int(selected_asset.get("size", 0) or 0),
-        "digest": _normalize_sha256_digest(str(selected_asset.get("digest", "") or "")),
+        "digest": digest,
         "mandatory": False,
         "source": f"github:{repo}",
     }
@@ -177,6 +185,29 @@ def _select_release_asset(assets: list, asset_name: str) -> dict | None:
             return asset
 
     return None
+
+
+def _fetch_release_checksum(assets: list, selected_asset: dict, timeout: int) -> str:
+    selected_name = str(selected_asset.get("name", "") or "").strip()
+    checksum_names = {
+        f"{selected_name}.sha256",
+        f"{selected_name}.sha256.txt",
+        "igreja.sha256.txt",
+    }
+    for asset in assets:
+        if str(asset.get("name", "") or "").strip().lower() not in {
+            name.lower() for name in checksum_names
+        }:
+            continue
+        checksum_url = str(asset.get("browser_download_url", "") or "").strip()
+        if not checksum_url.startswith("https://"):
+            continue
+        response = requests.get(checksum_url, timeout=timeout)
+        response.raise_for_status()
+        match = re.search(r"\b[0-9a-fA-F]{64}\b", response.text)
+        if match:
+            return match.group(0).lower()
+    return ""
 
 
 def has_update(manifest: dict) -> bool:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import hashlib
 import json
 import os
 import shutil
@@ -13,7 +14,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from app.utils import load_app_config
+from app.utils import atomic_write_json, load_app_config
 
 
 PYPI_URL = "https://pypi.org/pypi/yt-dlp/json"
@@ -68,10 +69,7 @@ def load_state() -> dict:
 
 
 def save_state(data: dict) -> None:
-    root = runtime_root()
-    root.mkdir(parents=True, exist_ok=True)
-    with state_path().open("w", encoding="utf-8") as file:
-        json.dump(data, file, ensure_ascii=False, indent=2)
+    atomic_write_json(state_path(), data)
 
 
 def get_installed_versions() -> list[str]:
@@ -253,6 +251,7 @@ def fetch_latest_metadata(timeout: int = 12) -> dict:
         "url": url,
         "filename": str(wheel.get("filename", "") or "yt-dlp.whl"),
         "size": int(wheel.get("size", 0) or 0),
+        "sha256": str(wheel.get("digests", {}).get("sha256", "") or "").strip().lower(),
     }
 
 
@@ -285,12 +284,19 @@ def _download_and_extract(metadata: dict, progress_callback=None) -> Path:
         if expected_size > 0 and downloaded != expected_size:
             raise YtDlpRuntimeError("O download do yt-dlp ficou incompleto.")
 
+        expected_digest = str(metadata.get("sha256", "") or "").strip().lower()
+        if len(expected_digest) != 64:
+            raise YtDlpRuntimeError("O PyPI nao informou um SHA-256 valido para o yt-dlp.")
+        if _sha256_file(wheel_path) != expected_digest:
+            raise YtDlpRuntimeError("O wheel do yt-dlp falhou na verificacao SHA-256.")
+
         extract_dir.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(wheel_path) as archive:
             members = [
                 name
                 for name in archive.namelist()
-                if name.startswith("yt_dlp/") or ".dist-info/" in name
+                if (name.startswith("yt_dlp/") or ".dist-info/" in name)
+                and _safe_archive_member(name)
             ]
             if "yt_dlp/__init__.py" not in members:
                 raise YtDlpRuntimeError("O pacote baixado nao contem yt_dlp.")
@@ -312,6 +318,19 @@ def _cleanup_old_versions(keep_version: str) -> None:
             continue
         path = versions_dir() / version
         shutil.rmtree(path, ignore_errors=True)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _safe_archive_member(name: str) -> bool:
+    path = Path(name.replace("\\", "/"))
+    return not path.is_absolute() and ".." not in path.parts
 
 
 def _module_version(module) -> str | None:

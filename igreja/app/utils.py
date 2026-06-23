@@ -1,12 +1,15 @@
 # app/utils.py
 import importlib.util
+import hashlib
 import json
+import logging
 import math
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 import zipfile
 from pathlib import Path
 
@@ -14,8 +17,11 @@ import requests
 
 
 FFMPEG_DOWNLOAD_URL_KEY = "ffmpeg_download_url"
+FFMPEG_SHA256_KEY = "ffmpeg_sha256"
+FFMPEG_SHA256_URL_KEY = "ffmpeg_sha256_url"
 DEFAULT_FFMPEG_DOWNLOAD_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
 OUTPUT_FOLDER_KEY = "output_folder"
+LOGGER = logging.getLogger(__name__)
 
 
 def _has_module(name: str) -> bool:
@@ -93,7 +99,7 @@ def load_app_config() -> dict:
                 if isinstance(data, dict):
                     config_data.update(data)
         except Exception:
-            pass
+            LOGGER.exception("Nao foi possivel ler a configuracao empacotada.")
 
     config_path = app_config_path()
     if not config_path.exists():
@@ -106,13 +112,27 @@ def load_app_config() -> dict:
                 config_data.update(data)
             return config_data
     except Exception:
+        LOGGER.exception("Nao foi possivel ler o arquivo de configuracao.")
         return config_data
 
 
+def atomic_write_json(path: Path, data: dict) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
+    try:
+        with temp_path.open("w", encoding="utf-8", newline="\n") as file:
+            json.dump(data, file, ensure_ascii=False, indent=2)
+            file.write("\n")
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temp_path, path)
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
 def save_app_config(data: dict) -> None:
-    config_path = app_config_path()
-    with config_path.open("w", encoding="utf-8") as file:
-        json.dump(data, file, ensure_ascii=False, indent=2)
+    atomic_write_json(app_config_path(), data)
 
 
 def normalize_folder_path(path_value) -> str:
@@ -138,6 +158,15 @@ def save_output_folder(folder: str) -> str:
 def get_ffmpeg_download_url() -> str:
     config = load_app_config()
     return str(config.get(FFMPEG_DOWNLOAD_URL_KEY, DEFAULT_FFMPEG_DOWNLOAD_URL) or "").strip()
+
+
+def get_ffmpeg_checksum_settings(package_url: str) -> tuple[str, str]:
+    config = load_app_config()
+    expected_digest = str(config.get(FFMPEG_SHA256_KEY, "") or "").strip().lower()
+    checksum_url = str(config.get(FFMPEG_SHA256_URL_KEY, "") or "").strip()
+    if not checksum_url and package_url == DEFAULT_FFMPEG_DOWNLOAD_URL:
+        checksum_url = f"{package_url}.sha256"
+    return expected_digest, checksum_url
 
 
 def _runtime_bundle_dir() -> Path:
@@ -224,20 +253,47 @@ def download_and_install_ffmpeg(package_url: str | None = None, progress_callbac
         raise RuntimeError("A instalacao automatica do FFmpeg esta disponivel apenas no Windows.")
 
     package_url = str(package_url or get_ffmpeg_download_url()).strip()
-    if not package_url:
-        raise RuntimeError("Configure 'ffmpeg_download_url' no config.json para baixar o FFmpeg automaticamente.")
+    if not package_url.startswith("https://"):
+        raise RuntimeError("O download automatico do FFmpeg exige uma URL HTTPS.")
+
+    expected_digest, checksum_url = get_ffmpeg_checksum_settings(package_url)
+    if not expected_digest:
+        if not checksum_url.startswith("https://"):
+            raise RuntimeError(
+                "Configure 'ffmpeg_sha256' ou uma URL HTTPS em 'ffmpeg_sha256_url'."
+            )
+        checksum_response = requests.get(checksum_url, timeout=15)
+        checksum_response.raise_for_status()
+        expected_digest = checksum_response.text.strip().split()[0].lower()
+    if len(expected_digest) != 64 or any(char not in "0123456789abcdef" for char in expected_digest):
+        raise RuntimeError("O checksum SHA-256 configurado para o FFmpeg e invalido.")
 
     download_dir = Path(tempfile.mkdtemp(prefix="igreja-ffmpeg-download-"))
+    try:
+        return _download_verified_ffmpeg_package(
+            package_url,
+            expected_digest,
+            download_dir,
+            progress_callback,
+        )
+    finally:
+        shutil.rmtree(download_dir, ignore_errors=True)
+
+
+def _download_verified_ffmpeg_package(
+    package_url: str,
+    expected_digest: str,
+    download_dir: Path,
+    progress_callback=None,
+) -> Path:
     package_path = download_dir / "ffmpeg.zip"
     extract_dir = download_dir / "extract"
     target_dir = ffmpeg_vendor_bin_dir()
-
     response = requests.get(package_url, stream=True, timeout=30)
     response.raise_for_status()
 
     total_bytes = int(response.headers.get("content-length", "0") or "0")
     downloaded_bytes = 0
-
     with package_path.open("wb") as file:
         for chunk in response.iter_content(chunk_size=1024 * 256):
             if not chunk:
@@ -247,24 +303,31 @@ def download_and_install_ffmpeg(package_url: str | None = None, progress_callbac
             if progress_callback:
                 progress_callback(downloaded_bytes, total_bytes)
 
+    if _sha256_file(package_path) != expected_digest:
+        raise RuntimeError("O pacote do FFmpeg falhou na verificacao de integridade SHA-256.")
+
     with zipfile.ZipFile(package_path) as archive:
         ffmpeg_member = _find_zip_member(archive, "ffmpeg.exe")
         ffprobe_member = _find_zip_member(archive, "ffprobe.exe")
-
         if not ffmpeg_member or not ffprobe_member:
             raise RuntimeError("O pacote baixado nao contem ffmpeg.exe e ffprobe.exe.")
-
         archive.extract(ffmpeg_member, path=extract_dir)
         archive.extract(ffprobe_member, path=extract_dir)
 
     extracted_ffmpeg = extract_dir / Path(ffmpeg_member)
     extracted_ffprobe = extract_dir / Path(ffprobe_member)
-
     target_dir.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(extracted_ffmpeg, target_dir / "ffmpeg.exe")
     shutil.copyfile(extracted_ffprobe, target_dir / "ffprobe.exe")
-
     return target_dir
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _find_zip_member(archive: zipfile.ZipFile, filename: str) -> str | None:

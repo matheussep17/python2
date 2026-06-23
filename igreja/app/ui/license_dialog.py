@@ -235,7 +235,7 @@ def ensure_application_license() -> bool:
             validate_with_server(settings, local_state)
             return True
         except LicenseConnectionError:
-            if local_license_is_usable_offline(local_state):
+            if local_license_is_usable_offline(local_state, settings):
                 return True
             initial_message = (
                 "Nao foi possivel falar com o servidor e o prazo offline desta licenca ja acabou. "

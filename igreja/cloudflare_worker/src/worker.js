@@ -319,7 +319,7 @@ function ensureUsable(row) {
 
 function licensePayload(row, env) {
   const now = new Date();
-  const grace = positiveInt(env.OFFLINE_GRACE_HOURS, 175200);
+  const grace = positiveInt(env.OFFLINE_GRACE_HOURS, 24);
   return {
     license_id: row.id,
     username: row.username,

@@ -22,6 +22,18 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install test dependencies
+        shell: pwsh
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Compile Python sources
+        shell: pwsh
+        run: python -m compileall -q app licensing_server scripts tests
+
+      - name: Run tests
+        shell: pwsh
+        run: python -m pytest -q
+
       - name: Create build virtual environment
         shell: pwsh
         run: python -m venv .buildvenv
@@ -56,9 +68,9 @@ jobs:
             version = $version
             url = $downloadUrl
             notes = @"
-Consolida a migracao do licenciamento para matheustorresqa.com.
-Corrige automaticamente configuracoes antigas da Railway e remove bypasses externos.
-Envia o nome do computador ao painel administrativo.
+Reduz a tolerancia offline da licenca para 24 horas com revalidacao automatica.
+Adiciona verificacao SHA-256 aos downloads executaveis.
+Melhora testes, logs, persistencia e reprodutibilidade do build.
 "@.Trim()
             size = $exe.Length
             digest = $hash
@@ -76,8 +88,8 @@ Envia o nome do computador ao painel administrativo.
             dist/update-manifest.json
             dist/Igreja.sha256.txt
           body: |
-            Consolida a migracao do licenciamento para matheustorresqa.com.
-            Corrige automaticamente configuracoes antigas da Railway e remove bypasses externos.
-            Envia o nome do computador ao painel administrativo.
+            Reduz a tolerancia offline da licenca para 24 horas com revalidacao automatica.
+            Adiciona verificacao SHA-256 aos downloads executaveis.
+            Melhora testes, logs, persistencia e reprodutibilidade do build.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
