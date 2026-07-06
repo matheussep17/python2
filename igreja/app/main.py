@@ -752,7 +752,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
                 f"{describe_update_manifest(manifest)}\n\n"
                 "O aplicativo sera fechado para substituir o arquivo atual pela nova versao.\n"
                 "A licenca e os dados locais continuam salvos no computador.\n"
-                "Depois disso, abra o aplicativo novamente normalmente.\n\n"
+                "Depois disso, abra o aplicativo manualmente novamente.\n\n"
                 "Deseja continuar agora?"
             ),
         )

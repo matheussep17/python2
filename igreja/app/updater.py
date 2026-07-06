@@ -368,7 +368,7 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             "} finally {",
             "  Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue",
             "}",
-            "Start-Process -FilePath $Target -WorkingDirectory (Split-Path -LiteralPath $Target -Parent)",
+            "Write-Log 'Atualizacao concluida. Abra o aplicativo manualmente para usar a nova versao.'",
         ]
     )
     script_path.write_text(script, encoding="utf-8")
