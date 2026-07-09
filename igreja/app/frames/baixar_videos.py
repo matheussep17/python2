@@ -72,6 +72,7 @@ class BaixarFrame(ttk.Frame):
         self._url_preview_job = None
         self._last_preview_url = None
         self._thumb_photo = None
+        self._media_info_cache = {}
 
         self._build_ui()
 
@@ -479,6 +480,11 @@ class BaixarFrame(ttk.Frame):
 
     def _probe_media_info(self, url):
         y = self._yt_dlp
+        media_info_cache = getattr(self, "_media_info_cache", {})
+        cached_info = media_info_cache.get(url)
+        if cached_info is not None:
+            return cached_info
+
         extractor_args = self._build_youtube_extractor_args()
         js_runtimes = get_available_js_runtimes()
         attempts = self._iter_ydl_attempts(
@@ -514,7 +520,10 @@ class BaixarFrame(ttk.Frame):
         for probe_opts in attempts:
             try:
                 with y.YoutubeDL(probe_opts) as ydl:
-                    return ydl.extract_info(url, download=False)
+                    info = ydl.extract_info(url, download=False)
+                    media_info_cache[url] = info
+                    self._media_info_cache = media_info_cache
+                    return info
             except Exception as exc:
                 last_error = exc
 
@@ -523,6 +532,10 @@ class BaixarFrame(ttk.Frame):
         return {}
 
     def _resolve_download_target(self, url, fmt_mode, quality_choice):
+        cached_title = self._sanitize_filename(self.url_title_var.get()).replace("_", " ")
+        if cached_title and cached_title not in {"(buscando título...)", "(sem título)", "(não foi possível obter o título)"}:
+            return self._build_outtmpl(cached_title, fmt_mode, quality_choice)
+
         try:
             info = self._probe_media_info(url)
         except Exception:
@@ -623,6 +636,8 @@ class BaixarFrame(ttk.Frame):
         try:
             self._yt_dlp = load_yt_dlp()
             info = self._probe_media_info(url)
+            self._media_info_cache = getattr(self, "_media_info_cache", {})
+            self._media_info_cache[url] = info
 
             title = (
                 (info or {}).get("title")
@@ -1150,19 +1165,62 @@ class BaixarFrame(ttk.Frame):
             raise RuntimeError("FFmpeg não encontrado para finalizar o download.")
 
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform.startswith("win") else 0
-        try:
-            completed = subprocess.run(
+        cancelled_exc = getattr(getattr(self._yt_dlp, "utils", None), "DownloadCancelled", None)
+        started_at = time.monotonic()
+
+        with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+            proc = subprocess.Popen(
                 [ffmpeg_exe, *args],
-                capture_output=True,
-                text=True,
+                stdin=subprocess.DEVNULL,
+                stdout=stdout_file,
+                stderr=stderr_file,
                 creationflags=creationflags,
-                timeout=timeout_seconds,
             )
-        except subprocess.TimeoutExpired as exc:
-            raise RuntimeError("O corte demorou demais e foi interrompido. Tente um trecho menor.") from exc
-        if completed.returncode != 0:
-            stderr = (completed.stderr or "").strip()
-            raise RuntimeError(stderr or error_message)
+            try:
+                while True:
+                    if self.cancel_requested:
+                        try:
+                            proc.terminate()
+                            proc.wait(timeout=5)
+                        except Exception:
+                            try:
+                                proc.kill()
+                                proc.wait(timeout=5)
+                            except Exception:
+                                pass
+                        if cancelled_exc is not None:
+                            raise cancelled_exc()
+                        raise RuntimeError("Download cancelado.")
+
+                    wait_timeout = 0.2
+                    if timeout_seconds is not None:
+                        elapsed = time.monotonic() - started_at
+                        remaining = timeout_seconds - elapsed
+                        if remaining <= 0:
+                            try:
+                                proc.kill()
+                                proc.wait(timeout=5)
+                            except Exception:
+                                pass
+                            raise RuntimeError("O corte demorou demais e foi interrompido. Tente um trecho menor.")
+                        wait_timeout = min(wait_timeout, remaining)
+
+                    try:
+                        returncode = proc.wait(timeout=wait_timeout)
+                        break
+                    except subprocess.TimeoutExpired:
+                        continue
+            finally:
+                if proc.poll() is None:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+
+            stderr_file.seek(0)
+            stderr_text = stderr_file.read().decode(errors="replace").strip()
+            if returncode != 0:
+                raise RuntimeError(stderr_text or error_message)
 
     def _output_has_stream(self, path, stream_selector):
         ffprobe_exe = self._get_ffprobe_executable()
@@ -1308,6 +1366,9 @@ class BaixarFrame(ttk.Frame):
             except y.utils.DownloadCancelled:
                 raise
             except Exception as exc:
+                cancelled_exc = getattr(getattr(self._yt_dlp, "utils", None), "DownloadCancelled", None)
+                if self.cancel_requested or (cancelled_exc is not None and isinstance(exc, cancelled_exc)):
+                    raise
                 last_error = exc
                 continue
 
@@ -1350,95 +1411,106 @@ class BaixarFrame(ttk.Frame):
         self._queue_event("status", "Preparando corte direto...")
 
         last_error = None
-        for attempt_opts in self._iter_cut_extract_attempts(fmt_mode, quality_choice, outtmpl):
-            try:
-                info = self._extract_cut_source_info(url, attempt_opts)
-                if self._is_music_mode(fmt_mode):
-                    audio_format = self._select_requested_format(info, "audio")
-                    if not audio_format:
-                        raise RuntimeError("Nao encontrei uma faixa de audio para cortar.")
-                    args = ["-y"]
-                    args.extend(self._ffmpeg_url_input_args(audio_format, info, start, duration))
-                    args.extend(["-vn", "-codec:a", "libmp3lame", "-q:a", "2", reserved_path])
-                    self._queue_event("status", "Baixando e cortando audio...")
-                    self._run_ffmpeg(args, "Falha ao baixar e cortar o audio.", timeout_seconds=30 * 60)
-                    self._validate_cut_output(reserved_path, expects_video=False)
-                    return reserved_path
-
-                video_format = self._select_requested_format(info, "video")
-                audio_format = self._select_requested_format(info, "audio")
-                if not video_format:
-                    raise RuntimeError("Nao encontrei um formato de video para cortar.")
-
-                temp_dir = tempfile.mkdtemp(prefix="igreja-cut-")
-                fast_copy_mode = not self._is_holyrics_profile()
-                temp_video = os.path.join(temp_dir, "video.mkv" if fast_copy_mode else "video.mp4")
-                temp_audio = os.path.join(temp_dir, "audio.mkv" if fast_copy_mode else "audio.m4a")
+        media_info_cache = getattr(self, "_media_info_cache", {})
+        info = media_info_cache.get(url)
+        if info is None:
+            for attempt_opts in self._iter_cut_extract_attempts(fmt_mode, quality_choice, outtmpl):
                 try:
-                    video_args = ["-y"]
-                    video_args.extend(self._ffmpeg_url_input_args(video_format, info, start, duration))
-                    video_args.extend(["-map", "0:v:0", "-an"])
-                    if fast_copy_mode:
-                        video_args.extend(["-c:v", "copy", temp_video])
-                    else:
-                        video_args.extend([
-                            "-c:v", "libx264",
-                            "-preset", "medium",
-                            "-crf", "23",
-                            "-pix_fmt", "yuv420p",
-                            temp_video,
-                        ])
-                    self._queue_event("status", "Baixando e cortando video...")
-                    self._run_ffmpeg(video_args, "Falha ao baixar e cortar o video.", timeout_seconds=30 * 60)
-                    self._validate_cut_output(temp_video, expects_video=True)
+                    info = self._extract_cut_source_info(url, attempt_opts)
+                    media_info_cache[url] = info
+                    self._media_info_cache = media_info_cache
+                    break
+                except Exception as exc:
+                    last_error = exc
+                    cancelled_exc = getattr(getattr(self._yt_dlp, "utils", None), "DownloadCancelled", None)
+                    if self.cancel_requested or (cancelled_exc is not None and isinstance(exc, cancelled_exc)):
+                        raise
+                    continue
 
-                    has_audio = False
-                    if audio_format:
-                        audio_args = ["-y"]
-                        audio_args.extend(self._ffmpeg_url_input_args(audio_format, info, start, duration))
-                        audio_args.extend(["-map", "0:a:0", "-vn"])
-                        if fast_copy_mode:
-                            audio_args.extend(["-c:a", "copy", temp_audio])
-                        else:
-                            audio_args.extend([
-                                "-c:a", "aac",
-                                "-b:a", "192k",
-                                temp_audio,
-                            ])
-                        self._queue_event("status", "Baixando e cortando audio...")
-                        self._run_ffmpeg(audio_args, "Falha ao baixar e cortar o audio do video.", timeout_seconds=30 * 60)
-                        has_audio = self._output_has_stream(temp_audio, "a:0")
+        if info is None:
+            raise last_error or RuntimeError("Falha ao preparar o corte.")
 
-                    merge_args = ["-y", "-i", temp_video]
-                    if has_audio:
-                        merge_args.extend(["-i", temp_audio, "-map", "0:v:0", "-map", "1:a:0"])
-                    else:
-                        merge_args.extend(["-map", "0:v:0"])
-                    merge_args.extend(["-c:v", "copy", "-c:a", "copy"])
-                    if not fast_copy_mode:
-                        merge_args.extend(["-movflags", "+faststart"])
-                    merge_args.append(reserved_path)
+        if self._is_music_mode(fmt_mode):
+            audio_format = self._select_requested_format(info, "audio")
+            if not audio_format:
+                raise RuntimeError("Nao encontrei uma faixa de audio para cortar.")
+            args = ["-y"]
+            args.extend(self._ffmpeg_url_input_args(audio_format, info, start, duration))
+            args.extend(["-vn", "-codec:a", "libmp3lame", "-q:a", "2", reserved_path])
+            self._queue_event("status", "Baixando e cortando audio...")
+            self._run_ffmpeg(args, "Falha ao baixar e cortar o audio.", timeout_seconds=30 * 60)
+            self._validate_cut_output(reserved_path, expects_video=False)
+            return reserved_path
 
-                    self._queue_event("status", "Finalizando video...")
-                    self._run_ffmpeg(merge_args, "Falha ao finalizar o video cortado.", timeout_seconds=10 * 60)
-                    self._validate_cut_output(reserved_path, expects_video=True)
-                finally:
-                    for path in (temp_video, temp_audio):
-                        try:
-                            if path and os.path.exists(path):
-                                os.remove(path)
-                        except Exception:
-                            pass
-                    try:
-                        os.rmdir(temp_dir)
-                    except Exception:
-                        pass
-                return reserved_path
-            except Exception as exc:
-                last_error = exc
-                continue
+        video_format = self._select_requested_format(info, "video")
+        audio_format = self._select_requested_format(info, "audio")
+        if not video_format:
+            raise RuntimeError("Nao encontrei um formato de video para cortar.")
 
-        raise last_error or RuntimeError("Falha ao preparar o corte.")
+        temp_dir = tempfile.mkdtemp(prefix="igreja-cut-")
+        fast_copy_mode = not self._is_holyrics_profile()
+        temp_video = os.path.join(temp_dir, "video.mkv" if fast_copy_mode else "video.mp4")
+        temp_audio = os.path.join(temp_dir, "audio.mkv" if fast_copy_mode else "audio.m4a")
+        try:
+            video_args = ["-y"]
+            video_args.extend(self._ffmpeg_url_input_args(video_format, info, start, duration))
+            video_args.extend(["-map", "0:v:0", "-an"])
+            if fast_copy_mode:
+                video_args.extend(["-c:v", "copy", temp_video])
+            else:
+                video_args.extend([
+                    "-c:v", "libx264",
+                    "-preset", "medium",
+                    "-crf", "23",
+                    "-pix_fmt", "yuv420p",
+                    temp_video,
+                ])
+            self._queue_event("status", "Baixando e cortando video...")
+            self._run_ffmpeg(video_args, "Falha ao baixar e cortar o video.", timeout_seconds=30 * 60)
+            self._validate_cut_output(temp_video, expects_video=True)
+
+            has_audio = False
+            if audio_format:
+                audio_args = ["-y"]
+                audio_args.extend(self._ffmpeg_url_input_args(audio_format, info, start, duration))
+                audio_args.extend(["-map", "0:a:0", "-vn"])
+                if fast_copy_mode:
+                    audio_args.extend(["-c:a", "copy", temp_audio])
+                else:
+                    audio_args.extend([
+                        "-c:a", "aac",
+                        "-b:a", "192k",
+                        temp_audio,
+                    ])
+                self._queue_event("status", "Baixando e cortando audio...")
+                self._run_ffmpeg(audio_args, "Falha ao baixar e cortar o audio do video.", timeout_seconds=30 * 60)
+                has_audio = self._output_has_stream(temp_audio, "a:0")
+
+            merge_args = ["-y", "-i", temp_video]
+            if has_audio:
+                merge_args.extend(["-i", temp_audio, "-map", "0:v:0", "-map", "1:a:0"])
+            else:
+                merge_args.extend(["-map", "0:v:0"])
+            merge_args.extend(["-c:v", "copy", "-c:a", "copy"])
+            if not fast_copy_mode:
+                merge_args.extend(["-movflags", "+faststart"])
+            merge_args.append(reserved_path)
+
+            self._queue_event("status", "Finalizando video...")
+            self._run_ffmpeg(merge_args, "Falha ao finalizar o video cortado.", timeout_seconds=10 * 60)
+            self._validate_cut_output(reserved_path, expects_video=True)
+        finally:
+            for path in (temp_video, temp_audio):
+                try:
+                    if path and os.path.exists(path):
+                        os.remove(path)
+                except Exception:
+                    pass
+            try:
+                os.rmdir(temp_dir)
+            except Exception:
+                pass
+        return reserved_path
 
     def _transcode_to_holyrics(self, source_path, target_path):
         self._queue_event("status", "Convertendo para MP4 compatível com Holyrics...")
@@ -2089,6 +2161,11 @@ class BaixarFrame(ttk.Frame):
                         cut_range,
                     )
                 except Exception as exc:
+                    cancelled_exc = getattr(getattr(self._yt_dlp, "utils", None), "DownloadCancelled", None)
+                    if self.cancel_requested or (cancelled_exc is not None and isinstance(exc, cancelled_exc)):
+                        self._cleanup_partial()
+                        self._queue_event("canceled")
+                        return
                     if self._yt_dlp is not None and isinstance(exc, self._yt_dlp.utils.DownloadCancelled):
                         self._cleanup_partial()
                         self._queue_event("canceled")
