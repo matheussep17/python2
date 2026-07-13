@@ -1,9 +1,11 @@
+import json
 import hashlib
 import os
 import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import requests
@@ -28,6 +30,7 @@ REQUIRED_FROZEN_PACKAGE_MARKERS = (
     (b"tk86t.dll", "tk86t.dll"),
     (b"_tkinter.pyd", "_tkinter.pyd"),
 )
+UPDATE_STATE_PATH = Path(tempfile.gettempdir()) / "igreja-update-state.json"
 
 
 class UpdateError(Exception):
@@ -36,6 +39,42 @@ class UpdateError(Exception):
 
 def _ps_single_quote(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
+
+
+def _normalize_update_state_path(path_value: str | Path | None) -> str:
+    try:
+        return str(Path(path_value).resolve()) if path_value else ""
+    except Exception:
+        return str(path_value or "")
+
+
+def write_update_state(target_version: str, target_path: Path, package_path: Path) -> None:
+    payload = {
+        "status": "pending",
+        "target_version": str(target_version or "").strip(),
+        "target_path": _normalize_update_state_path(target_path),
+        "package_path": _normalize_update_state_path(package_path),
+        "created_at": time.time(),
+    }
+    UPDATE_STATE_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def read_update_state() -> dict:
+    try:
+        payload = json.loads(UPDATE_STATE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+    return payload if isinstance(payload, dict) else {}
+
+
+def clear_update_state() -> None:
+    try:
+        UPDATE_STATE_PATH.unlink()
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
 
 
 def get_update_settings() -> dict:
@@ -255,12 +294,13 @@ def download_update_package(manifest: dict, progress_callback=None) -> Path:
     return package_path
 
 
-def schedule_windows_self_replace(downloaded_exe: Path) -> None:
+def schedule_windows_self_replace(downloaded_exe: Path, expected_version: str | None = None) -> None:
     if not can_self_update():
         raise UpdateError("Auto-update disponivel apenas no executavel Windows.")
 
     downloaded_exe = Path(downloaded_exe).resolve()
     current_exe = Path(sys.executable).resolve()
+    target_version = str(expected_version or downloaded_exe.stem).strip()
     app_dir = current_exe.parent
     script_path = Path(tempfile.gettempdir()) / f"igreja-update-{os.getpid()}.ps1"
     log_path = Path(tempfile.gettempdir()) / f"igreja-update-{os.getpid()}.log"
@@ -272,6 +312,10 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
     target_process_name = _ps_single_quote(current_exe.stem)
     backup_path = _ps_single_quote(current_exe.with_suffix(current_exe.suffix + ".old"))
     log_path_ps = _ps_single_quote(log_path)
+    state_path = _ps_single_quote(UPDATE_STATE_PATH)
+    target_version_ps = _ps_single_quote(target_version)
+
+    write_update_state(target_version, current_exe, downloaded_exe)
 
     script = "\n".join(
         [
@@ -284,14 +328,32 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             f"$TargetProcessName = {target_process_name}",
             f"$Backup = {backup_path}",
             f"$Log = {log_path_ps}",
+            f"$State = {state_path}",
+            f"$TargetVersion = {target_version_ps}",
             "function Write-Log {",
             "  param([string]$Message)",
             "  Add-Content -LiteralPath $Log -Value (\"[{0}] {1}\" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss,ff'), $Message)",
+            "}",
+            "function Write-State {",
+            "  param(",
+            "    [string]$Status,",
+            "    [string]$Message = ''",
+            "  )",
+            "  $payload = [ordered]@{",
+            "    status = $Status",
+            "    target_version = $TargetVersion",
+            "    target_path = $Target",
+            "    package_path = $Package",
+            "    message = $Message",
+            "    updated_at = (Get-Date).ToString('o')",
+            "  }",
+            "  $payload | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $State -Encoding UTF8",
             "}",
             "Write-Log 'Iniciando atualizacao.'",
             "Write-Log (\"PACKAGE={0}\" -f $Package)",
             "Write-Log (\"TARGET={0}\" -f $Target)",
             "Write-Log (\"TARGET_NAME={0}\" -f $TargetName)",
+            "Write-State 'pending'",
             "while (Get-Process -Id $AppPid -ErrorAction SilentlyContinue) {",
             "  Start-Sleep -Seconds 1",
             "}",
@@ -345,6 +407,11 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             "}",
             "if (-not $success) {",
             "  Write-Log 'ERRO: nao foi possivel substituir o executavel.'",
+            "  try {",
+            "    Write-State 'failed' 'nao foi possivel substituir o executavel.'",
+            "  } catch {",
+            "    Write-Log (\"ERRO ao registrar falha: {0}\" -f $_.Exception.Message)",
+            "  }",
             "  exit 1",
             "}",
             "try {",
@@ -356,6 +423,9 @@ def schedule_windows_self_replace(downloaded_exe: Path) -> None:
             "  }",
             "  if (Test-Path -LiteralPath $Backup) {",
             "    Remove-Item -LiteralPath $Backup -Force -ErrorAction SilentlyContinue",
+            "  }",
+            "  if (Test-Path -LiteralPath $State) {",
+            "    Remove-Item -LiteralPath $State -Force -ErrorAction SilentlyContinue",
             "  }",
             "} finally {",
             "  Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue",

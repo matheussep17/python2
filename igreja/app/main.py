@@ -1,6 +1,7 @@
 ﻿import os
 import sys
 import threading
+import time
 import tkinter as tk
 from datetime import datetime
 from pathlib import Path
@@ -30,8 +31,11 @@ from app.updater import (
     describe_update_manifest,
     download_update_package,
     fetch_update_manifest,
+    compare_versions,
+    clear_update_state,
     get_current_version,
     has_update,
+    read_update_state,
     schedule_windows_self_replace,
 )
 from app.ui.alerts import install_messagebox_hooks, show_info
@@ -761,7 +765,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             return
 
         try:
-            schedule_windows_self_replace(package_path)
+            schedule_windows_self_replace(package_path, expected_version=manifest.get("version"))
         except Exception as exc:
             messagebox.showerror("Atualizacao", f"Nao foi possivel iniciar a instalacao:\n{exc}")
             self._set_status("Falha ao iniciar a atualizacao.")
@@ -867,6 +871,48 @@ def main():
         sys.exit(0)
 
     configure_runtime_environment()
+    pending_update = read_update_state()
+    if pending_update:
+        status = str(pending_update.get("status", "")).strip().lower()
+        target_version = str(pending_update.get("target_version", "")).strip()
+        target_path_value = str(pending_update.get("target_path", "")).strip()
+        created_at = float(pending_update.get("created_at", 0) or 0)
+        current_path = str(Path(sys.executable).resolve())
+        try:
+            target_path = str(Path(target_path_value).resolve()) if target_path_value else ""
+        except Exception:
+            target_path = target_path_value
+
+        state_age = time.time() - created_at if created_at > 0 else None
+        same_install = bool(target_path and current_path == target_path)
+        update_still_pending = (
+            status == "pending"
+            and same_install
+            and target_version
+            and compare_versions(APP_VERSION, target_version) < 0
+            and (state_age is None or state_age < 300)
+        )
+
+        if update_still_pending:
+            try:
+                root = tk.Tk()
+                root.withdraw()
+                messagebox.showinfo(
+                    "Atualizacao em andamento",
+                    (
+                        f"A atualizacao para a versao {target_version} ainda esta sendo aplicada.\n\n"
+                        "Feche esta janela e aguarde alguns segundos antes de abrir novamente."
+                    ),
+                    parent=root,
+                )
+                root.destroy()
+            except Exception:
+                pass
+            sys.exit(0)
+
+        if status == "failed" or not same_install or (state_age is not None and state_age >= 86400):
+            clear_update_state()
+
     missing, runtime = missing_runtime_requirements()
     if missing:
         try:
