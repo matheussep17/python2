@@ -34,7 +34,7 @@ class LicenseActivationWindow(ttk.Window):
         self.username_var = tk.StringVar(value=local_state.get("username", ""))
         self.password_var = tk.StringVar()
         self.status_var = tk.StringVar(
-            value=initial_message.strip() or "Informe o login e a senha enviados para este computador."
+            value=initial_message.strip() or "Informe o nome e a senha enviados para este computador."
         )
         self.summary_var = tk.StringVar(value=describe_license_state(local_state))
         self.device_var = tk.StringVar(value=f"Computador: {machine_name()}\nFingerprint: {device_fingerprint()}")
@@ -102,7 +102,7 @@ class LicenseActivationWindow(ttk.Window):
         inner.pack(fill="x")
         inner.columnconfigure(1, weight=1)
 
-        ttk.Label(inner, text="Login", style="SurfaceAlt.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(inner, text="Nome", style="SurfaceAlt.TLabel").grid(row=0, column=0, sticky="w")
         username_entry = ttk.Entry(inner, textvariable=self.username_var, width=36)
         username_entry.grid(row=0, column=1, sticky="ew", padx=(10, 0))
 
@@ -124,7 +124,7 @@ class LicenseActivationWindow(ttk.Window):
         ttk.Label(
             inner,
             text=(
-                "Ao ativar, o servidor recebe o login da licenca, um identificador tecnico deste dispositivo "
+                "Ao ativar, o servidor recebe o nome da licença, um identificador técnico deste dispositivo "
                 "e datas de validacao para controle de acesso e suporte."
             ),
             style="SurfaceMuted.TLabel",
@@ -174,7 +174,7 @@ class LicenseActivationWindow(ttk.Window):
         username = self.username_var.get().strip()
         password = self.password_var.get()
         if not username or not password:
-            self.status_var.set("Preencha login e senha antes de ativar.")
+            self.status_var.set("Preencha nome e senha antes de ativar.")
             return
 
         self.status_var.set("Validando licenca no servidor...")

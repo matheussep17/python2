@@ -285,7 +285,7 @@ def describe_license_state(state: dict) -> str:
     offline_until = parse_iso_datetime(state.get("offline_valid_until"))
     offline_label = offline_until.astimezone().strftime("%d/%m/%Y %H:%M") if offline_until else "indisponivel"
     return (
-        f"Login atual: {state.get('username', 'nao informado')}\n"
+        f"Nome atual: {state.get('username', 'não informado')}\n"
         f"Validade da licenca: {expires_label}\n"
         f"Uso offline permitido ate: {offline_label}"
     )

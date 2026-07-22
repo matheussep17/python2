@@ -148,7 +148,7 @@ def _require_admin_token(token: str | None):
 
 def _ensure_license_is_usable(row):
     if row is None:
-        raise HTTPException(status_code=401, detail="Login ou senha inválidos.")
+        raise HTTPException(status_code=401, detail="Nome ou senha inválidos.")
 
     if row["status"] != "active":
         raise HTTPException(status_code=403, detail="Esta licença está bloqueada.")
@@ -175,7 +175,7 @@ def privacy_notice():
         "service": "Igreja Licensing API",
         "purpose": "Controle de ativacao, validacao e suporte de licencas do aplicativo.",
         "personal_data": [
-            "login da licenca",
+            "nome da licença",
             "identificador tecnico do dispositivo em formato de hash",
             "nome do dispositivo quando enviado pelo aplicativo",
             "datas de criacao, ativacao, validacao e validade",
@@ -354,7 +354,7 @@ def admin_panel():
       <div class="eyebrow">Painel Administrativo</div>
       <h1>Gerenciamento de Licenças</h1>
       <div class="sub">
-        Crie logins e senhas, veja o computador vinculado, bloqueie, reative, renove validade e libere troca de máquina sem mexer no executável.
+        Crie nomes e senhas, veja o computador vinculado, bloqueie, reative, renove validade e libere troca de máquina sem mexer no executável.
       </div>
     </div>
 
@@ -371,7 +371,7 @@ def admin_panel():
         <h2>Nova Licença</h2>
         <div class="row">
           <div>
-            <label>Login</label>
+            <label>Nome</label>
             <input id="username" placeholder="Ex.: NOTEBOOK-SALA-1" />
           </div>
         </div>
@@ -401,7 +401,7 @@ def admin_panel():
 
       <div class="card">
         <div class="toolbar">
-          <input id="filterInput" placeholder="Filtrar por login, status ou dispositivo" oninput="renderLicenses()" />
+          <input id="filterInput" placeholder="Filtrar por nome, status ou dispositivo" oninput="renderLicenses()" />
           <button onclick="loadLicenses()">Recarregar</button>
         </div>
         <div id="status" class="status">Informe o token administrativo e clique em Recarregar.</div>
@@ -409,7 +409,7 @@ def admin_panel():
           <table>
             <thead>
               <tr>
-                <th>Login</th>
+                <th>Nome</th>
                 <th>Status</th>
                 <th>Validade</th>
                 <th>Dispositivo</th>
@@ -532,7 +532,7 @@ def admin_panel():
       };
 
       if (!payload.username || !payload.password) {
-        setStatus("Login e senha são obrigatórios para criar a licença.", true);
+        setStatus("Nome e senha são obrigatórios para criar a licença.", true);
         return;
       }
 
@@ -647,7 +647,7 @@ def activate(payload: ActivateRequest):
     _ensure_license_is_usable(row)
 
     if not verify_password(payload.password, row["password_hash"]):
-        raise HTTPException(status_code=401, detail="Login ou senha inválidos.")
+        raise HTTPException(status_code=401, detail="Nome ou senha inválidos.")
 
     known_fingerprints = _known_fingerprints(payload)
     if row["device_fingerprint"] and row["device_fingerprint"] not in known_fingerprints:
@@ -673,7 +673,7 @@ def validate(payload: ValidateRequest):
     _ensure_license_is_usable(row)
 
     if row["activation_token"] != payload.activation_token:
-        raise HTTPException(status_code=401, detail="Token de ativação inválido para este login.")
+        raise HTTPException(status_code=401, detail="Token de ativação inválido para este nome.")
 
     known_fingerprints = _known_fingerprints(payload)
     if row["device_fingerprint"] not in known_fingerprints:
@@ -716,7 +716,7 @@ def admin_create_license(
 ):
     _require_admin_token(x_admin_token)
     if fetch_license_by_username(payload.username):
-        raise HTTPException(status_code=409, detail="Já existe uma licença com esse login.")
+        raise HTTPException(status_code=409, detail="Já existe uma licença com esse nome.")
 
     expires_at = payload.expires_at.strip() if payload.expires_at else None
     if expires_at:

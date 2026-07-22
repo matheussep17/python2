@@ -1,9 +1,9 @@
 name = "igreja-license-server"
 main = "src/worker.js"
-compatibility_date = "2026-06-15"
+compatibility_date = "2026-07-22"
 workers_dev = true
 routes = [
-  { pattern = "matheustorresqa.com/appigreja*", zone_name = "matheustorresqa.com" }
+  { pattern = "matheustorresqa.com/appigreja/*", zone_name = "matheustorresqa.com" }
 ]
 
 [[d1_databases]]

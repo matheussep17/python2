@@ -69,7 +69,7 @@ async function route(request, env) {
   }
 
   const licenseAction = path.match(
-    new RegExp(`^${API_PREFIX}/admin/licenses/([^/]+)/(revoke|reactivate|reset-device|expiration)$`),
+    new RegExp(`^${API_PREFIX}/admin/licenses/([^/]+)/(revoke|reactivate|reset-device|reset-password|expiration)$`),
   );
   if (licenseAction && method === "POST") {
     requireAdmin(request, env);
@@ -106,7 +106,7 @@ async function activate(request, env) {
   const row = await findLicense(env, payload.username);
   ensureUsable(row);
   if (!(await verifyPassword(payload.password, row.password_hash))) {
-    throw httpError(401, "Login ou senha invalidos.");
+    throw httpError(401, "Nome ou senha inválidos.");
   }
 
   const fingerprints = knownFingerprints(payload);
@@ -142,7 +142,7 @@ async function validate(request, env) {
   const row = await findLicense(env, payload.username);
   ensureUsable(row);
   if (row.activation_token !== payload.activation_token) {
-    throw httpError(401, "Token de ativacao invalido para este login.");
+    throw httpError(401, "Token de ativação inválido para este nome.");
   }
   if (!knownFingerprints(payload).has(row.device_fingerprint)) {
     throw httpError(409, "Esta licenca pertence a outro computador.");
@@ -179,7 +179,7 @@ async function createLicense(request, env) {
   const existing = await env.DB.prepare("SELECT id FROM licenses WHERE username = ?")
     .bind(payload.username.trim()).first();
   if (existing) {
-    throw httpError(409, "Ja existe uma licenca com esse login.");
+    throw httpError(409, "Já existe uma licença com esse nome.");
   }
   const expiresAt = normalizeDate(payload.expires_at);
   await env.DB.prepare(
@@ -207,6 +207,11 @@ async function mutateLicense(username, action, request, env) {
       `UPDATE licenses SET device_fingerprint = NULL, device_name = NULL,
        activation_token = NULL, activated_at = NULL WHERE username = ?`,
     ).bind(username.trim()).run();
+  } else if (action === "reset-password") {
+    const password = randomPassword();
+    await env.DB.prepare("UPDATE licenses SET password_hash = ? WHERE username = ?")
+      .bind(await hashPassword(password), username.trim()).run();
+    return json({ ok: true, password });
   } else {
     const payload = await readJson(request);
     await env.DB.prepare("UPDATE licenses SET expires_at = ? WHERE username = ?")
@@ -310,7 +315,7 @@ async function findLicense(env, username) {
 }
 
 function ensureUsable(row) {
-  if (!row) throw httpError(401, "Login ou senha invalidos.");
+  if (!row) throw httpError(401, "Nome ou senha inválidos.");
   if (row.status !== "active") throw httpError(403, "Esta licenca esta bloqueada.");
   if (row.expires_at && Date.now() > Date.parse(row.expires_at)) {
     throw httpError(403, "Esta licenca expirou e precisa ser renovada.");
@@ -358,7 +363,7 @@ function knownFingerprints(payload) {
 function requireAdmin(request, env) {
   if (!env.ADMIN_TOKEN) throw httpError(503, "Configure o segredo ADMIN_TOKEN.");
   if (request.headers.get("X-Admin-Token") !== env.ADMIN_TOKEN) {
-    throw httpError(401, "Token administrativo invalido.");
+    throw httpError(401, "Token administrativo inválido.");
   }
 }
 
@@ -366,20 +371,23 @@ async function readJson(request) {
   try {
     return await request.json();
   } catch {
-    throw httpError(400, "JSON invalido.");
+    throw httpError(400, "JSON inválido.");
   }
 }
 
 function requireText(value, field, min, max) {
   const size = String(value || "").length;
-  if (size < min || size > max) throw httpError(422, `Campo '${field}' invalido.`);
+  if (size < min || size > max) {
+    const labels = { username: "nome", password: "senha" };
+    throw httpError(422, `Campo '${labels[field] || field}' inválido.`);
+  }
 }
 
 function normalizeDate(value) {
   const text = cleanText(value);
   if (!text) return null;
   const timestamp = Date.parse(text);
-  if (Number.isNaN(timestamp)) throw httpError(400, "Formato de validade invalido. Use ISO 8601.");
+  if (Number.isNaN(timestamp)) throw httpError(400, "Formato de validade inválido. Use ISO 8601.");
   return new Date(timestamp).toISOString();
 }
 
@@ -398,12 +406,16 @@ function randomToken(bytes) {
   return btoa(String.fromCharCode(...data)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+function randomPassword() {
+  return randomToken(12).slice(0, 16);
+}
+
 function toHex(data) {
   return [...data].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function fromHex(value) {
-  if (!value || value.length % 2) throw new Error("hex invalido");
+  if (!value || value.length % 2) throw new Error("hex inválido");
   return new Uint8Array(value.match(/.{2}/g).map((part) => Number.parseInt(part, 16)));
 }
 
@@ -493,6 +505,7 @@ th{color:var(--muted);background:#102238;font-size:11px;letter-spacing:.08em;tex
 .actions{display:flex;flex-wrap:wrap;gap:7px}.actions button{min-height:34px;padding:0 10px;font-size:12px}
 .empty{text-align:center!important;color:var(--muted);padding:32px!important}
 .hidden{display:none!important}
+.modal{position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:20px;background:rgba(2,8,16,.78)}.modal-card{width:min(460px,100%);border:1px solid var(--line);border-radius:18px;padding:24px;background:var(--panel);box-shadow:0 24px 80px rgba(0,0,0,.45)}.modal-card h2{margin-bottom:8px}.modal-card p{color:var(--muted);margin:0 0 16px}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
 @media(max-width:700px){main{width:min(100% - 20px,1180px);padding-top:25px}.topbar{align-items:start;flex-direction:column}.auth-row,.field-grid{grid-template-columns:1fr}.auth-row button{width:100%}.card{padding:16px}}
 </style></head><body><main>
 <div class="topbar"><div><p class="eyebrow">App Igreja</p><h1>Painel de licenças</h1></div><span class="health">Servidor operacional</span></div>
@@ -500,16 +513,16 @@ th{color:var(--muted);background:#102238;font-size:11px;letter-spacing:.08em;tex
 <button class="primary" type="submit">Acessar painel</button></form><span id="auth-status">Informe o token para carregar as licenças.</span></section>
 <div id="admin-panel" class="hidden">
 <section class="card"><h2>Nova licença</h2><form id="license-form"><div class="field-grid">
-<label>Login<input id="username" placeholder="Nome da licença"></label>
+<label>Nome<input id="username" placeholder="Nome da licença"></label>
 <label>Senha<input id="password" type="password" placeholder="Mínimo de 8 caracteres"></label>
 <label>Validade<input id="expires" placeholder="ISO 8601 (opcional)"></label>
 <label>Observações<input id="notes" placeholder="Informações administrativas"></label>
 </div><button class="primary" type="submit" style="margin-top:16px">Criar licença</button></form></section>
-<section class="card"><h2>Licenças cadastradas</h2><div class="table-wrap"><table><thead><tr><th>Login</th><th>Status</th><th>Dispositivo</th><th>Validade</th><th>Ações</th></tr></thead>
+<section class="card"><h2>Licenças cadastradas</h2><div class="table-wrap"><table><thead><tr><th>Nome</th><th>Status</th><th>Dispositivo</th><th>Validade</th><th>Ações</th></tr></thead>
 <tbody id="rows"><tr><td colspan="5" class="empty">A lista será exibida após informar o token.</td></tr></tbody></table></div></section>
 <span id="panel-status"></span>
 </div>
-</main><script>
+</main><div id="password-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="password-modal-title"><div class="modal-card"><h2 id="password-modal-title">Nova senha gerada</h2><p>A senha antiga foi substituída. Copie a nova senha antes de fechar esta janela.</p><input id="generated-password" type="text" readonly aria-label="Nova senha"><div class="modal-actions"><button onclick="closePasswordModal()">Fechar</button><button class="primary" onclick="copyGeneratedPassword()">Copiar senha</button></div></div></div><script>
 const api="${API_PREFIX}";
 let adminToken="";
 let authenticated=false;
@@ -521,10 +534,15 @@ async function load(){try{adminToken=document.querySelector("#token").value;cons
 <tr><td class="user">\${row.username}</td><td><span class="badge \${row.status==="active"?"":"revoked"}">\${row.status==="active"?"Ativa":"Revogada"}</span></td><td class="device">\${row.device_name||"Não vinculado"}</td><td>\${row.expires_at||"Permanente"}</td>
 <td><div class="actions"><button class="\${row.status==="active"?"warning":""}" onclick="action('\${encodeURIComponent(row.username)}','\${row.status==="active"?"revoke":"reactivate"}')">\${row.status==="active"?"Revogar":"Reativar"}</button>
 <button onclick="action('\${encodeURIComponent(row.username)}','reset-device')">Liberar PC</button>
+<button onclick="resetPassword('\${encodeURIComponent(row.username)}')">Redefinir senha</button>
 <button class="destructive" onclick="removeLicense('\${encodeURIComponent(row.username)}')">Excluir</button></div></td></tr>\`).join("")||'<tr><td colspan="5" class="empty">Nenhuma licença cadastrada.</td></tr>';status(data.length+" licença(s) carregada(s).")}catch(e){status(e.message,true)}}
 async function createLicense(){try{await call("/admin/licenses",{method:"POST",body:JSON.stringify({username:username.value,password:password.value,expires_at:expires.value||null,notes:notes.value})});document.querySelector("#license-form").reset();await load()}catch(e){status(e.message,true)}}
 async function action(user,name){try{await call("/admin/licenses/"+user+"/"+name,{method:"POST",body:"{}"});await load()}catch(e){status(e.message,true)}}
 async function removeLicense(user){if(!confirm("Excluir esta licença definitivamente?"))return;try{await call("/admin/licenses/"+user,{method:"DELETE"});await load()}catch(e){status(e.message,true)}}
+async function resetPassword(user){if(!confirm("A senha atual deixará de funcionar. Gerar uma nova senha para esta licença?"))return;try{const data=await call("/admin/licenses/"+user+"/reset-password",{method:"POST",body:"{}"});showPasswordModal(data.password);status("Senha redefinida. Copie a nova senha no modal.");}catch(e){status(e.message,true)}}
+function showPasswordModal(password){document.querySelector("#generated-password").value=password;document.querySelector("#password-modal").classList.remove("hidden");document.querySelector("#generated-password").select()}
+function closePasswordModal(){document.querySelector("#password-modal").classList.add("hidden")}
+async function copyGeneratedPassword(){const field=document.querySelector("#generated-password");try{await navigator.clipboard.writeText(field.value)}catch{field.select();document.execCommand("copy")}status("Nova senha copiada para a área de transferência.")}
 document.querySelector("#auth-form").addEventListener("submit",event=>{event.preventDefault();load()});
 document.querySelector("#license-form").addEventListener("submit",event=>{event.preventDefault();createLicense()});
 </script></body></html>`;

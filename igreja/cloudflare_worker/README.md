@@ -34,6 +34,10 @@ npx wrangler secret put ADMIN_TOKEN
 npm run deploy
 ```
 
+Os comandos devem ser executados dentro desta pasta. Os scripts já informam
+explicitamente `wrangler.toml` para não carregar o `wrangler.jsonc` da raiz do
+repositório.
+
 No painel Cloudflare, crie uma rota de Worker:
 
 ```text

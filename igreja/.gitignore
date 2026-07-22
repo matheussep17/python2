@@ -24,3 +24,10 @@ venv/
 
 # Local FFmpeg binaries for packaging
 vendor/ffmpeg/bin/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
