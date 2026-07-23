@@ -22,5 +22,8 @@ venv/
 .venv/
 .buildvenv/
 
+# Local editor settings
+.vscode/
+
 # Local FFmpeg binaries for packaging
 vendor/ffmpeg/bin/
