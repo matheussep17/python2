@@ -486,11 +486,11 @@ button:hover{transform:translateY(-1px);border-color:#4b6b8c;filter:brightness(1
 .destructive{border-color:rgba(255,125,134,.3);color:#ffadb3;background:rgba(255,125,134,.1)}
 #status{display:block;min-height:22px;margin-top:12px;color:var(--green);font-size:13px;white-space:pre-wrap}.danger{color:var(--red)!important}
 .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:13px}
-table{width:100%;border-collapse:collapse;min-width:850px;background:#0a1827}th,td{padding:14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+table{width:100%;border-collapse:collapse;min-width:850px;background:#0a1827}th,td{padding:14px;border-bottom:1px solid var(--line);text-align:center;vertical-align:middle}
 th{color:var(--muted);background:#102238;font-size:11px;letter-spacing:.08em;text-transform:uppercase}tbody tr:last-child td{border-bottom:0}tbody tr:hover{background:rgba(70,215,232,.035)}
 .user{font-weight:750}.device{color:var(--muted)}.badge{display:inline-flex;border:1px solid rgba(120,230,177,.3);border-radius:999px;padding:4px 9px;color:var(--green);background:rgba(120,230,177,.08);font-size:11px;font-weight:800;text-transform:uppercase}
 .badge.revoked{border-color:rgba(255,125,134,.3);color:var(--red);background:rgba(255,125,134,.08)}
-.actions{display:flex;flex-wrap:wrap;gap:7px}.actions button{min-height:34px;padding:0 10px;font-size:12px}
+.actions{display:flex;flex-wrap:wrap;justify-content:center;gap:7px}.actions button{min-height:34px;padding:0 10px;font-size:12px}
 .empty{text-align:center!important;color:var(--muted);padding:32px!important}
 .hidden{display:none!important}
 @media(max-width:700px){main{width:min(100% - 20px,1180px);padding-top:25px}.topbar{align-items:start;flex-direction:column}.auth-row,.field-grid{grid-template-columns:1fr}.auth-row button{width:100%}.card{padding:16px}}
