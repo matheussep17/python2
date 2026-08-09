@@ -529,7 +529,17 @@ let authenticated=false;
 const token=()=>adminToken||document.querySelector("#token").value;
 function status(text,bad=false){const el=document.querySelector(authenticated?"#panel-status":"#auth-status");el.textContent=" "+text;el.className=bad?"danger":""}
 async function call(path,options={}){options.headers={...(options.headers||{}),"Content-Type":"application/json","X-Admin-Token":token()};
- const response=await fetch(api+path,options);const data=await response.json();if(!response.ok)throw new Error(data.detail||"Falha");return data}
+ const response=await fetch(api+path,options);
+ const raw=await response.text();
+ let data={};
+ if(raw){
+  try{data=JSON.parse(raw)}catch{
+   const hint=raw.replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim().slice(0,180);
+   throw new Error("O servidor devolveu uma resposta inválida ("+response.status+")."+(hint?" "+hint:" Verifique a rota publicada do Worker."));
+  }
+ }
+ if(!response.ok)throw new Error(data.detail||data.message||("Falha na operação ("+response.status+")."));
+ return data}
 async function load(){try{adminToken=document.querySelector("#token").value;const data=await call("/admin/licenses");authenticated=true;document.querySelector("#auth-card").classList.add("hidden");document.querySelector("#admin-panel").classList.remove("hidden");document.querySelector("#rows").innerHTML=data.map(row=>\`
 <tr><td class="user">\${row.username}</td><td><span class="badge \${row.status==="active"?"":"revoked"}">\${row.status==="active"?"Ativa":"Revogada"}</span></td><td class="device">\${row.device_name||"Não vinculado"}</td><td>\${row.expires_at||"Permanente"}</td>
 <td><div class="actions"><button class="\${row.status==="active"?"warning":""}" onclick="action('\${encodeURIComponent(row.username)}','\${row.status==="active"?"revoke":"reactivate"}')">\${row.status==="active"?"Revogar":"Reativar"}</button>

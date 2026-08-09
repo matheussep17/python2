@@ -112,13 +112,34 @@ tk_binaries = _unique_pairs(
 tkdnd_datas, tkdnd_binaries, tkdnd_hiddenimports = collect_all("tkinterdnd2")
 ttkbootstrap_datas, ttkbootstrap_binaries, ttkbootstrap_hiddenimports = collect_all("ttkbootstrap")
 faster_whisper_datas, faster_whisper_binaries, faster_whisper_hiddenimports = collect_all("faster_whisper")
+yt_dlp_datas, yt_dlp_binaries, yt_dlp_hiddenimports = collect_all("yt_dlp")
+try:
+    pytubefix_datas, pytubefix_binaries, pytubefix_hiddenimports = collect_all("pytubefix")
+except Exception:
+    pytubefix_datas, pytubefix_binaries, pytubefix_hiddenimports = [], [], []
 tkinter_hiddenimports = collect_submodules("tkinter")
 
 a = Analysis(
     ['run.py'],
     pathex=[],
-    binaries=_unique_pairs(ffmpeg_binaries + tk_binaries + tkdnd_binaries + ttkbootstrap_binaries + faster_whisper_binaries),
-    datas=_unique_pairs(tkdnd_datas + ttkbootstrap_datas + faster_whisper_datas + tk_datas + [('config.json', '.')]),
+    binaries=_unique_pairs(
+        ffmpeg_binaries
+        + tk_binaries
+        + tkdnd_binaries
+        + ttkbootstrap_binaries
+        + faster_whisper_binaries
+        + yt_dlp_binaries
+        + pytubefix_binaries
+    ),
+    datas=_unique_pairs(
+        tkdnd_datas
+        + ttkbootstrap_datas
+        + faster_whisper_datas
+        + yt_dlp_datas
+        + pytubefix_datas
+        + tk_datas
+        + [('config.json', '.')]
+    ),
     hiddenimports=[
         'tkinter',
         '_tkinter',
@@ -134,7 +155,13 @@ a = Analysis(
         'whisper',
         'PIL',
         'rawpy',
-    ] + tkinter_hiddenimports + tkdnd_hiddenimports + ttkbootstrap_hiddenimports + faster_whisper_hiddenimports,
+    ]
+    + tkinter_hiddenimports
+    + tkdnd_hiddenimports
+    + ttkbootstrap_hiddenimports
+    + faster_whisper_hiddenimports
+    + yt_dlp_hiddenimports
+    + pytubefix_hiddenimports,
     hookspath=['app/pyinstaller_hooks'],
     hooksconfig={},
     runtime_hooks=['app/runtime_hooks/pyi_rth_tkinter.py'],
