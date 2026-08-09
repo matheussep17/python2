@@ -396,6 +396,19 @@ class BaixarFrame(ttk.Frame):
 
         return [dict(base_opts)]
 
+    def _iter_browser_cookie_attempts(self, attempts):
+        """Repete as tentativas do YouTube usando sessões autenticadas do navegador."""
+        if not self._is_youtube_service():
+            return []
+
+        cookie_attempts = []
+        for browser in ("edge", "chrome", "firefox"):
+            for attempt in attempts:
+                with_cookies = dict(attempt)
+                with_cookies["cookiesfrombrowser"] = (browser,)
+                cookie_attempts.append(with_cookies)
+        return cookie_attempts
+
     def _is_cut_mode(self):
         return self.download_mode.get() == "Cortado"
 
@@ -2244,6 +2257,29 @@ class BaixarFrame(ttk.Frame):
 
                 if last_error is not None:
                     yt_dlp_error = last_error
+
+                error_text = str(last_error or "").lower()
+                if last_error is not None and any(
+                    marker in error_text
+                    for marker in ("please sign in", "video is unavailable", "video unavailable")
+                ):
+                    self._queue_event("status", "Tentando usar a sessão do navegador...")
+                    for attempt_opts in self._iter_browser_cookie_attempts(attempt_opts_list):
+                        try:
+                            with y.YoutubeDL(attempt_opts) as ydl:
+                                ydl.download([url])
+                            last_error = None
+                            used_yt_dlp = True
+                            break
+                        except y.utils.DownloadCancelled:
+                            self._cleanup_partial()
+                            self._queue_event("canceled")
+                            return
+                        except Exception as exc:
+                            last_error = exc
+
+                    if last_error is not None:
+                        yt_dlp_error = last_error
             else:
                 yt_dlp_error = RuntimeError("yt-dlp não está disponível.")
 
