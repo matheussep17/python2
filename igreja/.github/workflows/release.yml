@@ -56,9 +56,8 @@ jobs:
             version = $version
             url = $downloadUrl
             notes = @"
-Consolida a migracao do licenciamento para matheustorresqa.com.
-Corrige automaticamente configuracoes antigas da Railway e remove bypasses externos.
-Envia o nome do computador ao painel administrativo.
+Corrige a identificacao do computador para permanecer estavel apos reinicializacoes.
+Migra automaticamente licencas ativadas com o identificador anterior.
 "@.Trim()
             size = $exe.Length
             digest = $hash
@@ -76,8 +75,7 @@ Envia o nome do computador ao painel administrativo.
             dist/update-manifest.json
             dist/Igreja.sha256.txt
           body: |
-            Consolida a migracao do licenciamento para matheustorresqa.com.
-            Corrige automaticamente configuracoes antigas da Railway e remove bypasses externos.
-            Envia o nome do computador ao painel administrativo.
+            Corrige a identificacao do computador para permanecer estavel apos reinicializacoes.
+            Migra automaticamente licencas ativadas com o identificador anterior.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

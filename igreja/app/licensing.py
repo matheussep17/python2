@@ -19,7 +19,8 @@ from app.version import APP_NAME, APP_VERSION
 LICENSE_STATE_FILE = "license_state.json"
 DEFAULT_OFFLINE_GRACE_HOURS = 24 * 365 * 20
 DEFAULT_TIMEOUT_SECONDS = 10
-DEVICE_FINGERPRINT_NAMESPACE = "igreja-license-device-v2"
+DEVICE_FINGERPRINT_NAMESPACE = "igreja-license-device-v3"
+LEGACY_DEVICE_FINGERPRINT_NAMESPACE = "igreja-license-device-v2"
 CURRENT_LICENSE_API_URL = "https://matheustorresqa.com/appigreja/api/v1"
 LEGACY_LICENSE_API_URLS = {
     "https://python2-production-e3ee.up.railway.app/api/v1",
@@ -240,9 +241,9 @@ def legacy_device_fingerprint() -> str:
     return _fingerprint_from_parts(raw_parts)
 
 
-def device_fingerprint() -> str:
+def v2_device_fingerprint() -> str:
     raw_parts = [
-        DEVICE_FINGERPRINT_NAMESPACE,
+        LEGACY_DEVICE_FINGERPRINT_NAMESPACE,
         platform.system(),
         platform.machine(),
         _read_windows_machine_guid(),
@@ -252,8 +253,27 @@ def device_fingerprint() -> str:
     return _fingerprint_from_parts(raw_parts)
 
 
+def device_fingerprint() -> str:
+    """Return a stable id without values that may randomly change at boot."""
+    machine_guid = _read_windows_machine_guid()
+    bios_uuid = _read_windows_bios_uuid()
+    stable_hardware_id = machine_guid or bios_uuid
+    if not stable_hardware_id:
+        stable_hardware_id = f"{machine_name()}|{uuid.getnode()}"
+    return _fingerprint_from_parts([
+        DEVICE_FINGERPRINT_NAMESPACE,
+        platform.system(),
+        platform.machine(),
+        stable_hardware_id,
+    ])
+
+
 def acceptable_device_fingerprints() -> set[str]:
-    return {item for item in {device_fingerprint(), legacy_device_fingerprint()} if item}
+    return {
+        item
+        for item in {device_fingerprint(), v2_device_fingerprint(), legacy_device_fingerprint()}
+        if item
+    }
 
 
 def local_license_is_usable_offline(state: dict) -> bool:
@@ -343,11 +363,18 @@ def validate_with_server(settings: dict | None = None, state: dict | None = None
     if not current_state:
         raise LicenseValidationError("Nenhuma licenca local foi encontrada.")
 
+    legacy_fingerprints = acceptable_device_fingerprints() - {device_fingerprint()}
+    # The old id included a possibly random MAC. Preserve the saved value so
+    # the server can recognize this installation once and migrate it to v3.
+    saved_fingerprint = str(current_state.get("device_fingerprint", "") or "").strip()
+    if saved_fingerprint:
+        legacy_fingerprints.add(saved_fingerprint)
+
     payload = {
         "username": current_state.get("username", ""),
         "activation_token": current_state.get("activation_token", ""),
         "device_fingerprint": device_fingerprint(),
-        "legacy_device_fingerprints": sorted(acceptable_device_fingerprints() - {device_fingerprint()}),
+        "legacy_device_fingerprints": sorted(legacy_fingerprints),
         "device_name": machine_name() if settings.get("send_device_name") else None,
         "app_version": APP_VERSION,
     }
