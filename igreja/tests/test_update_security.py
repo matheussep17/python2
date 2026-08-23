@@ -41,6 +41,7 @@ class UpdateSecurityTests(unittest.TestCase):
                 self.assertEqual(payload.get("status"), "pending")
                 self.assertEqual(payload.get("target_version"), "2.1.9")
                 self.assertEqual(payload.get("target_path"), str((Path(temp_dir) / "Igreja.exe").resolve()))
+                self.assertGreater(float(payload.get("created_at", 0)), 0)
 
                 updater.clear_update_state()
                 self.assertFalse(state_path.exists())

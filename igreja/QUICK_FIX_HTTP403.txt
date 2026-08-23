@@ -1,0 +1,65 @@
+# Quick Fix - Erro HTTP 403 no YouTube
+
+## 🚨 Você está vendo este erro?
+```
+"Falha no yt-dlp: ERROR: unable to download video data: HTTP Error 403: Forbidden"
+```
+
+## ✅ Tente estas soluções AGORA (em ordem):
+
+### 1️⃣ **Espere 10-15 minutos**
+YouTube pode ter limitado suas requisições. Aguarde antes de tentar novamente.
+
+### 2️⃣ **Faça login no YouTube**
+```
+1. Abra https://www.youtube.com em seu navegador
+2. Clique em "Fazer login" (canto superior direito)
+3. Insira suas credenciais
+4. Retorne ao app Igreja e tente novamente
+```
+
+### 3️⃣ **Teste em seu navegador**
+1. Copie a URL do vídeo
+2. Cole no navegador
+3. Se carregar → problema é apenas com o app
+4. Se não carregar → vídeo é realmente restrito
+
+### 4️⃣ **Atualize o yt-dlp**
+No app Igreja:
+- Clique em "Atualizar yt-dlp" (botão próximo ao menu de serviço)
+- Aguarde a atualização
+- Tente novamente
+
+Ou no terminal:
+```bash
+pip install --upgrade yt-dlp
+```
+
+### 5️⃣ **Se mesmo assim não funcionar**
+- O vídeo pode estar **privado**, **removido** ou **restrito por região**
+- Tente com outro vídeo que você sabe que funciona
+- Se nenhum vídeo funcionar, veja o arquivo `TROUBLESHOOTING_HTTP403.md`
+
+---
+
+## 🔍 Tipo de Problema?
+
+**Se vê:** "...HTTP Error 403..."
+→ Vídeo está bloqueado/restrito. Veja acima. ↑
+
+**Se vê:** "...pytubefix... WinError 2..."
+→ Ambos os sistemas falharam. Reinicie o app e tente novamente.
+
+**Se vê:** "...Node.js não encontrado..."
+→ Instale Node.js: https://nodejs.org
+
+**Se vê:** "...HTTP Error 429..."
+→ YouTube limitou você. **Aguarde 30+ minutos** antes de tentar.
+
+---
+
+## 📚 Documentação Completa
+- `TROUBLESHOOTING_HTTP403.md` - Guia completo
+- `SOLUTION_HTTP403.md` - Detalhes técnicos da solução
+
+**Última atualização:** 2026-08-23

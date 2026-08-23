@@ -2127,6 +2127,15 @@ class BaixarFrame(ttk.Frame):
                     "Node.js não encontrado. Instale Node.js (https://nodejs.org) "
                     "e adicione ao PATH do sistema."
                 )
+            elif "http error 403" in error_msg or "forbidden" in error_msg:
+                msg = (
+                    "Acesso negado (HTTP 403). O vídeo pode estar:\n"
+                    "• Restrito por região ou idade\n"
+                    "• Privado ou removido\n"
+                    "• Exigindo autenticação\n\n"
+                    "Tente fazer login no YouTube antes de usar o app, "
+                    "ou aguarde alguns minutos antes de tentar novamente."
+                )
             elif "signature solving failed" in error_msg or "n challenge solving failed" in error_msg:
                 msg = (
                     "O yt-dlp não conseguiu resolver a proteção atual do YouTube. "
@@ -2339,6 +2348,15 @@ class BaixarFrame(ttk.Frame):
                 msg = (
                     "Node.js não encontrado. Instale Node.js (https://nodejs.org) "
                     "e adicione ao PATH do sistema."
+                )
+            elif "http error 403" in error_msg or "forbidden" in error_msg:
+                msg = (
+                    "Acesso negado (HTTP 403). O vídeo pode estar:\n"
+                    "• Restrito por região ou idade\n"
+                    "• Privado ou removido\n"
+                    "• Exigindo autenticação\n\n"
+                    "Tente fazer login no YouTube antes de usar o app, "
+                    "ou aguarde alguns minutos antes de tentar novamente."
                 )
             elif "signature solving failed" in error_msg or "n challenge solving failed" in error_msg:
                 msg = (

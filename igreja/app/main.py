@@ -85,7 +85,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             return self._app_style
         return getattr(self, "_style", None)
 
-    def __init__(self):
+    def __init__(self, suppress_startup_update_check: bool = False):
         import traceback
 
         def report_callback_exception(_root, exc, val, tb):
@@ -320,7 +320,8 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         self.bind("<Control-Key-7>", lambda _e: self._show("transcribe"))
         self.bind("<Configure>", self._on_window_resize, add="+")
         self.protocol("WM_DELETE_WINDOW", self._on_close)
-        self.after(500, self._schedule_startup_update_check)
+        if not suppress_startup_update_check:
+            self.after(500, self._schedule_startup_update_check)
         self.after_idle(self._update_responsive_shell)
         self._schedule_active_frame_layout_refresh()
 
@@ -871,6 +872,7 @@ def main():
         sys.exit(0)
 
     configure_runtime_environment()
+    suppress_startup_update_check = False
     pending_update = read_update_state()
     if pending_update:
         status = str(pending_update.get("status", "")).strip().lower()
@@ -910,7 +912,16 @@ def main():
                 pass
             sys.exit(0)
 
-        if status == "failed" or not same_install or (state_age is not None and state_age >= 86400):
+        if status == "failed":
+            # Evita baixar automaticamente a mesma atualizacao a cada abertura.
+            # Uma nova tentativa continua disponivel pelo botao Atualizar.
+            suppress_startup_update_check = same_install
+            clear_update_state()
+        elif target_version and same_install and compare_versions(APP_VERSION, target_version) >= 0:
+            # A versao instalada e a fonte da verdade caso o instalador tenha
+            # terminado a troca, mas nao conseguido apagar o arquivo de estado.
+            clear_update_state()
+        elif not same_install or (state_age is not None and state_age >= 86400):
             clear_update_state()
 
     missing, runtime = missing_runtime_requirements()
@@ -933,7 +944,7 @@ def main():
     if not ensure_application_license():
         sys.exit(1)
 
-    app = SuperApp()
+    app = SuperApp(suppress_startup_update_check=suppress_startup_update_check)
     try:
         app.mainloop()
     except KeyboardInterrupt:
