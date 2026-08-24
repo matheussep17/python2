@@ -491,11 +491,10 @@ class BaixarFrame(ttk.Frame):
         }
 
     def _youtube_impersonation_options(self):
-        try:
-            import curl_cffi  # noqa: F401
-        except Exception:
-            return {}
-        return {"impersonate": "chrome"}
+        # A API Python do yt-dlp não aceita a string usada pela CLI em todas
+        # as versões recentes e pode gerar AssertionError. O cliente mweb,
+        # com PO Token, já fornece a camada necessária para o YouTube.
+        return {}
 
     def _fetch_youtube_oembed_title(self, url: str):
         if not (getattr(self, "service", None) and self.service.get() == "YouTube"):
