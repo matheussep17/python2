@@ -125,6 +125,14 @@ try:
     pytubefix_datas, pytubefix_binaries, pytubefix_hiddenimports = collect_all("pytubefix")
 except Exception:
     pytubefix_datas, pytubefix_binaries, pytubefix_hiddenimports = [], [], []
+try:
+    nodriver_datas, nodriver_binaries, nodriver_hiddenimports = collect_all("nodriver")
+except Exception:
+    nodriver_datas, nodriver_binaries, nodriver_hiddenimports = [], [], []
+try:
+    ytdlp_plugin_hiddenimports = collect_submodules("yt_dlp_plugins")
+except Exception:
+    ytdlp_plugin_hiddenimports = []
 tkinter_hiddenimports = collect_submodules("tkinter")
 
 a = Analysis(
@@ -140,6 +148,7 @@ a = Analysis(
         + yt_dlp_ejs_binaries
         + curl_cffi_binaries
         + pytubefix_binaries
+        + nodriver_binaries
     ),
     datas=_unique_pairs(
         tkdnd_datas
@@ -149,6 +158,7 @@ a = Analysis(
         + yt_dlp_ejs_datas
         + curl_cffi_datas
         + pytubefix_datas
+        + nodriver_datas
         + tk_datas
         + [('config.json', '.')]
     ),
@@ -165,6 +175,10 @@ a = Analysis(
         'yt_dlp_ejs',
         'curl_cffi',
         'pytubefix',
+        'yt_dlp_plugins.extractor.getpot',
+        'yt_dlp_plugins.extractor.getpot_client',
+        'yt_dlp_plugins.extractor.getpot_wpc',
+        'nodriver',
         'docx',
         'whisper',
         'PIL',
@@ -177,7 +191,9 @@ a = Analysis(
     + yt_dlp_hiddenimports
     + yt_dlp_ejs_hiddenimports
     + curl_cffi_hiddenimports
-    + pytubefix_hiddenimports,
+    + pytubefix_hiddenimports
+    + nodriver_hiddenimports
+    + ytdlp_plugin_hiddenimports,
     hookspath=['app/pyinstaller_hooks'],
     hooksconfig={},
     runtime_hooks=['app/runtime_hooks/pyi_rth_tkinter.py'],

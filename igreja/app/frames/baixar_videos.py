@@ -484,7 +484,9 @@ class BaixarFrame(ttk.Frame):
     def _build_youtube_extractor_args(self):
         return {
             "youtube": {
-                "player_client": ["android_vr"],
+                # O YouTube passou a exigir PO Token nos formatos do android_vr.
+                # O provedor GetPOT/WPC gera o token automaticamente no Chrome.
+                "player_client": ["mweb"],
             }
         }
 

@@ -2,6 +2,8 @@ ttkbootstrap
 yt-dlp
 yt-dlp-ejs
 curl-cffi
+yt-dlp-get-pot
+yt-dlp-getpot-wpc
 pytubefix
 python-docx
 faster-whisper
