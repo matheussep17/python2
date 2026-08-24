@@ -177,6 +177,16 @@ def _binary_name(tool_name: str) -> str:
 
 def resolve_tool_path(tool_name: str):
     binary_name = _binary_name(tool_name)
+    runtime_base = _runtime_bundle_dir()
+    app_base = app_base_dir()
+
+    for folder in (
+        runtime_base / tool_name,
+        app_base / tool_name,
+    ):
+        candidate = folder / binary_name
+        if candidate.exists():
+            return str(candidate)
 
     for folder in _candidate_ffmpeg_dirs():
         candidate = folder / binary_name

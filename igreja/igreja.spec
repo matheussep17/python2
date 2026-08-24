@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import sys
+import shutil
 from pathlib import Path
 
 import _tkinter
@@ -79,6 +80,11 @@ def _find_runtime_binary(name):
 project_root = Path.cwd()
 ffmpeg_root = project_root / "vendor" / "ffmpeg"
 ffmpeg_binaries = []
+node_binaries = []
+
+node_path = shutil.which("node")
+if node_path:
+    node_binaries.append((node_path, "node"))
 
 if ffmpeg_root.exists():
     for file_path in ffmpeg_root.rglob("*"):
@@ -149,6 +155,7 @@ a = Analysis(
         + curl_cffi_binaries
         + pytubefix_binaries
         + nodriver_binaries
+        + node_binaries
     ),
     datas=_unique_pairs(
         tkdnd_datas
