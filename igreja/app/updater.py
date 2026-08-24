@@ -149,37 +149,75 @@ def _fetch_manifest_from_url(manifest_url: str, timeout: int) -> dict:
 
 def _fetch_manifest_from_github_release(repo: str, asset_name: str, timeout: int) -> dict:
     repo = _normalize_github_repo(repo)
-    api_url = f"https://api.github.com/repos/{repo}/releases?per_page=30"
+    api_url = f"https://api.github.com/repos/{repo}/releases/latest"
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": f"{APP_NAME}/{APP_VERSION}",
     }
 
-    response = requests.get(api_url, headers=headers, timeout=timeout)
-    if response.status_code == 404:
-        raise UpdateError(f"Nenhuma release encontrada em '{repo}'.")
-    response.raise_for_status()
-    payload = response.json()
-    if not isinstance(payload, list):
-        raise UpdateError("A resposta de releases do GitHub nao esta no formato esperado.")
-
-    manifests = []
-    for release in payload:
-        if not isinstance(release, dict):
-            continue
-        if release.get("draft") or release.get("prerelease"):
-            continue
+    last_error = None
+    for attempt in range(3):
         try:
-            manifests.append(_build_github_release_manifest(repo, asset_name, release))
+            response = requests.get(api_url, headers=headers, timeout=timeout)
+            if response.status_code == 404:
+                raise UpdateError(f"Nenhuma release encontrada em '{repo}'.")
+            response.raise_for_status()
+            payload = response.json()
+            if not isinstance(payload, dict):
+                raise UpdateError("A resposta da release do GitHub nao esta no formato esperado.")
+            return _build_github_release_manifest(repo, asset_name, payload)
         except UpdateError:
-            continue
+            raise
+        except (requests.RequestException, ValueError) as exc:
+            last_error = exc
+            if attempt < 2:
+                time.sleep(0.8 * (attempt + 1))
 
-    if not manifests:
-        raise UpdateError(
-            f"Nao encontrei uma release valida de '{repo}' com o asset '{asset_name}'."
+    fallback = _fetch_manifest_from_github_latest_redirect(repo, asset_name, timeout)
+    if fallback:
+        return fallback
+    raise UpdateError(f"Nao foi possivel consultar o GitHub agora: {last_error}")
+
+
+def _fetch_manifest_from_github_latest_redirect(repo: str, asset_name: str, timeout: int) -> dict | None:
+    """Fallback sem API quando a consulta ao GitHub sofre timeout/5xx."""
+    latest_url = f"https://github.com/{repo}/releases/latest"
+    try:
+        response = requests.get(latest_url, allow_redirects=True, timeout=timeout, stream=True)
+        response.raise_for_status()
+        match = re.search(r"/releases/tag/([^/?#]+)", response.url)
+        if not match:
+            return None
+
+        tag_name = requests.utils.unquote(match.group(1))
+        version = _normalize_release_version(tag_name)
+        if not version:
+            return None
+
+        asset_url = f"https://github.com/{repo}/releases/download/{tag_name}/{asset_name}"
+        asset_head = requests.head(asset_url, allow_redirects=True, timeout=timeout)
+        asset_head.raise_for_status()
+        digest = ""
+        digest_name = f"{Path(asset_name).stem}.sha256.txt"
+        digest_response = requests.get(
+            f"https://github.com/{repo}/releases/download/{tag_name}/{digest_name}",
+            timeout=timeout,
         )
+        if digest_response.ok:
+            digest_match = re.search(r"\b([0-9a-fA-F]{64})\b", digest_response.text)
+            digest = digest_match.group(1).lower() if digest_match else ""
 
-    return sorted(manifests, key=lambda item: _parse_version(item["version"]), reverse=True)[0]
+        return {
+            "version": version,
+            "url": asset_url,
+            "notes": "",
+            "size": int(asset_head.headers.get("content-length", 0) or 0),
+            "digest": digest,
+            "mandatory": False,
+            "source": f"github-fallback:{repo}",
+        }
+    except (requests.RequestException, ValueError):
+        return None
 
 
 def _build_github_release_manifest(repo: str, asset_name: str, payload: dict) -> dict:
