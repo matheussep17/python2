@@ -1115,14 +1115,10 @@ class BaixarFrame(ttk.Frame):
 
         h = self._quality_height(quality_choice)
         exact = self._height_filter(h, exact=True)
-        at_most = self._height_filter(h, exact=False)
         return [
-            f"(bv*[ext=mp4]{exact}/bv*{exact})"
-            f"+(ba[ext=m4a]/ba)"
-            f"/b[ext=mp4]{exact}/b{exact}",
-            f"(bv*[ext=mp4]{at_most}/bv*{at_most})"
-            f"+(ba[ext=m4a]/ba)"
-            f"/b[ext=mp4]{at_most}/b{at_most}",
+            f"(bestvideo{exact}+bestaudio/best{exact})",
+            f"(bv*{exact}+ba/b{exact})",
+            f"b{exact}",
         ]
 
     def _build_best_quality_format(self, quality_choice):
@@ -1138,11 +1134,11 @@ class BaixarFrame(ttk.Frame):
             return [self._build_best_quality_format(quality_choice)]
 
         h = self._quality_height(quality_choice)
-        at_most = self._height_filter(h, exact=False)
+        exact = self._height_filter(h, exact=True)
         return [
-            f"(bestvideo{at_most}+bestaudio/best{at_most})",
-            f"(bv*{at_most}+ba/b{at_most})",
-            f"b{at_most}",
+            f"(bestvideo{exact}+bestaudio/best{exact})",
+            f"(bv*{exact}+ba/b{exact})",
+            f"b{exact}",
         ]
 
     def _build_video_attempts(self, quality_choice):
