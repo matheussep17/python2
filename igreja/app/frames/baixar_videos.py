@@ -1138,11 +1138,9 @@ class BaixarFrame(ttk.Frame):
             return [self._build_best_quality_format(quality_choice)]
 
         h = self._quality_height(quality_choice)
-        exact = self._height_filter(h, exact=True)
         at_most = self._height_filter(h, exact=False)
         return [
-            self._build_best_quality_format(quality_choice),
-            f"b{exact}",
+            f"(bestvideo{at_most}+bestaudio/best{at_most})",
             f"(bv*{at_most}+ba/b{at_most})",
             f"b{at_most}",
         ]
