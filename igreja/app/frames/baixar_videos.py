@@ -987,6 +987,10 @@ class BaixarFrame(ttk.Frame):
 
                 elif kind == "yt_dlp_updated":
                     version = str(payload or "").strip()
+                    try:
+                        self._yt_dlp = load_yt_dlp()
+                    except Exception:
+                        pass
                     if version:
                         self.on_status(f"yt-dlp atualizado para {version}")
 
@@ -1893,6 +1897,13 @@ class BaixarFrame(ttk.Frame):
         return candidates[0] if candidates else reserved_path
 
     def start_download(self):
+        if self._yt_dlp_update_in_progress:
+            messagebox.showinfo(
+                "Atualizando dependências",
+                "O aplicativo está atualizando o yt-dlp. Tente o download novamente em alguns segundos.",
+            )
+            return
+
         url = self.url_entry.get().strip()
         if not url:
             svc = getattr(self, "service", None) and self.service.get() or "YouTube"
