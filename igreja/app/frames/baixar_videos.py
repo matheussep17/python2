@@ -1210,13 +1210,19 @@ class BaixarFrame(ttk.Frame):
         started_at = time.monotonic()
 
         with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
-            proc = subprocess.Popen(
-                [ffmpeg_exe, *args],
-                stdin=subprocess.DEVNULL,
-                stdout=stdout_file,
-                stderr=stderr_file,
-                creationflags=creationflags,
-            )
+            try:
+                proc = subprocess.Popen(
+                    [ffmpeg_exe, *args],
+                    stdin=subprocess.DEVNULL,
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                    creationflags=creationflags,
+                )
+            except OSError as exc:
+                raise RuntimeError(
+                    f"FFmpeg foi localizado, mas não pôde ser iniciado em '{ffmpeg_exe}'. "
+                    f"Reinstale o FFmpeg e tente novamente. Detalhes: {exc}"
+                ) from exc
             try:
                 while True:
                     if self.cancel_requested:
@@ -2352,8 +2358,11 @@ class BaixarFrame(ttk.Frame):
                     raise RuntimeError(f"A qualidade selecionada ({quality_choice}) não está disponível para este vídeo.")
 
                 if pytubefix_error is not None and self._is_youtube_service():
+                    ytdlp_message = str(yt_dlp_error or "").strip()
+                    if not ytdlp_message and yt_dlp_error is not None:
+                        ytdlp_message = f"{type(yt_dlp_error).__name__} sem mensagem detalhada"
                     raise RuntimeError(
-                        f"Falha no yt-dlp: {yt_dlp_error}\nFalha no pytubefix: {pytubefix_error}"
+                        f"Falha no yt-dlp: {ytdlp_message}\nFalha no pytubefix: {pytubefix_error}"
                     )
 
                 raise yt_dlp_error or pytubefix_error or RuntimeError("Falha ao baixar mídia.")
