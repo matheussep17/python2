@@ -401,8 +401,23 @@ class BaixarFrame(ttk.Frame):
         if not self._is_youtube_service():
             return []
 
+        local_app_data = os.environ.get("LOCALAPPDATA", "")
+        roaming_app_data = os.environ.get("APPDATA", "")
+        browser_roots = {
+            "edge": [Path(local_app_data) / "Microsoft" / "Edge" / "User Data"],
+            "chrome": [Path(local_app_data) / "Google" / "Chrome" / "User Data"],
+            "firefox": [
+                Path(roaming_app_data) / "Mozilla" / "Firefox" / "Profiles",
+                *Path(local_app_data).glob(
+                    "Packages/Mozilla.Firefox*/AC/*/Roaming/Mozilla/Firefox/Profiles"
+                ),
+            ],
+        }
+
         cookie_attempts = []
         for browser in ("edge", "chrome", "firefox"):
+            if not any(root and root.exists() for root in browser_roots[browser]):
+                continue
             for attempt in attempts:
                 with_cookies = dict(attempt)
                 with_cookies["cookiesfrombrowser"] = (browser,)
@@ -2278,6 +2293,7 @@ class BaixarFrame(ttk.Frame):
                         "video unavailable",
                     )
                 ):
+                    original_ytdlp_error = last_error
                     self._queue_event("status", "Tentando usar a sessão do navegador...")
                     for attempt_opts in self._iter_browser_cookie_attempts(attempt_opts_list):
                         try:
@@ -2294,7 +2310,7 @@ class BaixarFrame(ttk.Frame):
                             last_error = exc
 
                     if last_error is not None:
-                        yt_dlp_error = last_error
+                        yt_dlp_error = original_ytdlp_error
             else:
                 yt_dlp_error = RuntimeError("yt-dlp não está disponível.")
 
