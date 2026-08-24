@@ -482,13 +482,10 @@ class BaixarFrame(ttk.Frame):
         return opts
 
     def _build_youtube_extractor_args(self):
-        return {
-            "youtube": {
-                # O YouTube passou a exigir PO Token nos formatos do android_vr.
-                # O provedor GetPOT/WPC gera o token automaticamente no Chrome.
-                "player_client": ["mweb"],
-            }
-        }
+        # Let yt-dlp choose its current default clients. Pinning this to
+        # a single client can produce an incomplete format list (often only
+        # the 360p progressive stream), hiding adaptive HD streams.
+        return {}
 
     def _youtube_impersonation_options(self):
         # A API Python do yt-dlp não aceita a string usada pela CLI em todas
