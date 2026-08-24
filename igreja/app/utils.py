@@ -194,6 +194,27 @@ def resolve_tool_path(tool_name: str):
     return None
 
 
+def is_tool_usable(tool_path: str | None) -> bool:
+    """Confirma que o binário existe e consegue iniciar no Windows."""
+    if not tool_path:
+        return False
+
+    try:
+        completed = subprocess.run(
+            [str(tool_path), "-version"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=False,
+            creationflags=(subprocess.CREATE_NO_WINDOW if sys.platform.startswith("win") else 0),
+        )
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return False
+
+    return completed.returncode == 0
+
+
 def get_available_js_runtimes() -> dict[str, dict[str, str]]:
     runtimes: dict[str, dict[str, str]] = {}
 
@@ -309,9 +330,9 @@ def missing_runtime_requirements():
     runtime = configure_runtime_environment()
     missing = []
 
-    if not runtime.get("ffmpeg"):
+    if not is_tool_usable(runtime.get("ffmpeg")):
         missing.append("ffmpeg")
-    if not runtime.get("ffprobe"):
+    if not is_tool_usable(runtime.get("ffprobe")):
         missing.append("ffprobe")
 
     required_modules = {
