@@ -2270,7 +2270,13 @@ class BaixarFrame(ttk.Frame):
                 error_text = str(last_error or "").lower()
                 if last_error is not None and any(
                     marker in error_text
-                    for marker in ("please sign in", "video is unavailable", "video unavailable")
+                    for marker in (
+                        "http error 403",
+                        "403 forbidden",
+                        "please sign in",
+                        "video is unavailable",
+                        "video unavailable",
+                    )
                 ):
                     self._queue_event("status", "Tentando usar a sessão do navegador...")
                     for attempt_opts in self._iter_browser_cookie_attempts(attempt_opts_list):
