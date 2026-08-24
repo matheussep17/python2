@@ -2305,6 +2305,25 @@ class BaixarFrame(ttk.Frame):
                         return
                     except Exception as exc:
                         last_error = exc
+                        if "impersonate" in attempt_opts and (
+                            isinstance(exc, AssertionError)
+                            or "impersonate target" in str(exc).lower()
+                        ):
+                            fallback_opts = dict(attempt_opts)
+                            fallback_opts.pop("impersonate", None)
+                            try:
+                                self._queue_event("status", "Tentando sem impersonação do navegador...")
+                                with y.YoutubeDL(fallback_opts) as ydl:
+                                    ydl.download([url])
+                                last_error = None
+                                used_yt_dlp = True
+                                break
+                            except y.utils.DownloadCancelled:
+                                self._cleanup_partial()
+                                self._queue_event("canceled")
+                                return
+                            except Exception as fallback_exc:
+                                last_error = fallback_exc
 
                 if last_error is not None:
                     yt_dlp_error = last_error
