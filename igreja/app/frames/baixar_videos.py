@@ -2346,7 +2346,12 @@ class BaixarFrame(ttk.Frame):
 
             if not used_yt_dlp and cut_range:
                 pytubefix_error = RuntimeError("A opcao cortada usa yt-dlp para baixar apenas o trecho selecionado.")
-            elif not used_yt_dlp and self._is_youtube_service() and self._pytubefix is not None:
+            elif (
+                not used_yt_dlp
+                and yt_dlp_error is None
+                and self._is_youtube_service()
+                and self._pytubefix is not None
+            ):
                 try:
                     final_path = self._download_with_pytubefix(url, fmt_mode, quality_choice, reserved_path)
                     used_pytubefix = True
@@ -2354,6 +2359,11 @@ class BaixarFrame(ttk.Frame):
                     pytubefix_error = exc
 
             if not used_yt_dlp and not used_pytubefix:
+                if yt_dlp_error is not None and not str(yt_dlp_error).strip():
+                    yt_dlp_error = RuntimeError(
+                        f"O yt-dlp falhou sem detalhes adicionais ({type(yt_dlp_error).__name__})."
+                    )
+
                 if yt_dlp_error is not None and "requested format is not available" in str(yt_dlp_error).lower():
                     raise RuntimeError(f"A qualidade selecionada ({quality_choice}) não está disponível para este vídeo.")
 
