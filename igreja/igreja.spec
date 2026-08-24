@@ -114,6 +114,14 @@ ttkbootstrap_datas, ttkbootstrap_binaries, ttkbootstrap_hiddenimports = collect_
 faster_whisper_datas, faster_whisper_binaries, faster_whisper_hiddenimports = collect_all("faster_whisper")
 yt_dlp_datas, yt_dlp_binaries, yt_dlp_hiddenimports = collect_all("yt_dlp")
 try:
+    yt_dlp_ejs_datas, yt_dlp_ejs_binaries, yt_dlp_ejs_hiddenimports = collect_all("yt_dlp_ejs")
+except Exception:
+    yt_dlp_ejs_datas, yt_dlp_ejs_binaries, yt_dlp_ejs_hiddenimports = [], [], []
+try:
+    curl_cffi_datas, curl_cffi_binaries, curl_cffi_hiddenimports = collect_all("curl_cffi")
+except Exception:
+    curl_cffi_datas, curl_cffi_binaries, curl_cffi_hiddenimports = [], [], []
+try:
     pytubefix_datas, pytubefix_binaries, pytubefix_hiddenimports = collect_all("pytubefix")
 except Exception:
     pytubefix_datas, pytubefix_binaries, pytubefix_hiddenimports = [], [], []
@@ -129,6 +137,8 @@ a = Analysis(
         + ttkbootstrap_binaries
         + faster_whisper_binaries
         + yt_dlp_binaries
+        + yt_dlp_ejs_binaries
+        + curl_cffi_binaries
         + pytubefix_binaries
     ),
     datas=_unique_pairs(
@@ -136,6 +146,8 @@ a = Analysis(
         + ttkbootstrap_datas
         + faster_whisper_datas
         + yt_dlp_datas
+        + yt_dlp_ejs_datas
+        + curl_cffi_datas
         + pytubefix_datas
         + tk_datas
         + [('config.json', '.')]
@@ -150,6 +162,8 @@ a = Analysis(
         'pymupdf',
         'ttkbootstrap',
         'yt_dlp',
+        'yt_dlp_ejs',
+        'curl_cffi',
         'pytubefix',
         'docx',
         'whisper',
@@ -161,6 +175,8 @@ a = Analysis(
     + ttkbootstrap_hiddenimports
     + faster_whisper_hiddenimports
     + yt_dlp_hiddenimports
+    + yt_dlp_ejs_hiddenimports
+    + curl_cffi_hiddenimports
     + pytubefix_hiddenimports,
     hookspath=['app/pyinstaller_hooks'],
     hooksconfig={},

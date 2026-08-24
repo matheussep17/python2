@@ -484,9 +484,16 @@ class BaixarFrame(ttk.Frame):
     def _build_youtube_extractor_args(self):
         return {
             "youtube": {
-                "player_client": ["android_vr", "web"],
+                "player_client": ["android_vr"],
             }
         }
+
+    def _youtube_impersonation_options(self):
+        try:
+            import curl_cffi  # noqa: F401
+        except Exception:
+            return {}
+        return {"impersonate": "chrome"}
 
     def _fetch_youtube_oembed_title(self, url: str):
         if not (getattr(self, "service", None) and self.service.get() == "YouTube"):
@@ -527,6 +534,7 @@ class BaixarFrame(ttk.Frame):
                 "skip_unavailable_fragments": True,
                 "js_runtimes": js_runtimes,
                 "remote_components": {"ejs:github"},
+                **self._youtube_impersonation_options(),
                 "extractor_args": extractor_args,
                 "extractor_sleep_json": {"youtube": 2},
             }
@@ -1170,6 +1178,7 @@ class BaixarFrame(ttk.Frame):
             "ffmpeg_location": get_ffmpeg_bin_dir() or None,
             "js_runtimes": get_available_js_runtimes(),
             "remote_components": {"ejs:github"},
+            **self._youtube_impersonation_options(),
             "extractor_args": self._build_youtube_extractor_args(),
             "extractor_sleep_json": {"youtube": 2},
             "merge_output_format": final_ext,
@@ -2071,6 +2080,7 @@ class BaixarFrame(ttk.Frame):
                 "js_runtimes": js_runtimes,
                 "extractor_args": extractor_args,
                 "extractor_sleep_json": {"youtube": 2},
+                **self._youtube_impersonation_options(),
             }
 
             if fmt_mode == "Música":

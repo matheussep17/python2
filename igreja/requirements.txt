@@ -1,5 +1,7 @@
 ttkbootstrap
 yt-dlp
+yt-dlp-ejs
+curl-cffi
 pytubefix
 python-docx
 faster-whisper
