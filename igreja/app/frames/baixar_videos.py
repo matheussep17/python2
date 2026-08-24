@@ -1285,6 +1285,49 @@ class BaixarFrame(ttk.Frame):
         )
         return completed.returncode == 0 and bool((completed.stdout or "").strip())
 
+    def _get_video_height(self, path):
+        ffprobe_exe = self._get_ffprobe_executable()
+        if not ffprobe_exe or not os.path.exists(ffprobe_exe) or not path or not os.path.exists(path):
+            return None
+
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform.startswith("win") else 0
+        completed = subprocess.run(
+            [
+                ffprobe_exe,
+                "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=height",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+            creationflags=creationflags,
+        )
+        if completed.returncode != 0:
+            return None
+        try:
+            return int((completed.stdout or "").strip().splitlines()[0])
+        except (IndexError, TypeError, ValueError):
+            return None
+
+    def _validate_requested_video_quality(self, path, quality_choice, fmt_mode=None):
+        if quality_choice == "best" or self._is_music_mode(fmt_mode):
+            return
+
+        expected_height = int(self._quality_height(quality_choice) or "0")
+        actual_height = self._get_video_height(path)
+        if not expected_height or actual_height is None:
+            return
+        if actual_height != expected_height:
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+            raise RuntimeError(
+                f"O download retornou {actual_height}p, mas a qualidade solicitada foi {quality_choice}."
+            )
+
     def _validate_cut_output(self, path, expects_video):
         if not path or not os.path.exists(path):
             raise RuntimeError("O corte terminou, mas o arquivo final nao foi encontrado.")
@@ -2413,6 +2456,9 @@ class BaixarFrame(ttk.Frame):
             elif used_yt_dlp:
                 expected_ext = "mp3" if self._is_music_mode(fmt_mode) else "mkv"
                 final_path = self._resolve_completed_output_path(reserved_path, expected_ext=expected_ext)
+
+            if used_yt_dlp and not self._is_music_mode(fmt_mode):
+                self._validate_requested_video_quality(final_path, quality_choice, fmt_mode)
 
             self._cleanup_download_sidecars(final_path, reserved_path)
             self.downloaded_file = final_path
