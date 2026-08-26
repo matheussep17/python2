@@ -18,6 +18,46 @@ Observações:
 - O backend usa `yt-dlp` para downloads (já compatível com Instagram). Alguns formatos podem requerer um runtime JS (veja warnings do `yt-dlp`).
 - Se quiser, crio um changelog mais detalhado e faço o push para o repositório remoto.
 
+## Solução de problemas
+
+### YouTube baixa apenas em 360p
+
+Acima de 360p, o YouTube normalmente fornece vídeo e áudio em faixas separadas. O aplicativo precisa enxergar os formatos adaptativos e usar o FFmpeg para juntá-los.
+
+Checklist:
+
+1. Na tela **Baixar**, clique em `Atualizar yt-dlp` e reinicie o aplicativo.
+2. Confirme que o FFmpeg está instalado. No projeto, os binários esperados ficam em `vendor/ffmpeg/bin`.
+3. Teste um vídeo público que realmente ofereça a resolução escolhida.
+4. Rode pelo código-fonte para ver a mensagem completa:
+
+```powershell
+.\.buildvenv\Scripts\python.exe -m app.main
+```
+
+5. Se aparecer `requested format is not available`, verifique se o código não está forçando um único `player_client` do YouTube. Isso pode retornar apenas a faixa progressiva de 360p e esconder 720p/1080p.
+6. Antes de publicar uma correção, execute toda a suíte de testes:
+
+```powershell
+.\.buildvenv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+Os testes automatizados validam a seleção de formatos, mas uma correção do downloader também deve ser confirmada com pelo menos um download real em 720p ou 1080p.
+
+### Windows bloqueia `Igreja.exe`
+
+O aviso **"O controle inteligente de aplicativos bloqueou um aplicativo que pode não ser seguro"** aparece porque o executável local não tem uma assinatura digital de um fornecedor reconhecido. Isso não significa, por si só, que os testes falharam ou que o arquivo contém malware.
+
+Para desativar no Windows 11:
+
+1. Abra **Configurações**.
+2. Entre em **Privacidade e segurança** > **Segurança do Windows**.
+3. Abra **Controle de aplicativos e navegador**.
+4. Entre em **Configurações do Controle Inteligente de Aplicativos**.
+5. Selecione **Desativado** e reinicie o computador se solicitado.
+
+Atenção: isso reduz a proteção do Windows e não existe uma exceção oficial apenas para um executável. Dependendo da versão do Windows, reativar o recurso pode exigir redefinição ou reinstalação do sistema. A solução adequada para distribuição pública é assinar digitalmente o `Igreja.exe`. Consulte as [perguntas frequentes da Microsoft](https://support.microsoft.com/pt-BR/Windows/Security/threat-malware-protection/smart-app-control-frequently-asked-questions).
+
 ## Auto-update
 
 O app agora pode verificar atualizações automaticamente no executável Windows.
@@ -84,17 +124,45 @@ Se a atualizacao externa falhar, o aplicativo continua usando o `yt-dlp` embutid
 
 ### Fluxo automatico de release
 
-Depois de configurar o repositório com este workflow, a rotina fica:
+Sempre sincronize as tags e a branch remota antes de escolher a próxima versão. Isso evita criar uma tag antiga quando outra máquina já publicou releases novas.
 
 ```powershell
-git add .
-git commit -m "Release 1.0.1"
+git status --short
+git fetch origin --tags
+git pull --rebase origin main
+git tag --sort=-version:refname
+```
+
+Depois da sincronização:
+
+1. Atualize `APP_VERSION` em `app/version.py` para a próxima versão disponível.
+2. Rode os testes novamente **depois** do pull/rebase, pois o código integrado pode ser diferente daquele testado antes.
+3. Adicione apenas os arquivos relacionados à alteração.
+4. Faça o commit e envie a `main` antes de criar/enviar a tag.
+
+Exemplo para a versão `2.1.33`:
+
+```powershell
+.\.buildvenv\Scripts\python.exe -m unittest discover -s tests -v
+git status --short
+git add app/frames/baixar_videos.py app/version.py tests/test_baixar_videos_formats.py
+git commit -m "Descrição objetiva da correção"
 git push origin main
-git tag v1.0.1
-git push origin v1.0.1
+git tag -a v2.1.33 -m "Release v2.1.33"
+git push origin v2.1.33
 ```
 
 Ao receber a tag, o GitHub executa `.github/workflows/release.yml`, gera `dist/Igreja.exe` e anexa o arquivo na release.
+
+Verificação final:
+
+```powershell
+git status --short
+git log -1 --oneline --decorate
+git ls-remote --heads --tags origin main v2.1.33
+```
+
+Se o push da `main` responder `fetch first`, não use `--force`. Faça `git fetch origin`, integre com `git rebase origin/main`, resolva conflitos, rode todos os testes novamente e só então prossiga. Se uma tag incorreta já tiver sido publicada durante a tentativa, remova somente essa tag e publique a versão correta.
 
 ### Build local do executavel
 
