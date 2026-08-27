@@ -18,7 +18,7 @@ from app.utils import (
 )
 
 # ---------- Conversor ----------
-VIDEO_EXTS = {"mp4", "avi", "mkv", "mov", "webm", "flv", "m4v"}
+VIDEO_EXTS = {"mp4", "avi", "mkv", "mov", "webm", "flv", "m4v", "mpeg", "mpg"}
 AUDIO_EXTS = {"wav", "mp3"}
 IMAGE_EXTS = {"jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff", "cr2"}
 ALL_EXTS = VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS
@@ -52,7 +52,7 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
         self._last_action_key_ts = 0.0
         self.ui_queue = queue.Queue()
 
-        self.video_formats = ["mp3", "mp4", "avi", "mkv", "mov", "gif"]
+        self.video_formats = ["mp3", "mp4", "avi", "mkv", "mov", "mpeg", "gif"]
         self.image_formats = ["jpg", "png", "webp", "tiff", "bmp"]
         self.current_mode = "video"
 
@@ -888,6 +888,16 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
                     "-crf", settings["video_crf"],
                     "-an",
                     "-movflags", "+faststart",
+                    out_path,
+                )
+            elif out_ext in {"mpeg", "mpg"}:
+                cmd = ffmpeg_cmd(
+                    "-y", "-i", in_path,
+                    "-c:v", "mpeg2video",
+                    "-q:v", "2",
+                    "-c:a", "mp2",
+                    "-b:a", settings["audio_bitrate"],
+                    "-f", "mpeg",
                     out_path,
                 )
             else:

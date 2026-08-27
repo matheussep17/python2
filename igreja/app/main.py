@@ -125,6 +125,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         install_messagebox_hooks(self)
         apply_design_system(self, self.style, self.theme_mode.get())
         install_cursor_profile(self)
+        self.after(0, self._ensure_window_visible)
 
         self.title("Media Suite - Conversor")
         self._configure_initial_window()
@@ -324,6 +325,20 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             self.after(500, self._schedule_startup_update_check)
         self.after_idle(self._update_responsive_shell)
         self._schedule_active_frame_layout_refresh()
+
+    def _ensure_window_visible(self):
+        """Traz a janela para frente quando o Windows a abre atrás de outra janela."""
+        if self._is_closing:
+            return
+        try:
+            self.deiconify()
+            self.update_idletasks()
+            self.lift()
+            self.focus_force()
+            self.attributes("-topmost", True)
+            self.after(350, lambda: self.attributes("-topmost", False))
+        except tk.TclError:
+            pass
 
     def _configure_initial_window(self):
         screen_width = max(1, int(self.winfo_screenwidth()))
