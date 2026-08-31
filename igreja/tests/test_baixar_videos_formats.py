@@ -35,6 +35,24 @@ class BaixarVideosFormatTests(unittest.TestCase):
 
         self.assertIs(selected, hd)
 
+    def test_cut_input_seeks_after_opening_stream(self):
+        args = self.frame._ffmpeg_url_input_args(
+            {"url": "https://cdn.example/video"},
+            {},
+            12,
+            8,
+        )
+
+        self.assertLess(args.index("-i"), args.index("-ss"))
+        self.assertLess(args.index("-ss"), args.index("-t"))
+
+    def test_cut_audio_and_video_are_timestamp_normalized(self):
+        source = BaixarFrame._download_cut_with_ffmpeg.__code__.co_consts
+        constants = {value for value in source if isinstance(value, str)}
+
+        self.assertIn("setpts=PTS-STARTPTS", constants)
+        self.assertIn("aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS", constants)
+
 
 if __name__ == "__main__":
     unittest.main()

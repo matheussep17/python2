@@ -1354,7 +1354,11 @@ class BaixarFrame(ttk.Frame):
         headers = self._format_http_headers(media_format, info)
         if headers:
             args.extend(["-headers", headers])
-        args.extend(["-ss", f"{float(start):.3f}", "-t", f"{float(duration):.3f}", "-i", media_url])
+        # Seek after opening the stream.  Input seeking is faster, but it can
+        # start video on a keyframe while audio starts at a different packet.
+        # That is enough to desynchronize a cut when the two adaptive streams
+        # are downloaded separately.
+        args.extend(["-i", media_url, "-ss", f"{float(start):.3f}", "-t", f"{float(duration):.3f}"])
         return args
 
     def _extract_cut_source_info(self, url, ydl_opts):
@@ -1530,23 +1534,27 @@ class BaixarFrame(ttk.Frame):
             raise RuntimeError("Nao encontrei um formato de video para cortar.")
 
         temp_dir = tempfile.mkdtemp(prefix="igreja-cut-")
-        fast_copy_mode = not self._is_holyrics_profile()
-        temp_video = os.path.join(temp_dir, "video.mkv" if fast_copy_mode else "video.mp4")
-        temp_audio = os.path.join(temp_dir, "audio.mkv" if fast_copy_mode else "audio.m4a")
+        # Both tracks must be decoded from the same cut interval and start at
+        # timestamp zero.  Stream-copying each adaptive URL independently is
+        # not safe: keyframes and first packet timestamps commonly differ.
+        # Re-encoding the temporary tracks is intentional and guarantees that
+        # the final mux keeps the audio aligned with the image for every
+        # profile, including the Holyrics flow.
+        temp_video = os.path.join(temp_dir, "video.mp4")
+        temp_audio = os.path.join(temp_dir, "audio.m4a")
         try:
             video_args = ["-y"]
             video_args.extend(self._ffmpeg_url_input_args(video_format, info, start, duration))
             video_args.extend(["-map", "0:v:0", "-an"])
-            if fast_copy_mode:
-                video_args.extend(["-c:v", "copy", temp_video])
-            else:
-                video_args.extend([
-                    "-c:v", "libx264",
-                    "-preset", "medium",
-                    "-crf", "23",
-                    "-pix_fmt", "yuv420p",
-                    temp_video,
-                ])
+            video_args.extend([
+                "-vf", "setpts=PTS-STARTPTS",
+                "-c:v", "libx264",
+                "-preset", "medium",
+                "-crf", "23",
+                "-pix_fmt", "yuv420p",
+                "-avoid_negative_ts", "make_zero",
+                temp_video,
+            ])
             self._queue_event("status", "Baixando e cortando video...")
             self._run_ffmpeg(video_args, "Falha ao baixar e cortar o video.", timeout_seconds=30 * 60)
             self._validate_cut_output(temp_video, expects_video=True)
@@ -1556,14 +1564,13 @@ class BaixarFrame(ttk.Frame):
                 audio_args = ["-y"]
                 audio_args.extend(self._ffmpeg_url_input_args(audio_format, info, start, duration))
                 audio_args.extend(["-map", "0:a:0", "-vn"])
-                if fast_copy_mode:
-                    audio_args.extend(["-c:a", "copy", temp_audio])
-                else:
-                    audio_args.extend([
-                        "-c:a", "aac",
-                        "-b:a", "192k",
-                        temp_audio,
-                    ])
+                audio_args.extend([
+                    "-af", "aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS",
+                    "-c:a", "aac",
+                    "-b:a", "192k",
+                    "-avoid_negative_ts", "make_zero",
+                    temp_audio,
+                ])
                 self._queue_event("status", "Baixando e cortando audio...")
                 self._run_ffmpeg(audio_args, "Falha ao baixar e cortar o audio do video.", timeout_seconds=30 * 60)
                 has_audio = self._output_has_stream(temp_audio, "a:0")
@@ -1573,9 +1580,14 @@ class BaixarFrame(ttk.Frame):
                 merge_args.extend(["-i", temp_audio, "-map", "0:v:0", "-map", "1:a:0"])
             else:
                 merge_args.extend(["-map", "0:v:0"])
-            merge_args.extend(["-c:v", "copy", "-c:a", "copy"])
-            if not fast_copy_mode:
-                merge_args.extend(["-movflags", "+faststart"])
+            merge_args.extend([
+                "-fflags", "+genpts",
+                "-avoid_negative_ts", "make_zero",
+                "-shortest",
+                "-c:v", "copy",
+                "-c:a", "copy",
+                "-movflags", "+faststart",
+            ])
             merge_args.append(reserved_path)
 
             self._queue_event("status", "Finalizando video...")
