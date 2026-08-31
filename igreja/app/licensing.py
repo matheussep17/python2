@@ -150,6 +150,13 @@ def load_local_license_state() -> dict:
                     save_local_license_state(data)
                 except Exception:
                     pass
+                # Instalações antigas gravavam ao lado do executável. Depois
+                # de migrar para o armazenamento do usuário, remova o legado
+                # para não deixar um JSON junto do .exe baixado.
+                try:
+                    path.unlink(missing_ok=True)
+                except Exception:
+                    pass
             return data
         except Exception:
             continue
@@ -157,19 +164,13 @@ def load_local_license_state() -> dict:
 
 
 def save_local_license_state(data: dict) -> None:
-    saved = False
-    last_error = None
-    for target in license_state_paths():
-        try:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with target.open("w", encoding="utf-8") as file:
-                json.dump(data, file, ensure_ascii=False, indent=2)
-            saved = True
-        except Exception as exc:
-            last_error = exc
-
-    if not saved and last_error:
-        raise last_error
+    # O estado é do usuário/máquina, não da pasta de instalação. Gravar ao
+    # lado do .exe fazia cada atualização deixar license_state.json visível
+    # na pasta escolhida para o download do executável.
+    target = license_state_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("w", encoding="utf-8") as file:
+        json.dump(data, file, ensure_ascii=False, indent=2)
 
 
 def clear_local_license_state() -> None:
