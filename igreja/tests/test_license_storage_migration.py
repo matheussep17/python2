@@ -70,3 +70,31 @@ class LicenseStorageMigrationTests(TestCase):
 
             self.assertTrue((primary_dir / licensing.LICENSE_STATE_FILE).exists())
             self.assertFalse((executable_dir / licensing.LICENSE_STATE_FILE).exists())
+
+    def test_existing_legacy_file_is_removed_when_primary_exists(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            primary_dir = temp_root / "primary"
+            primary_dir.mkdir(parents=True, exist_ok=True)
+            executable_dir = temp_root / "Downloads"
+            executable_dir.mkdir(parents=True, exist_ok=True)
+            state = {"status": "active"}
+            (primary_dir / licensing.LICENSE_STATE_FILE).write_text(json.dumps(state), encoding="utf-8")
+            legacy_path = executable_dir / licensing.LICENSE_STATE_FILE
+            legacy_path.write_text(json.dumps(state), encoding="utf-8")
+            fake_executable = executable_dir / "Igreja.exe"
+
+            with patch.dict(
+                "os.environ",
+                {
+                    "IGREJA_LICENSE_STORAGE_DIR": str(primary_dir),
+                    "PROGRAMDATA": str(temp_root / "ProgramData"),
+                },
+                clear=False,
+            ), \
+                patch.object(licensing.sys, "platform", "win32"), \
+                patch.object(licensing.sys, "frozen", True, create=True), \
+                patch.object(licensing.sys, "executable", str(fake_executable), create=True):
+                self.assertEqual(licensing.load_local_license_state(), state)
+
+            self.assertFalse(legacy_path.exists())

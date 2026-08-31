@@ -87,6 +87,12 @@ def license_state_path() -> Path:
     return licensing_storage_dir() / LICENSE_STATE_FILE
 
 
+def legacy_license_state_path() -> Path | None:
+    if not (sys.platform.startswith("win") and getattr(sys, "frozen", False)):
+        return None
+    return Path(sys.executable).resolve().parent / LICENSE_STATE_FILE
+
+
 def license_state_paths() -> list[Path]:
     paths = [license_state_path()]
     machine_dir = machine_license_storage_dir()
@@ -94,10 +100,9 @@ def license_state_paths() -> list[Path]:
         machine_path = machine_dir / LICENSE_STATE_FILE
         if machine_path not in paths:
             paths.append(machine_path)
-    if sys.platform.startswith("win") and getattr(sys, "frozen", False):
-        legacy_path = Path(sys.executable).resolve().parent / LICENSE_STATE_FILE
-        if legacy_path not in paths:
-            paths.append(legacy_path)
+    legacy_path = legacy_license_state_path()
+    if legacy_path and legacy_path not in paths:
+        paths.append(legacy_path)
     return paths
 
 
@@ -137,6 +142,7 @@ def device_has_bypass(settings: dict | None = None) -> bool:
 
 def load_local_license_state() -> dict:
     primary_path = license_state_path()
+    legacy_path = legacy_license_state_path()
     for path in license_state_paths():
         if not path.exists():
             continue
@@ -157,9 +163,19 @@ def load_local_license_state() -> dict:
                     path.unlink(missing_ok=True)
                 except Exception:
                     pass
+            elif legacy_path and legacy_path != primary_path:
+                try:
+                    legacy_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
             return data
         except Exception:
             continue
+    if legacy_path and legacy_path != primary_path:
+        try:
+            legacy_path.unlink(missing_ok=True)
+        except Exception:
+            pass
     return {}
 
 
