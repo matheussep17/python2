@@ -1586,8 +1586,9 @@ class BaixarFrame(ttk.Frame):
                 "-shortest",
                 "-c:v", "copy",
                 "-c:a", "copy",
-                "-movflags", "+faststart",
             ])
+            if os.path.splitext(reserved_path)[1].lower() in {".mp4", ".m4v"}:
+                merge_args.extend(["-movflags", "+faststart"])
             merge_args.append(reserved_path)
 
             self._queue_event("status", "Finalizando video...")
