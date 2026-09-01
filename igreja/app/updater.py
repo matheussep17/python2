@@ -285,24 +285,37 @@ def describe_update_manifest(manifest: dict) -> str:
 
 
 def download_update_package(manifest: dict, progress_callback=None) -> Path:
-    response = requests.get(manifest["url"], stream=True, timeout=20)
+    # Use a separate read timeout: release assets can be large and a brief
+    # pause from GitHub should not make the updater look frozen or fail too
+    # aggressively.
+    response = requests.get(manifest["url"], stream=True, timeout=(20, 60))
     response.raise_for_status()
 
-    total_bytes = int(response.headers.get("content-length", "0") or "0")
+    expected_size = int(manifest.get("size", 0) or 0)
+    total_bytes = int(response.headers.get("content-length", "0") or "0") or expected_size
     downloaded_bytes = 0
+    last_reported_percent = -1
+    last_reported_at = 0.0
     download_dir = Path(tempfile.mkdtemp(prefix="igreja-update-"))
     package_path = download_dir / f"{APP_NAME}-{manifest['version']}.exe"
 
     with package_path.open("wb") as file:
-        for chunk in response.iter_content(chunk_size=1024 * 256):
+        for chunk in response.iter_content(chunk_size=1024 * 64):
             if not chunk:
                 continue
             file.write(chunk)
             downloaded_bytes += len(chunk)
-            if progress_callback:
+            now = time.monotonic()
+            percent = int((downloaded_bytes / total_bytes) * 100) if total_bytes > 0 else -1
+            should_report = (
+                progress_callback
+                and (percent != last_reported_percent or now - last_reported_at >= 1.0)
+            )
+            if should_report:
                 progress_callback(downloaded_bytes, total_bytes)
+                last_reported_percent = percent
+                last_reported_at = now
 
-    expected_size = int(manifest.get("size", 0) or 0)
     if expected_size > 0 and downloaded_bytes != expected_size:
         raise UpdateError(
             "O download da atualizacao ficou incompleto. "

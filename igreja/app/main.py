@@ -50,6 +50,7 @@ from app.utils import (
     download_and_install_ffmpeg,
     ffmpeg_vendor_bin_dir,
     get_ffmpeg_download_url,
+    format_bytes,
     missing_runtime_requirements,
     runtime_requirement_message,
 )
@@ -755,7 +756,10 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
             return
         if total > 0:
             percent = int((downloaded / total) * 100)
-            self._set_status(f"Baixando atualizacao {version}... {percent}%")
+            self._set_status(
+                f"Baixando atualizacao {version}... {percent}% "
+                f"({format_bytes(downloaded)} de {format_bytes(total)})"
+            )
         else:
             self._set_status(f"Baixando atualizacao {version}...")
 
