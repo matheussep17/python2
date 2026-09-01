@@ -1484,10 +1484,12 @@ class BaixarFrame(ttk.Frame):
             except Exception:
                 pass
             self._validate_cut_output(reserved_path, expects_video=True)
+            self._validate_requested_video_quality(reserved_path, quality_choice, fmt_mode)
             return reserved_path
 
         final_path = self._resolve_completed_output_path(reserved_path, expected_ext="mkv")
         self._validate_cut_output(final_path, expects_video=True)
+        self._validate_requested_video_quality(final_path, quality_choice, fmt_mode)
         return final_path
 
     def _download_cut_with_ffmpeg(self, url, fmt_mode, quality_choice, outtmpl, reserved_path, cut_range):
@@ -1594,6 +1596,7 @@ class BaixarFrame(ttk.Frame):
             self._queue_event("status", "Finalizando video...")
             self._run_ffmpeg(merge_args, "Falha ao finalizar o video cortado.", timeout_seconds=10 * 60)
             self._validate_cut_output(reserved_path, expects_video=True)
+            self._validate_requested_video_quality(reserved_path, quality_choice, fmt_mode)
         finally:
             for path in (temp_video, temp_audio):
                 try:
