@@ -10,7 +10,6 @@ from tkinter import filedialog, messagebox
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
-import time
 import subprocess
 
 from app.ui.output_folder import OutputFolderMixin
