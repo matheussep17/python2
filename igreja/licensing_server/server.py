@@ -142,8 +142,9 @@ def _require_admin_token(token: str | None):
             status_code=503,
             detail="Configure IGREJA_ADMIN_TOKEN no servidor antes de usar o painel administrativo.",
         )
-    if not token or token.strip() != ADMIN_TOKEN:
+    if not token or not secrets.compare_digest(token.strip(), ADMIN_TOKEN):
         raise HTTPException(status_code=401, detail="Token administrativo inválido.")
+
 
 
 def _ensure_license_is_usable(row):
@@ -701,12 +702,33 @@ def admin_list_licenses(x_admin_token: str | None = Header(default=None, alias="
     return [_row_to_admin_payload(row) for row in list_licenses()]
 
 
+# Colunas expostas no backup administrativo. `password_hash` e
+# `activation_token` ficam de fora propositalmente: um backup nunca deveria
+# vazar credenciais/tokens de sessao ativos, apenas os metadados de gestao.
+_BACKUP_SAFE_COLUMNS = (
+    "id",
+    "username",
+    "status",
+    "device_fingerprint",
+    "device_name",
+    "created_at",
+    "activated_at",
+    "last_validated_at",
+    "expires_at",
+    "notes",
+    "privacy_deleted_at",
+    "privacy_erasure_reason",
+)
+
+
 @app.get("/api/v1/admin/backup")
 def admin_backup_licenses(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
     _require_admin_token(x_admin_token)
+    columns_sql = ", ".join(_BACKUP_SAFE_COLUMNS)
     with connect() as conn:
-        rows = conn.execute("SELECT * FROM licenses ORDER BY id").fetchall()
+        rows = conn.execute(f"SELECT {columns_sql} FROM licenses ORDER BY id").fetchall()
     return {"version": 1, "licenses": [dict(row) for row in rows]}
+
 
 
 @app.post("/api/v1/admin/licenses")

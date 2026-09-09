@@ -362,10 +362,12 @@ function knownFingerprints(payload) {
 
 function requireAdmin(request, env) {
   if (!env.ADMIN_TOKEN) throw httpError(503, "Configure o segredo ADMIN_TOKEN.");
-  if (request.headers.get("X-Admin-Token") !== env.ADMIN_TOKEN) {
+  const provided = String(request.headers.get("X-Admin-Token") || "");
+  if (!timingSafeEqual(provided, String(env.ADMIN_TOKEN))) {
     throw httpError(401, "Token administrativo inválido.");
   }
 }
+
 
 async function readJson(request) {
   try {

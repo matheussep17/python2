@@ -224,19 +224,50 @@ def _read_windows_bios_uuid() -> str:
     if not sys.platform.startswith("win"):
         return ""
 
+    creation_flags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+
+    # `wmic` esta descontinuado e ja foi removido em instalacoes recentes do
+    # Windows. Tenta primeiro para preservar o fingerprint de instalacoes
+    # antigas e cai para o PowerShell (Get-CimInstance) quando indisponivel.
     try:
         result = subprocess.run(
             ["wmic", "csproduct", "get", "uuid"],
             capture_output=True,
             text=True,
-            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+            creationflags=creation_flags,
             timeout=5,
             check=False,
         )
-        lines = [line.strip() for line in (result.stdout or "").splitlines() if line.strip() and "uuid" not in line.lower()]
-        return lines[0] if lines else ""
+        lines = [
+            line.strip()
+            for line in (result.stdout or "").splitlines()
+            if line.strip() and "uuid" not in line.lower()
+        ]
+        if lines:
+            return lines[0]
+    except Exception:
+        pass
+
+    try:
+        result = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "(Get-CimInstance -ClassName Win32_ComputerSystemProduct).UUID",
+            ],
+            capture_output=True,
+            text=True,
+            creationflags=creation_flags,
+            timeout=8,
+            check=False,
+        )
+        value = (result.stdout or "").strip()
+        return value
     except Exception:
         return ""
+
 
 
 def _fingerprint_from_parts(parts: list[str]) -> str:
