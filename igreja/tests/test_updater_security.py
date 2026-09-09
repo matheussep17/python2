@@ -7,7 +7,9 @@ from unittest.mock import Mock, patch
 from app import updater
 
 
-class UpdateSecurityTests(unittest.TestCase):
+class UpdaterSecurityTests(unittest.TestCase):
+    """Validações de segurança do processo de atualização."""
+
     def test_manifest_without_sha256_is_accepted(self):
         response = Mock()
         response.json.return_value = {

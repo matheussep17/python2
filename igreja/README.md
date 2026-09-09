@@ -10,9 +10,15 @@ Breve nota sobre mudanças recentes:
 Como testar rapidamente:
 
 1. Instale dependências: `pip install -r requirements.txt` (ou, no mínimo, `pip install yt-dlp` para a aba de download).
-2. Rode a app: `python -m app.main`.
-3. Vá em **⬇️  Baixar**, altere o "Serviço" entre **YouTube** e **Instagram**, cole uma URL e faça um download de teste.
-4. Após finalizar, clique em **Abrir local do arquivo**: a pasta escolhida em *Configurações* deverá abrir (e o arquivo deverá ser selecionado no Windows).
+2. Rode a suíte de testes com o comando único:
+
+```powershell
+./run_tests.ps1
+```
+
+3. Rode a app: `python -m app.main`.
+4. Vá em **⬇️  Baixar**, altere o "Serviço" entre **YouTube** e **Instagram**, cole uma URL e faça um download de teste.
+5. Após finalizar, clique em **Abrir local do arquivo**: a pasta escolhida em *Configurações* deverá abrir (e o arquivo deverá ser selecionado no Windows).
 
 Observações:
 - O backend usa `yt-dlp` para downloads (já compatível com Instagram). Alguns formatos podem requerer um runtime JS (veja warnings do `yt-dlp`).
@@ -39,7 +45,7 @@ Checklist:
 6. Antes de publicar uma correção, execute toda a suíte de testes:
 
 ```powershell
-.\.buildvenv\Scripts\python.exe -m unittest discover -s tests -v
+./run_tests.ps1
 ```
 
 Os testes automatizados validam a seleção de formatos, mas uma correção do downloader também deve ser confirmada com pelo menos um download real em 720p ou 1080p.

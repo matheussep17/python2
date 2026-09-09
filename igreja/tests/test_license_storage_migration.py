@@ -8,6 +8,8 @@ from app import licensing
 
 
 class LicenseStorageMigrationTests(TestCase):
+    """Valida migração e persistência do estado de licença entre locais antigos e atuais."""
+
     def test_loads_legacy_license_state_from_frozen_exe_dir(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)

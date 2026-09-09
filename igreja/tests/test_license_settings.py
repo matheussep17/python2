@@ -5,6 +5,8 @@ from app import licensing
 
 
 class LicenseSettingsTests(unittest.TestCase):
+    """Garante que as configurações de licenciamento usam defaults seguros."""
+
     @patch.object(
         licensing,
         "load_app_config",

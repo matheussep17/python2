@@ -5,6 +5,8 @@ from app import licensing
 
 
 class DeviceFingerprintTests(unittest.TestCase):
+    """Valida a estabilidade do identificador do computador."""
+
     def test_windows_fingerprint_does_not_depend_on_random_mac(self):
         patches = [
             patch.object(licensing.sys, "platform", "win32"),

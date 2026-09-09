@@ -28,6 +28,8 @@ class FakeActivationWindow:
 
 
 class LicenseEnforcementTests(unittest.TestCase):
+    """Garante que a aplicação bloqueia ou permite acesso conforme a resposta do servidor."""
+
     @patch.object(license_dialog, "LicenseActivationWindow", FakeActivationWindow)
     @patch.object(license_dialog, "device_has_bypass", return_value=False)
     @patch.object(license_dialog, "license_is_enforced", return_value=True)
