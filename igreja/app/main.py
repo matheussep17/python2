@@ -126,7 +126,11 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         install_messagebox_hooks(self)
         apply_design_system(self, self.style, self.theme_mode.get())
         install_cursor_profile(self)
+        self._restore_from_taskbar_job = None
+        self._was_minimized = False
         self.after(0, self._ensure_window_visible)
+        self.bind("<Map>", self._on_window_map, add="+")
+        self.bind("<Unmap>", self._on_window_unmap, add="+")
 
         self.title("Media Suite - Conversor")
         self._configure_initial_window()
@@ -329,6 +333,48 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
     def _ensure_window_visible(self):
         """Traz a janela para frente quando o Windows a abre atrás de outra janela."""
+        if self._is_closing:
+            return
+        try:
+            self.deiconify()
+            self.update_idletasks()
+            self.lift()
+            self.focus_force()
+            self.attributes("-topmost", True)
+            self.after(350, lambda: self.attributes("-topmost", False))
+        except tk.TclError:
+            pass
+
+    def _on_window_unmap(self, event=None):
+        # Só nos interessa o evento do próprio root, não de widgets filhos
+        # (Toplevels, Labels, etc.) que também disparam <Unmap>.
+        if event is not None and event.widget is not self:
+            return
+        self._was_minimized = True
+
+    def _on_window_map(self, event=None):
+        if event is not None and event.widget is not self:
+            return
+        if self._is_closing or not self._was_minimized:
+            return
+        self._was_minimized = False
+
+        # O Tk/Windows às vezes reporta a janela como "restaurada" pela barra
+        # de tarefas sem repintar ou focar de fato (bug conhecido de
+        # sincronizacao entre a mensagem do Windows e o loop de eventos do
+        # Tcl/Tk). Repetimos aqui a mesma rotina usada na abertura do app
+        # para forcar a janela de volta a tela com foco.
+        if self._restore_from_taskbar_job is not None:
+            try:
+                self.after_cancel(self._restore_from_taskbar_job)
+            except tk.TclError:
+                pass
+            self._restore_from_taskbar_job = None
+
+        self._restore_from_taskbar_job = self.after(60, self._force_restore_from_taskbar)
+
+    def _force_restore_from_taskbar(self):
+        self._restore_from_taskbar_job = None
         if self._is_closing:
             return
         try:
@@ -825,6 +871,12 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         if self._is_closing:
             return
         self._is_closing = True
+        if getattr(self, "_restore_from_taskbar_job", None) is not None:
+            try:
+                self.after_cancel(self._restore_from_taskbar_job)
+            except Exception:
+                pass
+            self._restore_from_taskbar_job = None
         try:
             self.quit()
         except Exception:
