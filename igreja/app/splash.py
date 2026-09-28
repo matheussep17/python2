@@ -5,6 +5,8 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
+from app.version import APP_VERSION
+
 
 class SplashScreen:
     """Janela pequena e independente para tornar a inicialização perceptível."""
@@ -23,10 +25,17 @@ class SplashScreen:
         shell = tk.Frame(self.root, bg="#11141A", highlightthickness=1, highlightbackground="#2A313B")
         shell.pack(fill="both", expand=True)
 
-        canvas = tk.Canvas(shell, width=180, height=40, bg="#11141A", highlightthickness=0)
-        canvas.pack(pady=(38, 11))
-        canvas.create_rectangle(0, 4, 5, 36, fill="#7EA7D8", outline="")
-        canvas.create_text(18, 20, text="IGREJA", anchor="w", fill="#F4F8FF", font=("Bahnschrift", 22, "bold"))
+        canvas = tk.Canvas(shell, width=360, height=54, bg="#11141A", highlightthickness=0)
+        canvas.pack(pady=(34, 8))
+        canvas.create_text(
+            180,
+            23,
+            text="IGREJA",
+            anchor="center",
+            fill="#F4F8FF",
+            font=("Bahnschrift", 25, "bold"),
+        )
+        canvas.create_line(164, 48, 196, 48, fill="#7EA7D8", width=2)
 
         tk.Label(
             shell,
@@ -37,11 +46,11 @@ class SplashScreen:
         ).pack()
         tk.Label(
             shell,
-            text="Preparando sua estação de mídia",
+            text="Preparando o Media Suite",
             bg="#11141A",
             fg="#F4F8FF",
-            font=("Bahnschrift SemiBold", 17),
-        ).pack(pady=(2, 12))
+            font=("Bahnschrift SemiBold", 16),
+        ).pack(pady=(2, 10))
         self.status_var = tk.StringVar(value="Preparando o aplicativo...")
         self.status_label = tk.Label(
             shell,
@@ -57,6 +66,13 @@ class SplashScreen:
         progress = ttk.Progressbar(shell, mode="indeterminate", length=250)
         progress.pack(pady=(12, 0))
         progress.start(14)
+        tk.Label(
+            shell,
+            text=f"Versão {APP_VERSION}",
+            bg="#11141A",
+            fg="#667386",
+            font=("Segoe UI", 9),
+        ).pack(pady=(14, 0))
         self.root.update_idletasks()
 
     def set_status(self, message: str) -> None:
