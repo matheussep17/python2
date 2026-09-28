@@ -1027,9 +1027,9 @@ def main(splash=None):
         sys.exit(1)
 
     startup_status("Montando sua estação de trabalho...")
-    app = SuperApp(suppress_startup_update_check=suppress_startup_update_check)
     if splash is not None:
         splash.close()
+    app = SuperApp(suppress_startup_update_check=suppress_startup_update_check)
     try:
         app.mainloop()
     except KeyboardInterrupt:

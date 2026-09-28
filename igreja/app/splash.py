@@ -23,10 +23,10 @@ class SplashScreen:
         shell = tk.Frame(self.root, bg="#11141A", highlightthickness=1, highlightbackground="#2A313B")
         shell.pack(fill="both", expand=True)
 
-        canvas = tk.Canvas(shell, width=74, height=74, bg="#11141A", highlightthickness=0)
-        canvas.pack(pady=(38, 12))
-        canvas.create_oval(7, 7, 67, 67, fill="#202733", outline="#7EA7D8", width=2)
-        canvas.create_text(37, 37, text="I", fill="#F4F8FF", font=("Bahnschrift", 34, "bold"))
+        canvas = tk.Canvas(shell, width=180, height=40, bg="#11141A", highlightthickness=0)
+        canvas.pack(pady=(38, 11))
+        canvas.create_rectangle(0, 4, 5, 36, fill="#7EA7D8", outline="")
+        canvas.create_text(18, 20, text="IGREJA", anchor="w", fill="#F4F8FF", font=("Bahnschrift", 22, "bold"))
 
         tk.Label(
             shell,
@@ -37,20 +37,22 @@ class SplashScreen:
         ).pack()
         tk.Label(
             shell,
-            text="Igreja",
+            text="Preparando sua estação de mídia",
             bg="#11141A",
             fg="#F4F8FF",
-            font=("Bahnschrift SemiBold", 24),
+            font=("Bahnschrift SemiBold", 17),
         ).pack(pady=(2, 12))
-
         self.status_var = tk.StringVar(value="Preparando o aplicativo...")
-        tk.Label(
+        self.status_label = tk.Label(
             shell,
             textvariable=self.status_var,
             bg="#11141A",
             fg="#98A3B2",
             font=("Segoe UI", 10),
-        ).pack()
+            width=44,
+            anchor="center",
+        )
+        self.status_label.pack()
 
         progress = ttk.Progressbar(shell, mode="indeterminate", length=250)
         progress.pack(pady=(12, 0))
@@ -67,5 +69,10 @@ class SplashScreen:
     def close(self) -> None:
         try:
             self.root.destroy()
+            # O Tkinter mantém a primeira raiz como default mesmo depois de
+            # destroy(). Remover essa referência evita que a janela principal
+            # seja criada em uma raiz antiga e apareça vazia.
+            if getattr(tk, "_default_root", None) is self.root:
+                tk._default_root = None
         except tk.TclError:
             pass
