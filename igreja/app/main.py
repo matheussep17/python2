@@ -938,10 +938,15 @@ def _try_recover_missing_ffmpeg(root, missing: list[str]) -> bool:
     return True
 
 
-def main():
+def main(splash=None):
+    def startup_status(message: str) -> None:
+        if splash is not None:
+            splash.set_status(message)
+
     if not acquire_single_instance_lock():
         sys.exit(0)
 
+    startup_status("Preparando o ambiente...")
     configure_runtime_environment()
     suppress_startup_update_check = False
     pending_update = read_update_state()
@@ -995,6 +1000,7 @@ def main():
         elif not same_install or (state_age is not None and state_age >= 86400):
             clear_update_state()
 
+    startup_status("Verificando componentes instalados...")
     missing, runtime = missing_runtime_requirements()
     if missing:
         try:
@@ -1010,11 +1016,19 @@ def main():
             pass
 
         if missing:
+            if splash is not None:
+                splash.close()
             sys.exit(1)
 
+    startup_status("Validando licença do aplicativo...")
     if not ensure_application_license():
+        if splash is not None:
+            splash.close()
         sys.exit(1)
 
+    startup_status("Montando sua estação de trabalho...")
+    if splash is not None:
+        splash.close()
     app = SuperApp(suppress_startup_update_check=suppress_startup_update_check)
     try:
         app.mainloop()
