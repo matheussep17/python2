@@ -6,13 +6,33 @@ dist_release/
 build_*/
 dist_*/
 .tmp/
+*.log
+*.tmp
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage/
+htmlcov/
+
+# Local app data / databases
+*.db
+*.sqlite
+*.sqlite3
 licensing_server/data/
+saas_server/data/
+
+# App package cache directories
 app/__pycache__/
 app/frames/__pycache__/
 app/ui/__pycache__/
 app/pyinstaller_hooks/**/__pycache__/
 app/runtime_hooks/**/__pycache__/
-__pycache__/
 
 # PyInstaller files
 *.spec
@@ -25,6 +45,15 @@ venv/
 # Local editor settings
 .vscode/
 
+# Node / frontend generated files
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/test-results/
+frontend/playwright-report/
+frontend/playwright/.cache/
+
 # Local FFmpeg binaries for packaging
 vendor/ffmpeg/bin/
 
@@ -34,4 +63,11 @@ vendor/ffmpeg/bin/
 !.dev.vars.example
 .env*
 !.env.example
+<<<<<<< HEAD
 Maria Marçal _ Deserto.mp3
+=======
+
+# OS files
+.DS_Store
+Thumbs.db
+>>>>>>> 8ab26625f0fb5932fe0342b1deb162f60da6aa1f
