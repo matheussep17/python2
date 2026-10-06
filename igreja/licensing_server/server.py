@@ -1,5 +1,7 @@
 import os
 import secrets
+import time
+from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, Header, HTTPException
@@ -49,6 +51,21 @@ PRIVACY_RETENTION_DAYS = max(1, int(os.environ.get("IGREJA_PRIVACY_RETENTION_DAY
 
 app = FastAPI(title="Igreja Licensing API", version="1.0.0")
 init_db()
+
+_admin_failures: dict[str, deque[float]] = defaultdict(deque)
+_ADMIN_FAILURE_WINDOW_SECONDS = 300
+_ADMIN_FAILURE_LIMIT = 10
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    if request.url.path.startswith("/admin"):
+        response.headers.setdefault("Cache-Control", "no-store")
+    return response
 
 
 class ActivateRequest(BaseModel):
@@ -142,8 +159,17 @@ def _require_admin_token(token: str | None):
             status_code=503,
             detail="Configure IGREJA_ADMIN_TOKEN no servidor antes de usar o painel administrativo.",
         )
+    key = str(token or "")[:256]
+    now = time.monotonic()
+    failures = _admin_failures[key]
+    while failures and now - failures[0] > _ADMIN_FAILURE_WINDOW_SECONDS:
+        failures.popleft()
+    if len(failures) >= _ADMIN_FAILURE_LIMIT:
+        raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde alguns minutos.")
     if not token or not secrets.compare_digest(token.strip(), ADMIN_TOKEN):
+        failures.append(now)
         raise HTTPException(status_code=401, detail="Token administrativo inválido.")
+    failures.clear()
 
 
 

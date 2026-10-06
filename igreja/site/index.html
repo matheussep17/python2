@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Site oficial da Igreja — cultos, eventos e mensagens.">
+  <title>Igreja | Fé que acolhe</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%231b5e55'/%3E%3Cpath d='M32 12v40M20 24h24' stroke='%23f5ead1' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="overrides.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#inicio" aria-label="Página inicial da Igreja"><span class="brand-mark">✦</span><span>Igreja<span class="brand-dot">.</span></span></a>
+    <nav aria-label="Navegação principal">
+      <a href="#sobre">Sobre</a><a href="#cultos">Cultos</a><a href="#eventos">Eventos</a><a href="#mensagens">Mensagens</a><a class="nav-cta" href="#contato">Fale conosco</a>
+    </nav>
+    <button class="menu-button" aria-label="Abrir menu">☰</button>
+  </header>
+
+  <main id="inicio">
+    <section class="hero section-wrap">
+      <div class="hero-copy"><p class="eyebrow">Uma comunidade para pertencer</p><h1>Você é bem-vindo<br><em>do jeito que está.</em></h1><p class="hero-text">Um lugar para encontrar esperança, construir amizades e caminhar com Deus.</p><div class="hero-actions"><a class="button primary" href="#cultos">Planeje sua visita</a><a class="text-link" href="#sobre">Conheça nossa história <span>↗</span></a></div></div>
+      <div class="hero-art" aria-hidden="true"><div class="sun"></div><div class="arch arch-back"></div><div class="arch arch-front"><span>✦</span></div><div class="hero-note">“Há espaço<br>para você<br>aqui.”</div></div>
+    </section>
+
+    <section id="cultos" class="visit-strip"><div><p class="eyebrow">Venha estar com a gente</p><h2>Próximo encontro</h2></div><div class="visit-item"><span class="icon">◷</span><div><strong>Domingo · 19h</strong><small>Culto de celebração</small></div></div><div class="visit-item"><span class="icon">⌂</span><div><strong>Rua da Esperança, 100</strong><small>Centro · Sua cidade</small></div></div><a class="button light" href="#contato">Como chegar</a></section>
+
+    <section id="sobre" class="content-section section-wrap split"><div><p class="eyebrow">Nossa casa</p><h2>Uma igreja presente<br>na vida real.</h2></div><div><p class="lead">Somos uma comunidade simples, acolhedora e comprometida em servir pessoas e transformar a cidade.</p><p>Nos reunimos para celebrar, aprender, cuidar uns dos outros e levar a esperança de Jesus para além das paredes da igreja.</p><a class="text-link" href="#contato">Saiba mais sobre nós <span>↗</span></a></div></section>
+
+    <section id="eventos" class="content-section tinted"><div class="section-wrap"><div class="section-heading"><div><p class="eyebrow">Acontece por aqui</p><h2>Próximos eventos</h2></div><a class="text-link" href="admin.html#events">Gerenciar agenda <span>↗</span></a></div><div id="public-event-list" class="cards"></div></div></section>
+
+    <section id="mensagens" class="content-section section-wrap"><div class="section-heading"><div><p class="eyebrow">Para ouvir durante a semana</p><h2>Mensagens recentes</h2></div><a class="text-link" href="#biblioteca">Abrir biblioteca <span>↗</span></a></div><div class="message-grid"><article class="message-card featured"><span class="play">▶</span><p class="card-tag">Mensagem · 42 min</p><h3>Quando a esperança<br>parece pequena</h3><p>Uma conversa sobre continuar caminhando mesmo quando ainda não vemos o final.</p></article><article class="message-card"><p class="card-tag">Mensagem · 35 min</p><h3>Uma fé que descansa</h3><p>Aprendendo a confiar sem precisar controlar tudo.</p><a href="#biblioteca">Ouvir mensagem →</a></article><article class="message-card dark"><p class="card-tag">Série especial</p><h3>Começos</h3><p>Novas histórias podem nascer de lugares improváveis.</p><a href="#biblioteca">Ver série →</a></article></div></section>
+
+    <section id="contato" class="contact-section"><div class="section-wrap contact-inner"><div><p class="eyebrow">Estamos aqui para ouvir</p><h2>Quer conversar<br>com a gente?</h2><p class="contact-note">Se preferir, envie também um pedido de oração. Nossa equipe receberá sua mensagem com cuidado.</p></div><form id="contact-form"><label>Seu nome<input required name="name" placeholder="Como podemos chamar você?"></label><label>Assunto<select name="subject"><option>Pedido de oração</option><option>Quero conhecer a igreja</option><option>Informação sobre evento</option><option>Outro assunto</option></select></label><label>Mensagem<textarea required name="message" rows="3" placeholder="Escreva sua mensagem"></textarea></label><label class="check-row"><input type="checkbox" name="reply"> Gostaria de receber uma resposta</label><button class="button primary" type="submit">Enviar mensagem</button><p class="form-feedback" role="status"></p></form></div></section>
+
+    <section id="biblioteca" class="library-section section-wrap"><div class="section-heading"><div><p class="eyebrow">Conteúdo para sua caminhada</p><h2>Biblioteca de mídia</h2></div><div class="library-tools"><label class="sr-only" for="media-search">Buscar mídia</label><input id="media-search" placeholder="Buscar mensagens..."><select id="media-filter" aria-label="Filtrar mídia"><option value="all">Tudo</option><option value="video">Vídeos</option><option value="audio">Áudios</option><option value="pdf">PDFs</option></select></div></div><div id="media-grid" class="media-grid"></div></section>
+  </main>
+
+  <footer><div class="section-wrap footer-inner"><a class="brand" href="#inicio"><span class="brand-mark">✦</span><span>Igreja<span class="brand-dot">.</span></span></a><p>Uma comunidade para pertencer.</p><div><a href="#contato">Contato</a><a href="admin.html">Painel administrativo</a></div></div></footer>
+  <script src="app.js"></script>
+</body>
+</html>
