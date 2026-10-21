@@ -175,7 +175,6 @@ a = Analysis(
         'tkinterdnd2',
         'tkinterdnd2.TkinterDnD',
         'pypdf',
-        'fitz',
         'pymupdf',
         'ttkbootstrap',
         'yt_dlp',
