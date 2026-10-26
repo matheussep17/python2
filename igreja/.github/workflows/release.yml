@@ -55,7 +55,11 @@ jobs:
           $manifest = [ordered]@{
             version = $version
             url = $downloadUrl
-            notes = "Corrige o aviso de depreciacao do PyMuPDF na inicializacao."
+            notes = @"
+Consolida a migracao do licenciamento para matheustorresqa.com.
+Corrige automaticamente configuracoes antigas da Railway e remove bypasses externos.
+Envia o nome do computador ao painel administrativo.
+"@.Trim()
             size = $exe.Length
             digest = $hash
             mandatory = $false
@@ -72,6 +76,8 @@ jobs:
             dist/update-manifest.json
             dist/Igreja.sha256.txt
           body: |
-            Corrige o aviso de depreciacao do PyMuPDF na inicializacao.
+            Consolida a migracao do licenciamento para matheustorresqa.com.
+            Corrige automaticamente configuracoes antigas da Railway e remove bypasses externos.
+            Envia o nome do computador ao painel administrativo.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
