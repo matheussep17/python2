@@ -47,7 +47,7 @@ except Exception:
     HAS_PYPDF = False
 
 try:
-    import fitz
+    import pymupdf as fitz
     HAS_PYMUPDF = True
 except Exception:
     fitz = None
