@@ -7,6 +7,8 @@ yt-dlp-getpot-wpc
 pytubefix
 python-docx
 faster-whisper
+# faster-whisper 1.2.x passes metadata_errors to av.open(); PyAV 17 removed it.
+av<17
 pillow
 rawpy
 tkinterdnd2
