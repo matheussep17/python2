@@ -313,6 +313,10 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
     def _set_files(self, paths):
         paths = [p for p in paths if os.path.isfile(p) and _ext(p) in SUPPORTED_EXTS]
         self.input_files = paths
+        # A new input list invalidates the previous transcription result.
+        self.last_output = None
+        self.btn_open.config(state=DISABLED)
+        self.btn_open.pack_forget()
 
         if not self.input_files:
             self.label_sel.config(text="Nenhum arquivo selecionado")
@@ -453,11 +457,13 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
 
     def remover_arquivos(self):
         self.input_files = []
+        self.last_output = None
         self.label_sel.config(text="Nenhum arquivo selecionado")
         self.progress_var.set(0)
         self.status_var.set("")
         self._hide_progress()
         self.btn_open.config(state=DISABLED)
+        self.btn_open.pack_forget()
         self.output_name_var.set("")
         self.output_name_vars = {}
         self._output_name_defaults = {}

@@ -657,6 +657,12 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
             seen.add(low)
             merged.append(abs_path)
         self.input_files = merged
+        # A new selection starts a new operation; never keep the previous result
+        # available through the folder button.
+        self.ultimo_arquivo_convertido = ""
+        self._current_output_path = None
+        self.open_btn.config(state=DISABLED)
+        self.open_btn.pack_forget()
 
         if not self.input_files:
             self.label_video.config(text="Nenhum arquivo selecionado")
@@ -694,12 +700,15 @@ class ConverterFrame(OutputFolderMixin, ttk.Frame):
 
     def remover_arquivos(self):
         self.input_files = []
+        self.ultimo_arquivo_convertido = ""
+        self._current_output_path = None
         self.label_video.config(text="Nenhum arquivo selecionado")
         self.label_formato.config(text="")
         self.progress_var.set(0)
         self.status_var.set("")
         self._hide_progress()
         self.open_btn.config(state=DISABLED)
+        self.open_btn.pack_forget()
         self.current_mode = "video"
         self.formato_destino.set("mp4")
         self.remove_audio.set(False)

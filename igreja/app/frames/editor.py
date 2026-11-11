@@ -336,8 +336,6 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         self._rebuild_video_rows()
         self._update_processing_mode_ui()
         self._update_visibility()
-        # Ensure the action buttons are visible after selecting a file in smaller windows.
-        self._scroll_to_bottom()
         self._update_scrollbar_visibility()
 
     def _capture_row_values(self):
@@ -509,6 +507,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
             self.options_frame.pack_forget()
             self.controls_frame.pack_forget()
             self.cancel_btn.pack_forget()
+            self.open_btn.pack_forget()
 
         # Only show progress while processing is running.
         if self.is_running:
@@ -623,7 +622,6 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
     def clear_files(self):
         self.input_files = []
         self.file_durations = {}
-        self.video_rows = []
         self.output_name_var.set("")
         self.processing_mode_var.set("merge")
         self.separate_naming_var.set("Nome original + sufixo")
@@ -632,6 +630,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
         self._hide_progress()
         self.last_output = ""
         self.open_btn.config(state=DISABLED)
+        self.open_btn.pack_forget()
         self._refresh_file_info()
         self._update_action_state()
 

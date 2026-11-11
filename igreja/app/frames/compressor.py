@@ -352,6 +352,10 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
             return
 
         self.input_files = uniq
+        # Selecting new inputs invalidates the result from the previous run.
+        self.last_output = ""
+        self.btn_open.config(state=DISABLED)
+        self.btn_open.pack_forget()
         self.current_mode = "video" if all_video else "audio" if all_audio else "image"
         if len(uniq) == 1:
             self.label_selected.config(text=f"Arquivo: {os.path.basename(uniq[0])}")
