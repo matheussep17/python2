@@ -34,6 +34,7 @@ from app.updater import (
     compare_versions,
     clear_update_state,
     get_current_version,
+    get_update_settings,
     has_update,
     read_update_state,
     schedule_windows_self_replace,
@@ -940,6 +941,44 @@ def _try_recover_missing_ffmpeg(root, missing: list[str]) -> bool:
     return True
 
 
+def _run_preflight_self_update(splash=None) -> bool:
+    """Prepara uma atualização antes de validar dependências ou abrir a UI."""
+    if not can_self_update():
+        return False
+
+    try:
+        settings = get_update_settings()
+        if not settings.get("auto_check", True):
+            return False
+
+        manifest = fetch_update_manifest(timeout=8)
+        if not has_update(manifest):
+            return False
+
+        parent = getattr(splash, "root", None)
+        should_install = messagebox.askyesno(
+            "Atualização disponível",
+            (
+                f"A versão {manifest.get('version', 'nova')} está disponível.\n\n"
+                "Deseja instalar antes de abrir o aplicativo?"
+            ),
+            parent=parent,
+        )
+        if not should_install:
+            return False
+
+        if splash is not None:
+            splash.set_status("Baixando atualização antes de iniciar...")
+        package_path = download_update_package(manifest)
+        schedule_windows_self_replace(package_path, expected_version=manifest.get("version"))
+        if splash is not None:
+            splash.close()
+        return True
+    except Exception:
+        # Falha de rede ou de atualização não deve impedir a abertura normal.
+        return False
+
+
 def main(splash=None):
     def startup_status(message: str) -> None:
         if splash is not None:
@@ -951,6 +990,7 @@ def main(splash=None):
     startup_status("Preparando o ambiente...")
     configure_runtime_environment()
     suppress_startup_update_check = False
+    skip_preflight_update = False
     pending_update = read_update_state()
     if pending_update:
         status = str(pending_update.get("status", "")).strip().lower()
@@ -994,6 +1034,7 @@ def main(splash=None):
             # Evita baixar automaticamente a mesma atualizacao a cada abertura.
             # Uma nova tentativa continua disponivel pelo botao Atualizar.
             suppress_startup_update_check = same_install
+            skip_preflight_update = same_install
             clear_update_state()
         elif target_version and same_install and compare_versions(APP_VERSION, target_version) >= 0:
             # A versao instalada e a fonte da verdade caso o instalador tenha
@@ -1001,6 +1042,9 @@ def main(splash=None):
             clear_update_state()
         elif not same_install or (state_age is not None and state_age >= 86400):
             clear_update_state()
+
+    if not skip_preflight_update and _run_preflight_self_update(splash=splash):
+        sys.exit(0)
 
     startup_status("Verificando componentes instalados...")
     missing, runtime = missing_runtime_requirements()

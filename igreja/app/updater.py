@@ -481,10 +481,12 @@ def schedule_windows_self_replace(downloaded_exe: Path, expected_version: str | 
             "  if (Test-Path -LiteralPath $State) {",
             "    Remove-Item -LiteralPath $State -Force -ErrorAction SilentlyContinue",
             "  }",
+            "  Start-Process -FilePath $Target -WorkingDirectory (Split-Path -Parent $Target)",
+            "  Write-Log 'Aplicativo relancado automaticamente.'",
             "} finally {",
             "  Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue",
             "}",
-            "Write-Log 'Atualizacao concluida. Abra o aplicativo manualmente para usar a nova versao.'",
+            "Write-Log 'Atualizacao concluida e aplicativo reaberto.'",
         ]
     )
     script_path.write_text(script, encoding="utf-8")
