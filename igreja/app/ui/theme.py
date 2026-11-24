@@ -559,6 +559,10 @@ def apply_design_system(window, style, mode: str | tk.Variable | None) -> None:
     window.option_add("*Text.HighlightThickness", 1)
     window.option_add("*Text.HighlightBackground", profile["panel_border"])
     window.option_add("*Text.HighlightColor", profile["input_focus"])
+    # Evita que o espaço livre de canvases use o cinza padrão do Tk.
+    window.option_add("*Canvas.background", profile["content_bg"])
+    window.option_add("*Canvas.Background", profile["content_bg"])
+    window.option_add("*Canvas.highlightBackground", profile["content_bg"])
 
     try:
         window.configure(background=profile["window_bg"])
