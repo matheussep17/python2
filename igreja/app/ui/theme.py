@@ -6,23 +6,23 @@ import tkinter as tk
 THEME_PROFILES = {
     "Escuro": {
         "ttk_theme": "darkly",
-        "window_bg": "#0A0C10",
-        "top_bg": "#11141A",
-        "top_border": "#2A313B",
-        "side_bg": "#0D1015",
-        "side_panel_bg": "#141922",
-        "content_bg": "#0D1015",
-        "hero_bg": "#171D27",
-        "hero_alt_bg": "#202733",
-        "status_bg": "#11141A",
-        "panel_bg": "#191F29",
-        "panel_alt_bg": "#202833",
-        "panel_border": "#36414E",
-        "panel_border_soft": "#29323D",
+        "window_bg": "#05070A",
+        "top_bg": "#080B10",
+        "top_border": "#151C25",
+        "side_bg": "#070A0E",
+        "side_panel_bg": "#0B1016",
+        "content_bg": "#080B10",
+        "hero_bg": "#0D131B",
+        "hero_alt_bg": "#111923",
+        "status_bg": "#080B10",
+        "panel_bg": "#0D131B",
+        "panel_alt_bg": "#111923",
+        "panel_border": "#1C2A39",
+        "panel_border_soft": "#17232F",
         "panel_highlight": "#7EA7D8",
-        "panel_shadow": "#07090D",
-        "input_bg": "#131922",
-        "input_border": "#4C6078",
+        "panel_shadow": "#05070A",
+        "input_bg": "#0A1017",
+        "input_border": "#30465E",
         "input_focus": "#A2C0E3",
         "title_fg": "#F4F8FF",
         "subtitle_fg": "#C5CCD6",
@@ -119,7 +119,10 @@ def apply_design_system(window, style, mode: str | tk.Variable | None) -> None:
     window.app_theme_mode = resolve_mode(mode).lower()
     window.option_add("*Font", "{Segoe UI} 11")
 
-    style.configure(".", background=profile["panel_bg"], foreground=profile["field_fg"])
+    # O fundo-base acompanha a área de conteúdo. Os cartões e superfícies
+    # continuam usando seus estilos próprios, mais claros, por contraste.
+    style.configure(".", background=profile["content_bg"], foreground=profile["field_fg"])
+    style.configure("TLabel", background=profile["content_bg"], foreground=profile["field_fg"])
 
     style.configure("TopBar.TFrame", background=profile["top_bg"])
     style.configure("TopBarInner.TFrame", background=profile["top_bg"])
@@ -129,7 +132,7 @@ def apply_design_system(window, style, mode: str | tk.Variable | None) -> None:
     style.configure("SidebarPanel.TFrame", background=profile["side_panel_bg"])
     style.configure("ContentArea.TFrame", background=profile["content_bg"])
     style.configure("HeroPanel.TFrame", background=profile["hero_bg"])
-    style.configure("ContentShell.TFrame", background=profile["panel_shadow"])
+    style.configure("ContentShell.TFrame", background=profile["content_bg"])
     style.configure("StatusBar.TFrame", background=profile["status_bg"])
     style.configure("Card.TFrame", background=profile["panel_bg"])
     style.configure("Surface.TFrame", background=profile["panel_bg"])

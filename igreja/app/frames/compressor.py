@@ -11,6 +11,7 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
 from app.ui.output_folder import OutputFolderMixin
+from app.ui.theme import get_theme_profile
 from app.utils import (
     HAS_DND,
     HAS_PIL,
@@ -80,7 +81,7 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
                 pass
 
     def _build_ui(self):
-        canvas_bg = self.winfo_toplevel().style.lookup("Card.TFrame", "background") or self.winfo_toplevel().style.lookup("TFrame", "background")
+        canvas_bg = get_theme_profile(getattr(self.winfo_toplevel(), "theme_mode", None))["content_bg"]
         self.canvas_frame = ttk.Frame(self, style="ContentHost.TFrame")
         self.canvas_frame.pack(fill="both", expand=True)
         self.scroll_canvas = tk.Canvas(self.canvas_frame, highlightthickness=0, borderwidth=0, background=canvas_bg)
@@ -100,7 +101,7 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
 
         header = ttk.Frame(card, style="Card.TFrame")
         header.pack(fill="x")
-        ttk.Label(header, text="Compressor de Video / Audio / Foto", style="SectionTitle.TLabel").pack(side="left")
+        ttk.Label(header, text="Compressor de Vídeo / Áudio / Foto", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
 
         # --- Arquivos ---
@@ -137,7 +138,7 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
 
         self.video_opts = ttk.Frame(opts_inner, style="SurfaceAlt.TFrame")
         self.video_opts.columnconfigure(1, weight=1)
-        ttk.Label(self.video_opts, text="Compressao de video:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
+        ttk.Label(self.video_opts, text="Compressão de vídeo:", font=("Helvetica", 13, "bold"), style="SurfaceAlt.TLabel").grid(row=0, column=0, sticky="w")
         self.video_menu = ttk.Combobox(
             self.video_opts,
             textvariable=self.video_preset,
@@ -149,7 +150,7 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
 
         self.audio_opts = ttk.Frame(opts_inner, style="SurfaceAlt.TFrame")
         self.audio_opts.columnconfigure(1, weight=1)
-        ttk.Label(self.audio_opts, text="Bitrate do audio:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
+        ttk.Label(self.audio_opts, text="Taxa de bits do áudio:", font=("Helvetica", 13, "bold"), style="SurfaceAlt.TLabel").grid(row=0, column=0, sticky="w")
         self.audio_menu = ttk.Combobox(
             self.audio_opts,
             textvariable=self.audio_bitrate,
@@ -161,7 +162,7 @@ class CompressorFrame(OutputFolderMixin, ttk.Frame):
 
         self.image_opts = ttk.Frame(opts_inner, style="SurfaceAlt.TFrame")
         self.image_opts.columnconfigure(1, weight=1)
-        ttk.Label(self.image_opts, text="Qualidade da foto:", font=("Helvetica", 13, "bold")).grid(row=0, column=0, sticky="w")
+        ttk.Label(self.image_opts, text="Qualidade da foto:", font=("Helvetica", 13, "bold"), style="SurfaceAlt.TLabel").grid(row=0, column=0, sticky="w")
         self.image_menu = ttk.Combobox(
             self.image_opts,
             textvariable=self.image_quality,

@@ -11,6 +11,7 @@ from PIL import Image, ImageTk
 from ttkbootstrap.constants import *
 
 from app.ui.output_folder import OutputFolderMixin
+from app.ui.theme import get_theme_profile
 from app.utils import DND_FILES, HAS_DND, HAS_PIL, HAS_PYMUPDF, fitz
 
 
@@ -113,7 +114,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
         self.scroll_canvas = tk.Canvas(
             self.canvas_frame,
             highlightthickness=0,
-            background=self._theme_color("panel_bg"),
+            background=self._theme_color("content_bg"),
         )
         self.scroll_canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar = ttk.Scrollbar(self.canvas_frame, orient="vertical", command=self.scroll_canvas.yview)
@@ -1383,18 +1384,7 @@ class PdfEditorFrame(OutputFolderMixin, ttk.Frame):
 
     def _theme_color(self, key):
         top = self.winfo_toplevel()
-        mode = getattr(top, "theme_var", None)
-        if hasattr(mode, "get"):
-            try:
-                mode = mode.get()
-            except Exception:
-                mode = None
-        palette = {
-            "content_bg": "#EEF3FA" if mode == "Claro" else "#060E1A",
-            "panel_bg": "#FDFEFF" if mode == "Claro" else "#191F29",
-            "panel_alt_bg": "#F2F6FC" if mode == "Claro" else "#13253E",
-        }
-        return palette[key]
+        return get_theme_profile(getattr(top, "theme_mode", None))[key]
 
     def open_folder(self):
         if not self.last_output or not os.path.exists(self.last_output):

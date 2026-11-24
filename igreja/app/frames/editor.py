@@ -99,7 +99,7 @@ class EditorFrame(OutputFolderMixin, ttk.Frame):
             self,
             borderwidth=0,
             highlightthickness=0,
-            background=self._theme_color("panel_bg"),
+            background=self._theme_color("content_bg"),
         )
         self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=self.scrollbar.set)

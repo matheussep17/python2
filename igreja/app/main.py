@@ -188,7 +188,7 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
 
         brand = ttk.Frame(top, style="TopBarInner.TFrame")
         brand.grid(row=0, column=0, sticky="w")
-        ttk.Label(brand, text="CENTRAL DE MIDIA", style="AppKicker.TLabel").pack(anchor="w")
+        ttk.Label(brand, text="CENTRAL DE MÍDIA", style="AppKicker.TLabel").pack(anchor="w")
         ttk.Label(brand, text="Media Suite", style="AppHeader.TLabel").pack(anchor="w", pady=(2, 0))
         self.title_label = ttk.Label(
             brand,
@@ -274,11 +274,13 @@ class SuperApp(ttk.Window if not HAS_DND else TkinterDnD.Tk):
         hero = ttk.Frame(workspace, padding=(22, 18), style="HeroPanel.TFrame")
         hero.grid(row=0, column=0, sticky="ew")
         hero.grid_columnconfigure(0, weight=1)
-        ttk.Label(hero, text="ÁREA ATIVA", style="WorkspaceEyebrow.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(hero, text="ÁREA ATIVA", style="WorkspaceEyebrow.TLabel", anchor="center").grid(row=0, column=0, sticky="ew")
         self.workspace_title = ttk.Label(hero, text="", style="WorkspaceTitle.TLabel")
-        self.workspace_title.grid(row=1, column=0, sticky="w", pady=(4, 0))
+        self.workspace_title.configure(anchor="center")
+        self.workspace_title.grid(row=1, column=0, sticky="ew", pady=(4, 0))
         self.workspace_subtitle = ttk.Label(hero, text="", style="WorkspaceSubtitle.TLabel", justify="left", wraplength=860)
-        self.workspace_subtitle.grid(row=2, column=0, sticky="w", pady=(4, 0))
+        self.workspace_subtitle.configure(anchor="center", justify="center")
+        self.workspace_subtitle.grid(row=2, column=0, sticky="ew", pady=(4, 0))
 
         stage = ttk.Frame(workspace, padding=12, style="ContentShell.TFrame")
         stage.grid(row=1, column=0, sticky="nsew", pady=(14, 0))

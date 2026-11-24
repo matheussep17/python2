@@ -53,7 +53,7 @@ class LyricsSearchFrame(ttk.Frame):
         self.artist_entry.grid(row=0, column=1, sticky="ew", padx=(8, 0))
         self.artist_entry.bind("<Return>", self._handle_enter_search)
 
-        ttk.Label(inner_frame, text="Musica:", style="SectionLabel.TLabel").grid(
+        ttk.Label(inner_frame, text="Música:", style="SectionLabel.TLabel").grid(
             row=1, column=0, sticky="w", pady=5
         )
         self.song_var = tk.StringVar()
@@ -79,17 +79,15 @@ class LyricsSearchFrame(ttk.Frame):
             command=self._cancel_search,
             state="disabled",
         )
-        self.cancel_button.pack(side="left", padx=5)
 
         self.clear_button = ttk.Button(
             button_frame,
-            text="Limpar",
+            text="Limpar letra",
             bootstyle="secondary-outline",
-            command=self._clear_form,
+            command=self._clear_lyrics,
         )
-        self.clear_button.pack(side="left", padx=5)
 
-        result_frame = ttk.Labelframe(card, text="Letra da Musica", style="TLabelframe")
+        result_frame = ttk.Labelframe(card, text="Letra da Música", style="TLabelframe")
         result_frame.pack(fill="both", expand=True, pady=(12, 0))
         result_frame.pack_forget()
         self.result_frame = result_frame
@@ -179,6 +177,8 @@ class LyricsSearchFrame(ttk.Frame):
         self.current_artist = artist
         self.current_song = song
         self.search_button.config(state="disabled")
+        self.clear_button.pack_forget()
+        self.cancel_button.pack(side="left", padx=5)
         self.cancel_button.config(state="normal")
         self.artist_entry.config(state="disabled")
         self.song_entry.config(state="disabled")
@@ -506,15 +506,16 @@ class LyricsSearchFrame(ttk.Frame):
         """Exibe a letra no campo de texto."""
         self.has_loaded_lyrics = True
         self.lyrics_text.delete("1.0", "end")
-        self.song_title_var.set(self.current_song or title or "Musica sem titulo")
+        self.song_title_var.set(self.current_song or title or "Música sem título")
         self.artist_name_var.set(self.current_artist or "")
         self.lyrics_text.insert("1.0", lyrics)
         self.lyrics_text.see("1.0")
         if not self.result_frame.winfo_ismapped():
             self.result_frame.pack(fill="both", expand=True, pady=(12, 0))
+        self.clear_button.pack(side="left", padx=5)
 
     def _clear_form(self):
-        """Limpa campos, letra carregada e oculta o resultado atual."""
+        """Limpa todos os campos e a letra carregada."""
         self.cancel_requested = False
         self.current_artist = ""
         self.current_song = ""
@@ -529,11 +530,25 @@ class LyricsSearchFrame(ttk.Frame):
         self._reset_buttons()
         self._set_status("Pronto para pesquisar")
 
+    def _clear_lyrics(self):
+        """Limpa somente a letra exibida e mantém a busca preenchida."""
+        self.has_loaded_lyrics = False
+        self.song_title_var.set("")
+        self.artist_name_var.set("")
+        self.lyrics_text.delete("1.0", "end")
+        if self.result_frame.winfo_ismapped():
+            self.result_frame.pack_forget()
+        self.clear_button.pack_forget()
+        self._set_status("Letra limpa. Pronto para pesquisar")
+
     def _reset_buttons(self):
         """Reseta os botoes apos a busca."""
         self.is_searching = False
         self.search_button.config(state="normal")
         self.cancel_button.config(state="disabled")
+        self.cancel_button.pack_forget()
+        if not self.has_loaded_lyrics:
+            self.clear_button.pack_forget()
         self.artist_entry.config(state="normal")
         self.song_entry.config(state="normal")
 

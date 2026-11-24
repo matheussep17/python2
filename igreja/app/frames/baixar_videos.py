@@ -31,6 +31,7 @@ from app.yt_dlp_runtime import (
     maybe_update_yt_dlp,
     update_yt_dlp,
 )
+from app.ui.theme import get_theme_profile
 
 
 def app_base_dir() -> Path:
@@ -84,7 +85,7 @@ class BaixarFrame(ttk.Frame):
         self._apply_quality_visibility()
 
     def _build_ui(self):
-        canvas_bg = self.winfo_toplevel().style.lookup("Card.TFrame", "background") or self.winfo_toplevel().style.lookup("TFrame", "background")
+        canvas_bg = get_theme_profile(getattr(self.winfo_toplevel(), "theme_mode", None))["content_bg"]
         self.canvas_frame = ttk.Frame(self, style="ContentHost.TFrame")
         self.canvas_frame.pack(fill="both", expand=True)
         self.scroll_canvas = tk.Canvas(self.canvas_frame, highlightthickness=0, borderwidth=0, background=canvas_bg)
@@ -106,12 +107,12 @@ class BaixarFrame(ttk.Frame):
         header.pack(fill="x")
 
         self.service = ttk.StringVar(value="YouTube")
-        self.header_label = ttk.Label(header, text="Downloader de midia - YouTube", style="SectionTitle.TLabel")
+        self.header_label = ttk.Label(header, text="Downloader de mídia - YouTube", style="SectionTitle.TLabel")
         self.header_label.pack(side="left")
 
         svc_frame = ttk.Frame(header, style="Card.TFrame")
         svc_frame.pack(side="right")
-        ttk.Label(svc_frame, text="Servico:", font=("Helvetica", 12)).pack(side="left")
+        ttk.Label(svc_frame, text="Serviço:", font=("Helvetica", 12)).pack(side="left")
         self.service_menu = ttk.Combobox(
             svc_frame,
             textvariable=self.service,
@@ -138,7 +139,7 @@ class BaixarFrame(ttk.Frame):
         url_inner.pack(fill="x")
         url_inner.columnconfigure(1, weight=1)
 
-        self.url_label = ttk.Label(url_inner, text="URL:", font=("Helvetica", 13))
+        self.url_label = ttk.Label(url_inner, text="URL:", font=("Helvetica", 13), style="SurfaceAlt.TLabel")
         self.url_label.grid(row=0, column=0, sticky="w")
         self.url_entry = ttk.Entry(url_inner, width=60, font=("Helvetica", 12))
         self.url_entry.grid(row=0, column=1, sticky="ew", padx=(10, 0))
@@ -190,7 +191,7 @@ class BaixarFrame(ttk.Frame):
         self.format_menu.grid(row=0, column=1, sticky="w", padx=(8, 20))
         self.format_menu.bind("<<ComboboxSelected>>", self._on_format_change)
 
-        self.quality_label = ttk.Label(opts_inner, text="Qualidade do video:", font=("Helvetica", 13))
+        self.quality_label = ttk.Label(opts_inner, text="Qualidade do vídeo:", font=("Helvetica", 13), style="SurfaceAlt.TLabel")
         self.quality_label.grid(row=0, column=2, sticky="w")
         self.quality_menu = ttk.Combobox(
             opts_inner,
@@ -227,12 +228,12 @@ class BaixarFrame(ttk.Frame):
         self.mode_menu.grid(row=1, column=1, sticky="w", padx=(8, 20), pady=(12, 0))
         self.mode_menu.bind("<<ComboboxSelected>>", self._on_download_mode_change)
 
-        self.cut_start_label = ttk.Label(opts_inner, text="Inicio:", font=("Helvetica", 13))
+        self.cut_start_label = ttk.Label(opts_inner, text="Início:", font=("Helvetica", 13), style="SurfaceAlt.TLabel")
         self.cut_start_label.grid(row=1, column=2, sticky="w", pady=(12, 0))
         self.cut_start_entry = ttk.Entry(opts_inner, textvariable=self.cut_start, width=12, font=("Helvetica", 12))
         self.cut_start_entry.grid(row=1, column=3, sticky="w", padx=(8, 0), pady=(12, 0))
 
-        self.cut_end_label = ttk.Label(opts_inner, text="Fim:", font=("Helvetica", 13))
+        self.cut_end_label = ttk.Label(opts_inner, text="Fim:", font=("Helvetica", 13), style="SurfaceAlt.TLabel")
         self.cut_end_label.grid(row=1, column=4, sticky="w", padx=(20, 0), pady=(12, 0))
         self.cut_end_entry = ttk.Entry(opts_inner, textvariable=self.cut_end, width=12, font=("Helvetica", 12))
         self.cut_end_entry.grid(row=1, column=5, sticky="w", padx=(8, 0), pady=(12, 0))

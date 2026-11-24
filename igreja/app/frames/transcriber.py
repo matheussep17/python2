@@ -14,6 +14,7 @@ import time
 import subprocess
 
 from app.ui.output_folder import OutputFolderMixin
+from app.ui.theme import get_theme_profile
 from app.utils import (
     HAS_DND, HAS_FW, HAS_DOCX, DND_FILES, _ext, seconds_to_hms, create_no_window_flags, ffprobe_cmd,
 )
@@ -69,7 +70,7 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
                 pass
 
     def _build_ui(self):
-        canvas_bg = self.winfo_toplevel().style.lookup("Card.TFrame", "background") or self.winfo_toplevel().style.lookup("TFrame", "background")
+        canvas_bg = get_theme_profile(getattr(self.winfo_toplevel(), "theme_mode", None))["content_bg"]
         self.canvas_frame = ttk.Frame(self, style="ContentHost.TFrame")
         self.canvas_frame.pack(fill="both", expand=True)
         self.scroll_canvas = tk.Canvas(self.canvas_frame, highlightthickness=0, borderwidth=0, background=canvas_bg)
@@ -89,7 +90,7 @@ class TranscriberFrame(OutputFolderMixin, ttk.Frame):
 
         header = ttk.Frame(card, style="Card.TFrame")
         header.pack(fill="x")
-        ttk.Label(header, text="Transcritor de Audio (Word)", style="SectionTitle.TLabel").pack(side="left")
+        ttk.Label(header, text="Transcritor de Áudio (Word)", style="SectionTitle.TLabel").pack(side="left")
         ttk.Separator(card).pack(fill="x", pady=12)
 
         files_frame = ttk.Labelframe(card, text="Arquivos", style="Hero.TLabelframe")
