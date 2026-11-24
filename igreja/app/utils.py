@@ -352,7 +352,10 @@ def missing_runtime_requirements():
         "docx": "python-docx",
         "faster_whisper": "faster-whisper",
         "pypdf": "pypdf",
-        "fitz": "PyMuPDF",
+        # PyMuPDF 1.24+ exposes the import as ``pymupdf``. The application
+        # already imports that canonical module above, so checking ``fitz``
+        # here incorrectly reports a missing dependency on clean machines.
+        "pymupdf": "PyMuPDF",
     }
     for module_name, label in required_modules.items():
         if not _has_module(module_name):
