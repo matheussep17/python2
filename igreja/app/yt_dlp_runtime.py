@@ -154,7 +154,36 @@ def load_yt_dlp(prefer_external: bool = True):
             sys.path.insert(0, package_path)
         _pop_yt_dlp_modules()
 
-    return importlib.import_module("yt_dlp")
+    module = importlib.import_module("yt_dlp")
+    _repair_urllib3_percent_regex()
+    return module
+
+
+def _repair_urllib3_percent_regex() -> None:
+    """Compatibiliza versões antigas do patch de URL do yt-dlp.
+
+    Algumas versões do yt-dlp substituem ``urllib3.util.url._PERCENT_RE`` por
+    um wrapper que só implementa ``subn``. Versões recentes do urllib3 podem
+    chamar ``sub`` diretamente, fazendo a consulta do atualizador falhar com
+    ``... object has no attribute 'sub'``.
+    """
+    try:
+        import urllib3.util.url as urllib3_url
+
+        percent_regex = getattr(urllib3_url, "_PERCENT_RE", None)
+        if percent_regex is None or hasattr(percent_regex, "sub"):
+            return
+
+        wrapper_type = type(percent_regex)
+        if hasattr(percent_regex, "re"):
+            def sub(self, repl, string, *args, **kwargs):
+                return self.re.sub(repl, string, *args, **kwargs)
+
+            setattr(wrapper_type, "sub", sub)
+    except Exception:
+        # A compatibilidade é opcional; não deve impedir o carregamento do
+        # yt-dlp em ambientes com outra implementação de urllib3.
+        return
 
 
 def get_preferred_external_package_dir() -> Path | None:
